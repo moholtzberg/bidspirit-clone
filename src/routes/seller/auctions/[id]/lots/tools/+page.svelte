@@ -33,7 +33,7 @@
     primaryImageUrl: '',
     backgroundImageUrl: '',
     textColor: ginzeyColors.darkText,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(245, 241, 232, 0.95)', // High opacity antique paper for text readability
     fontSize: 48,
     fontFamily: 'Cormorant Garamond, Times New Roman, serif', // Serif font for English
     hebrewFontFamily: 'Frank Ruhl Libre, Cardo, serif', // Frank Ruhl or Cardo for Hebrew
@@ -46,7 +46,8 @@
     textAreaWidth: 50, // 50% for text area (other 50% for image)
     // Category sticker colors
     categoryColor: ginzeyColors.red, // Default to red, can be changed to blue
-    baseBackgroundColor: ginzeyColors.antiquePaper
+    baseBackgroundColor: ginzeyColors.antiquePaper,
+    backgroundImageOpacity: 0.15 // Opacity for background image (0.15 = very subtle)
   });
   
   // Available fonts - serif for English, vintage Hebrew fonts
@@ -230,16 +231,20 @@
       canvas.height = bannerSettings.height;
       const ctx = canvas.getContext('2d');
       
-      // Load background image if provided
+      // Load background image if provided (much more subtle)
       if (bannerSettings.backgroundImageUrl) {
         await new Promise((resolve, reject) => {
           const bgImg = new Image();
           bgImg.crossOrigin = 'anonymous';
           bgImg.onload = () => {
-            // Draw background image covering entire canvas
+            // Draw background image with reduced opacity for subtlety
+            const bgOpacity = bannerSettings.backgroundImageOpacity || 0.15;
+            ctx.globalAlpha = bgOpacity; // Very subtle background image
             ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
-            // Add dark overlay for text readability
-            ctx.fillStyle = bannerSettings.backgroundColor;
+            ctx.globalAlpha = 1.0; // Reset alpha
+            
+            // Add strong antique paper overlay for text readability
+            ctx.fillStyle = bannerSettings.baseBackgroundColor || ginzeyColors.antiquePaper;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             resolve();
           };
@@ -292,14 +297,21 @@
       }
       
       // Draw text content - centered in left 50% of banner with vintage/antique theme
-      ctx.fillStyle = bannerSettings.textColor;
-      ctx.textBaseline = 'top'; // Use top baseline for consistent positioning
-      
-      // Calculate text area (left 50% of canvas)
-      const textAreaWidth = canvas.width * 0.5;
+      // First, add a solid background behind text area for better readability
+      const textAreaWidth = (canvas.width * bannerSettings.textAreaWidth) / 100;
       const textAreaCenterX = textAreaWidth / 2;
       const horizontalPadding = 40; // Padding from edges
       const maxTextWidth = textAreaWidth - (horizontalPadding * 2);
+      
+      // Draw semi-transparent antique paper background behind text area for better readability
+      ctx.fillStyle = bannerSettings.baseBackgroundColor || ginzeyColors.antiquePaper;
+      ctx.globalAlpha = 0.95; // High opacity for text readability
+      ctx.fillRect(0, 0, textAreaWidth, canvas.height);
+      ctx.globalAlpha = 1.0; // Reset alpha
+      
+      // Now draw text
+      ctx.fillStyle = bannerSettings.textColor;
+      ctx.textBaseline = 'top'; // Use top baseline for consistent positioning
       
       // Start from top with margin
       let currentY = bannerSettings.textMarginTop;
@@ -955,25 +967,25 @@
               </div>
             {/if}
 
-            <!-- Background Overlay Opacity -->
+            <!-- Background Image Opacity (Subtlety) -->
             <div class="mb-4">
-              <label for="overlayOpacity" class="block text-sm font-medium text-gray-700 mb-2">
-                Background Overlay Opacity
+              <label for="backgroundImageOpacity" class="block text-sm font-medium text-gray-700 mb-2">
+                Background Image Opacity (Subtlety)
               </label>
               <input
-                id="overlayOpacity"
+                id="backgroundImageOpacity"
                 type="range"
                 min="0"
-                max="1"
-                step="0.1"
-                value="0.5"
+                max="0.5"
+                step="0.05"
+                value="0.15"
                 oninput={(e) => {
-                  const opacity = parseFloat(e.target.value);
-                  bannerSettings.backgroundColor = `rgba(0, 0, 0, ${opacity})`;
+                  // Store for use in generateBanner function
+                  bannerSettings.backgroundImageOpacity = parseFloat(e.target.value);
                 }}
                 class="w-full"
               />
-              <p class="text-xs text-gray-500 mt-1">Adjusts text readability over background</p>
+              <p class="text-xs text-gray-500 mt-1">Lower = more subtle background image (default: 0.15)</p>
             </div>
 
             <!-- Text Positioning Section -->
