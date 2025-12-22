@@ -276,21 +276,35 @@
         const categoryHeight = 50;
         const cornerRadius = 8; // Rounded corners for sticker effect
         
+        // Helper function to draw rounded rectangle
+        function drawRoundedRect(x, y, width, height, radius) {
+          ctx.beginPath();
+          ctx.moveTo(x + radius, y);
+          ctx.lineTo(x + width - radius, y);
+          ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+          ctx.lineTo(x + width, y + height - radius);
+          ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+          ctx.lineTo(x + radius, y + height);
+          ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+          ctx.lineTo(x, y + radius);
+          ctx.quadraticCurveTo(x, y, x + radius, y);
+          ctx.closePath();
+        }
+        
         // Draw sticker shadow (offset slightly)
         ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-        ctx.beginPath();
-        ctx.roundRect(categoryX + 2, categoryY + 2, categoryWidth, categoryHeight, cornerRadius);
+        drawRoundedRect(categoryX + 2, categoryY + 2, categoryWidth, categoryHeight, cornerRadius);
         ctx.fill();
         
         // Draw sticker background with rounded corners
         ctx.fillStyle = bannerSettings.categoryColor || ginzeyColors.red;
-        ctx.beginPath();
-        ctx.roundRect(categoryX, categoryY, categoryWidth, categoryHeight, cornerRadius);
+        drawRoundedRect(categoryX, categoryY, categoryWidth, categoryHeight, cornerRadius);
         ctx.fill();
         
         // Draw sticker border for definition
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
         ctx.lineWidth = 1;
+        drawRoundedRect(categoryX, categoryY, categoryWidth, categoryHeight, cornerRadius);
         ctx.stroke();
         
         // Draw category text (English)
@@ -643,7 +657,7 @@
                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
                 placeholder="https://example.com/background.jpg"
               />
-              <p class="mt-1 text-xs text-gray-500">If not provided, a solid blue background will be used</p>
+              <p class="mt-1 text-xs text-gray-500">If not provided, antique paper background will be used</p>
               {#if bannerSettings.backgroundImageUrl}
                 <div class="mt-2">
                   <img
@@ -658,6 +672,20 @@
               {/if}
             </div>
 
+            <!-- Base Background Color -->
+            <div class="mb-4">
+              <label for="baseBackgroundColor" class="block text-sm font-medium text-gray-700 mb-2">
+                Base Background Color (Antique Paper)
+              </label>
+              <input
+                id="baseBackgroundColor"
+                type="color"
+                bind:value={bannerSettings.baseBackgroundColor}
+                class="w-full h-10 border border-gray-300 rounded-lg cursor-pointer"
+              />
+              <p class="text-xs text-gray-500 mt-1">Default: Antique paper (#F5F1E8)</p>
+            </div>
+
             <!-- Text Color -->
             <div class="mb-4">
               <label for="textColor" class="block text-sm font-medium text-gray-700 mb-2">
@@ -667,6 +695,38 @@
                 id="textColor"
                 type="color"
                 bind:value={bannerSettings.textColor}
+                class="w-full h-10 border border-gray-300 rounded-lg cursor-pointer"
+              />
+              <p class="text-xs text-gray-500 mt-1">Default: Dark brown (#2C1810)</p>
+            </div>
+
+            <!-- Category Sticker Color -->
+            <div class="mb-4">
+              <label for="categoryColor" class="block text-sm font-medium text-gray-700 mb-2">
+                Category Sticker Color
+              </label>
+              <div class="flex gap-2 mb-2">
+                <button
+                  type="button"
+                  onclick={() => bannerSettings.categoryColor = ginzeyColors.red}
+                  class="flex-1 px-3 py-2 rounded-lg border-2 transition-colors {bannerSettings.categoryColor === ginzeyColors.red ? 'border-red-600 bg-red-50' : 'border-gray-300 bg-white'}"
+                >
+                  <div class="w-full h-6 rounded" style="background-color: {ginzeyColors.red}"></div>
+                  <span class="text-xs mt-1">Red</span>
+                </button>
+                <button
+                  type="button"
+                  onclick={() => bannerSettings.categoryColor = ginzeyColors.blue}
+                  class="flex-1 px-3 py-2 rounded-lg border-2 transition-colors {bannerSettings.categoryColor === ginzeyColors.blue ? 'border-blue-600 bg-blue-50' : 'border-gray-300 bg-white'}"
+                >
+                  <div class="w-full h-6 rounded" style="background-color: {ginzeyColors.blue}"></div>
+                  <span class="text-xs mt-1">Blue</span>
+                </button>
+              </div>
+              <input
+                id="categoryColor"
+                type="color"
+                bind:value={bannerSettings.categoryColor}
                 class="w-full h-10 border border-gray-300 rounded-lg cursor-pointer"
               />
             </div>
@@ -882,48 +942,57 @@
 
           <!-- Quick Templates -->
           <div class="mt-6 bg-white rounded-lg shadow-lg p-6">
-            <h3 class="text-xl font-bold text-gray-900 mb-4">Quick Templates</h3>
+            <h3 class="text-xl font-bold text-gray-900 mb-4">Ginzey America Quick Templates</h3>
             <div class="grid grid-cols-2 gap-4">
               <button
                 onclick={() => {
                   bannerSettings.category = 'Menorahs';
-                  bannerSettings.textColor = '#FFFFFF';
-                  bannerSettings.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                  bannerSettings.textColor = ginzeyColors.darkText;
+                  bannerSettings.baseBackgroundColor = ginzeyColors.antiquePaper;
+                  bannerSettings.categoryColor = ginzeyColors.red;
                 }}
-                class="px-4 py-2 bg-blue-100 text-blue-800 rounded-lg hover:bg-blue-200 transition-colors"
+                class="px-4 py-2 bg-red-50 text-red-800 rounded-lg hover:bg-red-100 transition-colors border-2 border-red-200"
               >
-                Menorahs Template
+                Menorahs (Red Sticker)
               </button>
               <button
                 onclick={() => {
                   bannerSettings.category = 'Torah Scrolls';
-                  bannerSettings.textColor = '#FFFFFF';
-                  bannerSettings.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                  bannerSettings.textColor = ginzeyColors.darkText;
+                  bannerSettings.baseBackgroundColor = ginzeyColors.antiquePaper;
+                  bannerSettings.categoryColor = ginzeyColors.blue;
                 }}
-                class="px-4 py-2 bg-purple-100 text-purple-800 rounded-lg hover:bg-purple-200 transition-colors"
+                class="px-4 py-2 bg-blue-50 text-blue-800 rounded-lg hover:bg-blue-100 transition-colors border-2 border-blue-200"
               >
-                Torah Scrolls Template
+                Torah Scrolls (Blue Sticker)
               </button>
               <button
                 onclick={() => {
                   bannerSettings.category = 'Ceremonial Silver';
-                  bannerSettings.textColor = '#FFFFFF';
-                  bannerSettings.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                  bannerSettings.textColor = ginzeyColors.darkText;
+                  bannerSettings.baseBackgroundColor = ginzeyColors.antiquePaper;
+                  bannerSettings.categoryColor = ginzeyColors.red;
                 }}
-                class="px-4 py-2 bg-green-100 text-green-800 rounded-lg hover:bg-green-200 transition-colors"
+                class="px-4 py-2 bg-red-50 text-red-800 rounded-lg hover:bg-red-100 transition-colors border-2 border-red-200"
               >
-                Ceremonial Silver Template
+                Ceremonial Silver (Red Sticker)
               </button>
               <button
                 onclick={() => {
                   bannerSettings.category = 'Antique Judaica';
-                  bannerSettings.textColor = '#FFFFFF';
-                  bannerSettings.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                  bannerSettings.textColor = ginzeyColors.darkText;
+                  bannerSettings.baseBackgroundColor = ginzeyColors.antiquePaper;
+                  bannerSettings.categoryColor = ginzeyColors.blue;
                 }}
-                class="px-4 py-2 bg-yellow-100 text-yellow-800 rounded-lg hover:bg-yellow-200 transition-colors"
+                class="px-4 py-2 bg-blue-50 text-blue-800 rounded-lg hover:bg-blue-100 transition-colors border-2 border-blue-200"
               >
-                Antique Judaica Template
+                Antique Judaica (Blue Sticker)
               </button>
+            </div>
+            <div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+              <p class="text-sm text-amber-800">
+                <strong>Ginzey America Color Scheme:</strong> Antique paper base (#F5F1E8) with red (#C41E3A) and blue (#1E3A8A) accent stickers
+              </p>
             </div>
           </div>
         </div>
