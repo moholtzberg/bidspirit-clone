@@ -81,82 +81,93 @@
     { name: 'Times New Roman', value: 'Times New Roman, serif' }
   ];
   
-  // Convert Hebrew year to Hebrew numerals
+  // Convert Gregorian year to Hebrew year format (e.g., 1850 -> תר"נ)
   function convertToHebrewYear(year) {
     if (!year || isNaN(year)) return '';
-    const hebrewNumerals = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
+    
+    const yearNum = parseInt(year);
+    if (yearNum < 1000 || yearNum > 9999) {
+      return '';
+    }
+    
+    // Convert to Hebrew calendar year (add 3760 for approximate conversion)
+    // Hebrew year = Gregorian year + 3760 (approximately)
+    const hebrewYear = yearNum + 3760;
+    
+    // Hebrew numerals mapping
+    const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
     const tens = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
     const hundreds = ['', 'ק', 'ר', 'ש', 'ת'];
     
-    // For years like 1890, we'd typically show תר"נ format
-    // This is a simplified version - in practice you'd use a proper Hebrew calendar conversion
-    let num = parseInt(year);
-    if (num < 1000) num += 5000; // Add 5000 for Hebrew year
-    
     let result = '';
-    if (num >= 5000) {
+    let remaining = hebrewYear;
+    
+    // Handle thousands (5000+)
+    if (remaining >= 5000) {
       result += 'ה\'';
-      num -= 5000;
+      remaining -= 5000;
     }
     
-    // Convert remaining digits (simplified)
-    if (num >= 400) {
-      result += 'ת';
-      num -= 400;
-    }
-    if (num >= 300) {
-      result += 'ש';
-      num -= 300;
-    }
-    if (num >= 200) {
-      result += 'ר';
-      num -= 200;
-    }
-    if (num >= 100) {
-      result += 'ק';
-      num -= 100;
-    }
-    if (num >= 90) {
-      result += 'צ';
-      num -= 90;
-    }
-    if (num >= 80) {
-      result += 'פ';
-      num -= 80;
-    }
-    if (num >= 70) {
-      result += 'ע';
-      num -= 70;
-    }
-    if (num >= 60) {
-      result += 'ס';
-      num -= 60;
-    }
-    if (num >= 50) {
-      result += 'נ';
-      num -= 50;
-    }
-    if (num >= 40) {
-      result += 'מ';
-      num -= 40;
-    }
-    if (num >= 30) {
-      result += 'ל';
-      num -= 30;
-    }
-    if (num >= 20) {
-      result += 'כ';
-      num -= 20;
-    }
-    if (num >= 10) {
-      result += 'י';
-      num -= 10;
-    }
-    if (num > 0) {
-      result += hebrewNumerals[num];
+    // Convert hundreds (100-900)
+    // Hebrew: 100=ק, 200=ר, 300=ש, 400=ת, 500=תק, 600=תר, 700=תש, 800=תת, 900=תתק
+    const hundredsDigit = Math.floor(remaining / 100);
+    if (hundredsDigit > 0) {
+      if (hundredsDigit <= 4) {
+        result += hundreds[hundredsDigit];
+        remaining -= hundredsDigit * 100;
+      } else {
+        // For 500-900: ת (400) + the remainder (100-500)
+        result += 'ת';
+        remaining -= 400;
+        const remainderHundreds = hundredsDigit - 4;
+        if (remainderHundreds > 0 && remainderHundreds <= 4) {
+          result += hundreds[remainderHundreds];
+          remaining -= remainderHundreds * 100;
+        } else if (remainderHundreds === 5) {
+          // 900 = תתק
+          result += 'תק';
+          remaining -= 500;
+        }
+      }
     }
     
-    return result || year.toString();
+    // Convert tens (10-90)
+    const tensDigit = Math.floor(remaining / 10);
+    if (tensDigit > 0 && tensDigit <= 9) {
+      result += tens[tensDigit];
+      remaining -= tensDigit * 10;
+    }
+    
+    // Convert ones (1-9)
+    if (remaining > 0 && remaining <= 9) {
+      result += ones[remaining];
+    }
+    
+    // Add geresh (׳) apostrophe right before the last character
+    // This is the standard Hebrew year notation (e.g., תר"נ for 1850)
+    // Skip if result starts with ה' (thousands marker already has apostrophe)
+    if (result.length > 1 && !result.startsWith('ה\'')) {
+      const lastChar = result.slice(-1);
+      const beforeLast = result.slice(0, -1);
+      // Check if geresh is already present before the last char
+      const lastTwoChars = result.slice(-2);
+      if (!lastTwoChars.includes('׳') && !lastTwoChars.includes('״')) {
+        result = beforeLast + '׳' + lastChar;
+      }
+    } else if (result.length > 1 && result.startsWith('ה\'')) {
+      // For years with ה', add geresh before last char of the remaining part
+      const afterThousands = result.slice(2); // Remove ה'
+      if (afterThousands.length > 1) {
+        const lastChar = afterThousands.slice(-1);
+        const beforeLast = afterThousands.slice(0, -1);
+        const lastTwoChars = afterThousands.slice(-2);
+        if (!lastTwoChars.includes('׳') && !lastTwoChars.includes('״')) {
+          result = 'ה\'' + beforeLast + '׳' + lastChar;
+        }
+      }
+    }
+    
+    return result || '';
   }
   
   const presetDimensions = [
