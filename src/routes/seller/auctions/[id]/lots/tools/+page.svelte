@@ -49,7 +49,12 @@
     // Category sticker colors
     categoryColor: ginzeyColors.red, // Default to red, can be changed to blue
     baseBackgroundColor: ginzeyColors.antiquePaper,
-    backgroundImageOpacity: 0.25 // Opacity for background image (0.25 = subtle but visible)
+    backgroundImageOpacity: 0.25, // Opacity for background image (0.25 = subtle but visible)
+    // Primary image blending and rounding options
+    primaryImageRounded: true, // Enable rounded corners on primary image
+    primaryImageCornerRadius: 20, // Corner radius in pixels
+    primaryImageBlend: true, // Enable blending/fade on left edge
+    primaryImageBlendWidth: 40 // Width of blend gradient in pixels
   });
   
   // Available fonts - serif for English, vintage Hebrew fonts
@@ -150,6 +155,7 @@
   
   const presetDimensions = [
     { name: 'Social Media (Facebook/Twitter)', width: 1200, height: 630 },
+    { name: 'Page Template', width: 1559, height: 945 },
     { name: 'Instagram Post', width: 1080, height: 1080 },
     { name: 'Instagram Story', width: 1080, height: 1920 },
     { name: 'Email Header', width: 600, height: 200 },
@@ -288,16 +294,42 @@
             const imgHeight = canvas.height;
             const imgX = textAreaWidth;
             const imgY = 0;
+            const cornerRadius = bannerSettings.primaryImageRounded ? bannerSettings.primaryImageCornerRadius : 0;
+            
+            // Save context for clipping
+            ctx.save();
+            
+            // Create rounded rectangle path if rounding is enabled
+            if (bannerSettings.primaryImageRounded && cornerRadius > 0) {
+              ctx.beginPath();
+              ctx.moveTo(imgX + cornerRadius, imgY);
+              ctx.lineTo(imgX + imgWidth - cornerRadius, imgY);
+              ctx.quadraticCurveTo(imgX + imgWidth, imgY, imgX + imgWidth, imgY + cornerRadius);
+              ctx.lineTo(imgX + imgWidth, imgY + imgHeight - cornerRadius);
+              ctx.quadraticCurveTo(imgX + imgWidth, imgY + imgHeight, imgX + imgWidth - cornerRadius, imgY + imgHeight);
+              ctx.lineTo(imgX + cornerRadius, imgY + imgHeight);
+              ctx.quadraticCurveTo(imgX, imgY + imgHeight, imgX, imgY + imgHeight - cornerRadius);
+              ctx.lineTo(imgX, imgY + cornerRadius);
+              ctx.quadraticCurveTo(imgX, imgY, imgX + cornerRadius, imgY);
+              ctx.closePath();
+              ctx.clip();
+            }
             
             // Draw image
             ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
             
-            // Add subtle antique paper overlay at the edge for seamless transition
-            const gradient = ctx.createLinearGradient(imgX - 20, 0, imgX, 0);
-            gradient.addColorStop(0, 'rgba(245, 241, 232, 0.5)');
-            gradient.addColorStop(1, 'rgba(245, 241, 232, 0)');
-            ctx.fillStyle = gradient;
-            ctx.fillRect(imgX - 20, 0, 20, canvas.height);
+            // Restore context
+            ctx.restore();
+            
+            // Add blending/fade on left edge if enabled
+            if (bannerSettings.primaryImageBlend) {
+              const blendWidth = bannerSettings.primaryImageBlendWidth || 40;
+              const gradient = ctx.createLinearGradient(imgX, 0, imgX + blendWidth, 0);
+              gradient.addColorStop(0, 'rgba(245, 241, 232, 0.7)'); // Antique paper color with opacity
+              gradient.addColorStop(1, 'rgba(245, 241, 232, 0)');
+              ctx.fillStyle = gradient;
+              ctx.fillRect(imgX, imgY, blendWidth, imgHeight);
+            }
             
             // Clean up object URL if we created one
             if (bannerSettings.primaryImageFile) {
@@ -318,17 +350,21 @@
       }
       
       // Draw text content - centered in left 50% of banner with vintage/antique theme
-      // First, add a solid background behind text area for better readability
+      // First, add a semi-transparent background behind text area so background image shows through
       const textAreaWidth = (canvas.width * bannerSettings.textAreaWidth) / 100;
       const textAreaCenterX = textAreaWidth / 2;
       const horizontalPadding = 40; // Padding from edges
       const maxTextWidth = textAreaWidth - (horizontalPadding * 2);
       
-      // Draw semi-transparent antique paper background behind text area for better readability
-      ctx.fillStyle = bannerSettings.baseBackgroundColor || ginzeyColors.antiquePaper;
-      ctx.globalAlpha = 0.95; // High opacity for text readability
+      // Draw semi-transparent antique paper background behind text area - allows background image to show through
+      // Convert hex color to rgba for transparency
+      const baseColor = bannerSettings.baseBackgroundColor || ginzeyColors.antiquePaper;
+      // Extract RGB values from hex
+      const r = parseInt(baseColor.slice(1, 3), 16);
+      const g = parseInt(baseColor.slice(3, 5), 16);
+      const b = parseInt(baseColor.slice(5, 7), 16);
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.75)`; // 75% opacity - allows background image to show through
       ctx.fillRect(0, 0, textAreaWidth, canvas.height);
-      ctx.globalAlpha = 1.0; // Reset alpha
       
       // Now draw text
       ctx.fillStyle = bannerSettings.textColor;
@@ -932,6 +968,72 @@
                   />
                 </div>
               {/if}
+              
+              <!-- Primary Image Styling Options -->
+              <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h4 class="text-sm font-semibold text-gray-700 mb-3">Image Styling Options</h4>
+                
+                <!-- Rounded Corners Toggle -->
+                <div class="mb-3">
+                  <label class="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      bind:checked={bannerSettings.primaryImageRounded}
+                      class="mr-2 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span class="text-sm text-gray-700">Enable Rounded Corners</span>
+                  </label>
+                </div>
+                
+                <!-- Corner Radius -->
+                {#if bannerSettings.primaryImageRounded}
+                  <div class="mb-3">
+                    <label for="cornerRadius" class="block text-xs text-gray-600 mb-1">
+                      Corner Radius: {bannerSettings.primaryImageCornerRadius}px
+                    </label>
+                    <input
+                      id="cornerRadius"
+                      type="range"
+                      min="0"
+                      max="50"
+                      step="1"
+                      bind:value={bannerSettings.primaryImageCornerRadius}
+                      class="w-full"
+                    />
+                  </div>
+                {/if}
+                
+                <!-- Blending Toggle -->
+                <div class="mb-3">
+                  <label class="flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      bind:checked={bannerSettings.primaryImageBlend}
+                      class="mr-2 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span class="text-sm text-gray-700">Enable Edge Blending (Fade)</span>
+                  </label>
+                </div>
+                
+                <!-- Blend Width -->
+                {#if bannerSettings.primaryImageBlend}
+                  <div>
+                    <label for="blendWidth" class="block text-xs text-gray-600 mb-1">
+                      Blend Width: {bannerSettings.primaryImageBlendWidth}px
+                    </label>
+                    <input
+                      id="blendWidth"
+                      type="range"
+                      min="10"
+                      max="100"
+                      step="5"
+                      bind:value={bannerSettings.primaryImageBlendWidth}
+                      class="w-full"
+                    />
+                    <p class="text-xs text-gray-500 mt-1">Controls how far the fade extends from the left edge</p>
+                  </div>
+                {/if}
+              </div>
             </div>
 
             <!-- Background Image -->
