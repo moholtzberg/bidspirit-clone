@@ -28,48 +28,122 @@
     subtitleHebrew: '',
     category: '',
     categoryHebrew: '',
+    yearEnglish: '', // English year (e.g., "1890")
+    yearHebrew: '', // Hebrew year (e.g., "תר\"נ")
     primaryImageUrl: '',
     backgroundImageUrl: '',
     textColor: ginzeyColors.darkText,
     backgroundColor: 'rgba(0, 0, 0, 0.3)',
     fontSize: 48,
-    fontFamily: 'Arial, sans-serif',
-    hebrewFontFamily: 'David, Arial, sans-serif',
-    // Text positioning and spacing
-    textMarginLeft: 60,
+    fontFamily: 'Cormorant Garamond, Times New Roman, serif', // Serif font for English
+    hebrewFontFamily: 'Frank Ruhl Libre, Cardo, serif', // Frank Ruhl or Cardo for Hebrew
+    // Text positioning and spacing - centered layout
+    textMarginLeft: 0, // Will be calculated for centering
     textMarginRight: 0,
     textMarginTop: 80,
     textMarginBottom: 60,
     textPadding: 20,
-    textAreaWidth: 35, // Percentage of canvas width
+    textAreaWidth: 50, // 50% for text area (other 50% for image)
     // Category sticker colors
     categoryColor: ginzeyColors.red, // Default to red, can be changed to blue
     baseBackgroundColor: ginzeyColors.antiquePaper
   });
   
-  // Available fonts
+  // Available fonts - serif for English, vintage Hebrew fonts
   const fonts = [
-    { name: 'Arial', value: 'Arial, sans-serif', supportsHebrew: true },
-    { name: 'Times New Roman', value: 'Times New Roman, serif', supportsHebrew: true },
-    { name: 'David (Hebrew)', value: 'David, Arial, sans-serif', supportsHebrew: true },
-    { name: 'Frank Ruhl Libre (Hebrew)', value: 'Frank Ruhl Libre, serif', supportsHebrew: true },
-    { name: 'Heebo (Hebrew)', value: 'Heebo, sans-serif', supportsHebrew: true },
-    { name: 'Rubik (Hebrew)', value: 'Rubik, sans-serif', supportsHebrew: true },
-    { name: 'Varela Round (Hebrew)', value: 'Varela Round, sans-serif', supportsHebrew: true },
-    { name: 'Open Sans', value: 'Open Sans, sans-serif', supportsHebrew: true },
-    { name: 'Roboto', value: 'Roboto, sans-serif', supportsHebrew: true },
-    { name: 'Montserrat', value: 'Montserrat, sans-serif', supportsHebrew: false }
+    { name: 'Cormorant Garamond (Serif)', value: 'Cormorant Garamond, serif', supportsHebrew: false },
+    { name: 'Playfair Display (Serif)', value: 'Playfair Display, serif', supportsHebrew: false },
+    { name: 'Times New Roman (Serif)', value: 'Times New Roman, serif', supportsHebrew: true },
+    { name: 'Georgia (Serif)', value: 'Georgia, serif', supportsHebrew: true },
+    { name: 'Arial', value: 'Arial, sans-serif', supportsHebrew: true }
   ];
   
   const hebrewFonts = [
+    { name: 'Frank Ruhl Libre (Recommended)', value: 'Frank Ruhl Libre, serif' },
+    { name: 'Cardo (Recommended)', value: 'Cardo, serif' },
     { name: 'David', value: 'David, Arial, sans-serif' },
-    { name: 'Frank Ruhl Libre', value: 'Frank Ruhl Libre, serif' },
     { name: 'Heebo', value: 'Heebo, sans-serif' },
     { name: 'Rubik', value: 'Rubik, sans-serif' },
-    { name: 'Varela Round', value: 'Varela Round, sans-serif' },
-    { name: 'Arial', value: 'Arial, sans-serif' },
     { name: 'Times New Roman', value: 'Times New Roman, serif' }
   ];
+  
+  // Convert Hebrew year to Hebrew numerals
+  function convertToHebrewYear(year) {
+    if (!year || isNaN(year)) return '';
+    const hebrewNumerals = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
+    const tens = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
+    const hundreds = ['', 'ק', 'ר', 'ש', 'ת'];
+    
+    // For years like 1890, we'd typically show תר"נ format
+    // This is a simplified version - in practice you'd use a proper Hebrew calendar conversion
+    let num = parseInt(year);
+    if (num < 1000) num += 5000; // Add 5000 for Hebrew year
+    
+    let result = '';
+    if (num >= 5000) {
+      result += 'ה\'';
+      num -= 5000;
+    }
+    
+    // Convert remaining digits (simplified)
+    if (num >= 400) {
+      result += 'ת';
+      num -= 400;
+    }
+    if (num >= 300) {
+      result += 'ש';
+      num -= 300;
+    }
+    if (num >= 200) {
+      result += 'ר';
+      num -= 200;
+    }
+    if (num >= 100) {
+      result += 'ק';
+      num -= 100;
+    }
+    if (num >= 90) {
+      result += 'צ';
+      num -= 90;
+    }
+    if (num >= 80) {
+      result += 'פ';
+      num -= 80;
+    }
+    if (num >= 70) {
+      result += 'ע';
+      num -= 70;
+    }
+    if (num >= 60) {
+      result += 'ס';
+      num -= 60;
+    }
+    if (num >= 50) {
+      result += 'נ';
+      num -= 50;
+    }
+    if (num >= 40) {
+      result += 'מ';
+      num -= 40;
+    }
+    if (num >= 30) {
+      result += 'ל';
+      num -= 30;
+    }
+    if (num >= 20) {
+      result += 'כ';
+      num -= 20;
+    }
+    if (num >= 10) {
+      result += 'י';
+      num -= 10;
+    }
+    if (num > 0) {
+      result += hebrewNumerals[num];
+    }
+    
+    return result || year.toString();
+  }
   
   const presetDimensions = [
     { name: 'Social Media (Facebook/Twitter)', width: 1200, height: 630 },
@@ -127,6 +201,13 @@
     bannerSettings.subtitleHebrew = lot.HebrewDescription || lot.hebrewDescription || lot.descriptionHebrew || '';
     // Keep category Hebrew empty (not typically stored in lot)
     bannerSettings.categoryHebrew = '';
+    // Extract year from title if it contains a year (e.g., "c. 1890" or "1850")
+    const yearMatch = lot.title?.match(/\b(18|19|20)\d{2}\b/);
+    if (yearMatch) {
+      bannerSettings.yearEnglish = yearMatch[0];
+      // Convert to Hebrew year (simplified - you might want to use a proper Hebrew calendar library)
+      bannerSettings.yearHebrew = convertToHebrewYear(yearMatch[0]);
+    }
   }
   
   // Check if text contains Hebrew characters
@@ -176,27 +257,28 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
       
-      // Load and draw primary image (right side)
+      // Load and draw primary image (right side - remaining space after text area)
       if (bannerSettings.primaryImageUrl) {
         await new Promise((resolve, reject) => {
           const img = new Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => {
-            // Draw image on right side (60% of width)
-            const imgWidth = canvas.width * 0.6;
+            // Draw image on right side (remaining space after text area)
+            const textAreaWidth = (canvas.width * bannerSettings.textAreaWidth) / 100;
+            const imgWidth = canvas.width - textAreaWidth;
             const imgHeight = canvas.height;
-            const imgX = canvas.width - imgWidth;
+            const imgX = textAreaWidth;
             const imgY = 0;
             
             // Draw image
             ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
             
-            // Add subtle gradient overlay on left side for text readability (lighter for antique paper)
-            const gradient = ctx.createLinearGradient(0, 0, imgX, 0);
-            gradient.addColorStop(0, 'rgba(245, 241, 232, 0.9)'); // Antique paper with slight transparency
-            gradient.addColorStop(1, 'rgba(245, 241, 232, 0.5)');
+            // Add subtle antique paper overlay at the edge for seamless transition
+            const gradient = ctx.createLinearGradient(imgX - 20, 0, imgX, 0);
+            gradient.addColorStop(0, 'rgba(245, 241, 232, 0.5)');
+            gradient.addColorStop(1, 'rgba(245, 241, 232, 0)');
             ctx.fillStyle = gradient;
-            ctx.fillRect(0, 0, imgX, canvas.height);
+            ctx.fillRect(imgX - 20, 0, 20, canvas.height);
             
             resolve();
           };
@@ -207,50 +289,68 @@
           };
           img.src = bannerSettings.primaryImageUrl;
         });
-      } else {
-        // No overlay needed if no primary image - antique paper background is already set
       }
       
-      // Draw text content
+      // Draw text content - centered in left 50% of banner with vintage/antique theme
       ctx.fillStyle = bannerSettings.textColor;
-      ctx.textBaseline = 'top';
+      ctx.textBaseline = 'top'; // Use top baseline for consistent positioning
       
-      // Use settings for text positioning
-      const titleX = bannerSettings.textMarginLeft;
-      const textAreaWidth = (canvas.width * bannerSettings.textAreaWidth) / 100;
-      const maxTitleWidth = textAreaWidth;
-      const rightEdgeX = titleX + textAreaWidth;
+      // Calculate text area (left 50% of canvas)
+      const textAreaWidth = canvas.width * 0.5;
+      const textAreaCenterX = textAreaWidth / 2;
+      const horizontalPadding = 40; // Padding from edges
+      const maxTextWidth = textAreaWidth - (horizontalPadding * 2);
+      
+      // Start from top with margin
       let currentY = bannerSettings.textMarginTop;
       
-      // Draw title (English)
+      // Draw title (English) - centered, serif font for vintage look
       if (bannerSettings.title) {
         ctx.font = `bold ${bannerSettings.fontSize}px ${bannerSettings.fontFamily}`;
-        ctx.textAlign = 'left';
-        const titleHeight = wrapText(ctx, bannerSettings.title, titleX, currentY, maxTitleWidth, bannerSettings.fontSize * 1.2);
+        ctx.textAlign = 'center';
+        const titleHeight = wrapTextCentered(ctx, bannerSettings.title, textAreaCenterX, currentY, maxTextWidth, bannerSettings.fontSize * 1.3);
         currentY += titleHeight + bannerSettings.textPadding;
       }
       
-      // Draw title (Hebrew) if provided
+      // Draw title (Hebrew) if provided - centered, Frank Ruhl or Cardo font
       if (bannerSettings.titleHebrew) {
         ctx.font = `bold ${bannerSettings.fontSize}px ${bannerSettings.hebrewFontFamily}`;
-        ctx.textAlign = 'right';
-        const titleHebrewHeight = wrapTextRTL(ctx, bannerSettings.titleHebrew, rightEdgeX, currentY, maxTitleWidth, bannerSettings.fontSize * 1.2);
+        ctx.textAlign = 'center';
+        const titleHebrewHeight = wrapTextCentered(ctx, bannerSettings.titleHebrew, textAreaCenterX, currentY, maxTextWidth, bannerSettings.fontSize * 1.3);
         currentY += titleHebrewHeight + bannerSettings.textPadding;
       }
       
-      // Draw subtitle (English)
+      // Draw year (English and Hebrew) - centered together with vintage styling
+      if (bannerSettings.yearEnglish || bannerSettings.yearHebrew) {
+        ctx.font = `italic ${bannerSettings.fontSize * 0.4}px ${bannerSettings.fontFamily}`;
+        ctx.textAlign = 'center';
+        let yearText = '';
+        if (bannerSettings.yearEnglish) {
+          yearText = bannerSettings.yearEnglish;
+        }
+        if (bannerSettings.yearHebrew) {
+          if (yearText) yearText += ' / ';
+          yearText += bannerSettings.yearHebrew;
+        }
+        if (yearText) {
+          ctx.fillText(yearText, textAreaCenterX, currentY);
+          currentY += bannerSettings.fontSize * 0.6 + bannerSettings.textPadding;
+        }
+      }
+      
+      // Draw subtitle (English) - centered
       if (bannerSettings.subtitle) {
-        ctx.font = `${bannerSettings.fontSize * 0.5}px ${bannerSettings.fontFamily}`;
-        ctx.textAlign = 'left';
-        const subtitleHeight = wrapText(ctx, bannerSettings.subtitle, titleX, currentY, maxTitleWidth, bannerSettings.fontSize * 0.7);
+        ctx.font = `${bannerSettings.fontSize * 0.45}px ${bannerSettings.fontFamily}`;
+        ctx.textAlign = 'center';
+        const subtitleHeight = wrapTextCentered(ctx, bannerSettings.subtitle, textAreaCenterX, currentY, maxTextWidth, bannerSettings.fontSize * 0.7);
         currentY += subtitleHeight + bannerSettings.textPadding;
       }
       
-      // Draw subtitle (Hebrew) if provided
+      // Draw subtitle (Hebrew) if provided - centered
       if (bannerSettings.subtitleHebrew) {
-        ctx.font = `${bannerSettings.fontSize * 0.5}px ${bannerSettings.hebrewFontFamily}`;
-        ctx.textAlign = 'right';
-        const subtitleHebrewHeight = wrapTextRTL(ctx, bannerSettings.subtitleHebrew, rightEdgeX, currentY, maxTitleWidth, bannerSettings.fontSize * 0.7);
+        ctx.font = `${bannerSettings.fontSize * 0.45}px ${bannerSettings.hebrewFontFamily}`;
+        ctx.textAlign = 'center';
+        const subtitleHebrewHeight = wrapTextCentered(ctx, bannerSettings.subtitleHebrew, textAreaCenterX, currentY, maxTextWidth, bannerSettings.fontSize * 0.7);
         currentY += subtitleHebrewHeight + bannerSettings.textPadding;
       }
       
@@ -271,7 +371,8 @@
           categoryWidth += ctx.measureText(categoryHebrewText).width + 20;
         }
         
-        const categoryX = titleX;
+        // Center the category sticker
+        const categoryX = textAreaCenterX - (categoryWidth / 2);
         const categoryY = currentY;
         const categoryHeight = 50;
         const cornerRadius = 8; // Rounded corners for sticker effect
@@ -323,11 +424,12 @@
         currentY += categoryHeight + bannerSettings.textPadding;
       }
       
-      // Draw "Ginzey America" branding at bottom
-      ctx.font = `bold ${bannerSettings.fontSize * 0.35}px ${bannerSettings.fontFamily}`;
+      // Draw "Ginzey America" branding at bottom - centered
+      ctx.font = `italic ${bannerSettings.fontSize * 0.35}px ${bannerSettings.fontFamily}`;
       ctx.fillStyle = ginzeyColors.darkText;
-      ctx.textAlign = 'left';
-      ctx.fillText('Ginzey America', titleX, canvas.height - bannerSettings.textMarginBottom);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillText('Ginzey America', textAreaCenterX, canvas.height - bannerSettings.textMarginBottom - 20);
       
       // Convert canvas to image
       generatedBannerUrl = canvas.toDataURL('image/png');
@@ -386,6 +488,31 @@
       }
     }
     context.fillText(line, x, currentY);
+    totalHeight += lineHeight;
+    return totalHeight;
+  }
+  
+  function wrapTextCentered(context, text, centerX, startY, maxWidth, lineHeight) {
+    const words = text.split(' ');
+    let line = '';
+    let currentY = startY;
+    let totalHeight = 0;
+    
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      const metrics = context.measureText(testLine);
+      const testWidth = metrics.width;
+      
+      if (testWidth > maxWidth && n > 0) {
+        context.fillText(line.trim(), centerX, currentY);
+        line = words[n] + ' ';
+        currentY += lineHeight;
+        totalHeight += lineHeight;
+      } else {
+        line = testLine;
+      }
+    }
+    context.fillText(line.trim(), centerX, currentY);
     totalHeight += lineHeight;
     return totalHeight;
   }
@@ -618,6 +745,48 @@
               {/if}
             </div>
 
+            <!-- Year (English) -->
+            <div class="mb-4">
+              <label for="yearEnglish" class="block text-sm font-medium text-gray-700 mb-2">
+                Year (English)
+              </label>
+              <input
+                id="yearEnglish"
+                type="text"
+                bind:value={bannerSettings.yearEnglish}
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                placeholder="e.g., 1890 or c. 1850"
+                oninput={(e) => {
+                  // Auto-convert to Hebrew year if possible
+                  const yearMatch = e.target.value.match(/\b(18|19|20)\d{2}\b/);
+                  if (yearMatch) {
+                    bannerSettings.yearHebrew = convertToHebrewYear(yearMatch[0]);
+                  }
+                }}
+              />
+              {#if bannerSettings.yearEnglish}
+                <p class="mt-1 text-xs text-gray-500">English year: {bannerSettings.yearEnglish}</p>
+              {/if}
+            </div>
+
+            <!-- Year (Hebrew) -->
+            <div class="mb-4">
+              <label for="yearHebrew" class="block text-sm font-medium text-gray-700 mb-2">
+                Year (Hebrew)
+              </label>
+              <input
+                id="yearHebrew"
+                type="text"
+                bind:value={bannerSettings.yearHebrew}
+                dir="rtl"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-right"
+                placeholder="תר״נ"
+              />
+              {#if bannerSettings.yearHebrew}
+                <p class="mt-1 text-xs text-gray-500">Hebrew year: {bannerSettings.yearHebrew}</p>
+              {/if}
+            </div>
+
             <!-- Primary Image URL -->
             <div class="mb-4">
               <label for="primaryImage" class="block text-sm font-medium text-gray-700 mb-2">
@@ -711,7 +880,7 @@
                   onclick={() => bannerSettings.categoryColor = ginzeyColors.red}
                   class="flex-1 px-3 py-2 rounded-lg border-2 transition-colors {bannerSettings.categoryColor === ginzeyColors.red ? 'border-red-600 bg-red-50' : 'border-gray-300 bg-white'}"
                 >
-                  <div class="w-full h-6 rounded" style="background-color: {ginzeyColors.red}"></div>
+                  <div class="w-full h-6 rounded" style="background-color: {ginzeyColors.red};"></div>
                   <span class="text-xs mt-1">Red</span>
                 </button>
                 <button
@@ -719,7 +888,7 @@
                   onclick={() => bannerSettings.categoryColor = ginzeyColors.blue}
                   class="flex-1 px-3 py-2 rounded-lg border-2 transition-colors {bannerSettings.categoryColor === ginzeyColors.blue ? 'border-blue-600 bg-blue-50' : 'border-gray-300 bg-white'}"
                 >
-                  <div class="w-full h-6 rounded" style="background-color: {ginzeyColors.blue}"></div>
+                  <div class="w-full h-6 rounded" style="background-color: {ginzeyColors.blue};"></div>
                   <span class="text-xs mt-1">Blue</span>
                 </button>
               </div>
@@ -820,11 +989,11 @@
                   id="textAreaWidth"
                   type="number"
                   bind:value={bannerSettings.textAreaWidth}
-                  min="20"
-                  max="60"
+                  min="30"
+                  max="70"
                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
-                <p class="text-xs text-gray-500 mt-1">Width of text area as percentage of banner</p>
+                <p class="text-xs text-gray-500 mt-1">Width of text area (default: 50% - image takes remaining space)</p>
               </div>
 
               <!-- Margins -->
