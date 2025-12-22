@@ -66,7 +66,7 @@
   
   // Available fonts - serif for English, vintage Hebrew fonts
   const fonts = [
-    { name: 'Cormorant Garamond (Serif)', value: 'Cormorant Garamond, serif', supportsHebrew: false },
+    { name: 'Cormorant Garamond (Serif)', value: 'Cormorant Garamond, serif', supportsHebrew: false, default: true },
     { name: 'Playfair Display (Serif)', value: 'Playfair Display, serif', supportsHebrew: false },
     { name: 'Times New Roman (Serif)', value: 'Times New Roman, serif', supportsHebrew: true },
     { name: 'Georgia (Serif)', value: 'Georgia, serif', supportsHebrew: true },
@@ -74,7 +74,7 @@
   ];
   
   const hebrewFonts = [
-    { name: 'Frank Ruhl Libre (Recommended)', value: 'Frank Ruhl Libre, serif' },
+    { name: 'Frank Ruhl Libre (Recommended)', value: 'Frank Ruhl Libre, serif', default: true },
     { name: 'Cardo (Recommended)', value: 'Cardo, serif' },
     { name: 'David', value: 'David, Arial, sans-serif' },
     { name: 'Heebo', value: 'Heebo, sans-serif' },
@@ -1008,7 +1008,7 @@
                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
               >
                 {#each fonts as font}
-                  <option value={font.value}>{font.name}</option>
+                  <option value={font.value} selected={font.default}>{font.name}</option>
                 {/each}
               </select>
             </div>
