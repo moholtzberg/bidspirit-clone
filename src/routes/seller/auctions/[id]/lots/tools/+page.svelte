@@ -32,7 +32,8 @@
     yearHebrew: '', // Hebrew year (e.g., "תר\"נ")
     primaryImageUrl: '',
     backgroundImageUrl: '',
-    primaryImageFile: null, // For file upload
+    primaryImageFile: null, // For file upload (single)
+    primaryImageFiles: [], // For multiple file uploads (collage)
     backgroundImageFile: null, // For file upload
     textColor: ginzeyColors.darkText,
     backgroundColor: 'rgba(245, 241, 232, 0.95)', // High opacity antique paper for text readability
@@ -54,7 +55,12 @@
     primaryImageRounded: true, // Enable rounded corners on primary image
     primaryImageCornerRadius: 20, // Corner radius in pixels
     primaryImageBlend: true, // Enable blending/fade on left edge
-    primaryImageBlendWidth: 40 // Width of blend gradient in pixels
+    primaryImageBlendWidth: 40, // Width of blend gradient in pixels
+    // Collage layout options
+    collageCenterImageSize: 0.6, // Size of center (first) image as percentage (0.6 = 60%)
+    collageOtherImageSize: 0.35, // Size of other images as percentage
+    collageSpacing: 15, // Spacing between images in pixels
+    collageStaggerAmount: 0.1 // Amount of stagger (0.1 = 10% offset)
   });
   
   // Available fonts - serif for English, vintage Hebrew fonts
@@ -229,6 +235,174 @@
     return containsHebrew(text) ? 'rtl' : 'ltr';
   }
   
+  // Function to draw multiple images in a staggered collage layout
+  async function drawImageCollage(ctx, imageFiles, areaX, areaY, areaWidth, areaHeight, settings) {
+    const numImages = imageFiles.length;
+    if (numImages === 0) return;
+    
+    const cornerRadius = settings.primaryImageRounded ? settings.primaryImageCornerRadius : 0;
+    const padding = settings.collageSpacing || 15;
+    const blendWidth = settings.primaryImageBlend ? (settings.primaryImageBlendWidth || 40) : 0;
+    const centerSize = settings.collageCenterImageSize || 0.6;
+    const otherSize = settings.collageOtherImageSize || 0.35;
+    const staggerAmount = settings.collageStaggerAmount || 0.1;
+    
+    // Calculate layout based on number of images
+    let imageLayouts = [];
+    
+    if (numImages === 1) {
+      // Single image - centered, full area
+      imageLayouts.push({ x: 0.5 - centerSize/2, y: 0.5 - centerSize/2, width: centerSize, height: centerSize });
+    } else {
+      // First image (center, larger)
+      const centerX = 0.5 - centerSize / 2;
+      const centerY = 0.5 - centerSize / 2;
+      imageLayouts.push({ x: centerX, y: centerY, width: centerSize, height: centerSize });
+      
+      // Normalize spacing to relative units
+      const spacingX = padding / areaWidth;
+      const spacingY = padding / areaHeight;
+      
+      // Position other images around the center based on pattern:
+      // 1: [1]
+      // 2: [1, 2]
+      // 3: [2, 1, 3]
+      // 4: [2, 1, 3, 4]
+      if (numImages === 2) {
+        // Layout: 1,2 (center image + one other to the right)
+        imageLayouts.push({ 
+          x: 0.5 + centerSize/2 + spacingX, 
+          y: 0.5 - otherSize/2, 
+          width: otherSize, 
+          height: otherSize 
+        });
+      } else if (numImages === 3) {
+        // Layout: 2,1,3 (left, center, right)
+        imageLayouts.push({ 
+          x: 0.5 - centerSize/2 - otherSize - spacingX, 
+          y: 0.5 - otherSize/2, 
+          width: otherSize, 
+          height: otherSize 
+        }); // Image 2 - left
+        imageLayouts.push({ 
+          x: 0.5 + centerSize/2 + spacingX, 
+          y: 0.5 - otherSize/2, 
+          width: otherSize, 
+          height: otherSize 
+        }); // Image 3 - right
+      } else if (numImages === 4) {
+        // Layout: 2,1,3,4 (left, center, right, bottom)
+        imageLayouts.push({ 
+          x: 0.5 - centerSize/2 - otherSize - spacingX, 
+          y: 0.5 - otherSize/2, 
+          width: otherSize, 
+          height: otherSize 
+        }); // Image 2 - left
+        imageLayouts.push({ 
+          x: 0.5 + centerSize/2 + spacingX, 
+          y: 0.5 - otherSize/2, 
+          width: otherSize, 
+          height: otherSize 
+        }); // Image 3 - right
+        imageLayouts.push({ 
+          x: 0.5 - otherSize/2, 
+          y: 0.5 + centerSize/2 + spacingY, 
+          width: otherSize, 
+          height: otherSize 
+        }); // Image 4 - bottom
+      } else {
+        // 5+ images - arrange around center
+        const angleStep = (2 * Math.PI) / (numImages - 1);
+        const radius = centerSize / 2 + otherSize / 2 + padding / Math.min(areaWidth, areaHeight);
+        
+        for (let i = 1; i < numImages; i++) {
+          const angle = (i - 1) * angleStep;
+          const offsetX = Math.cos(angle) * radius;
+          const offsetY = Math.sin(angle) * radius;
+          imageLayouts.push({
+            x: 0.5 + offsetX - otherSize / 2,
+            y: 0.5 + offsetY - otherSize / 2,
+            width: otherSize,
+            height: otherSize
+          });
+        }
+      }
+    }
+    
+    // Load and draw each image
+    const imagePromises = imageFiles.map((file, index) => {
+      return new Promise((resolve) => {
+        if (!file) {
+          resolve();
+          return;
+        }
+        
+        const img = new Image();
+        const imgSrc = URL.createObjectURL(file);
+        
+        img.onload = () => {
+          try {
+            const layout = imageLayouts[index] || imageLayouts[0];
+            const imgX = areaX + (layout.x * areaWidth);
+            const imgY = areaY + (layout.y * areaHeight);
+            const imgWidth = layout.width * areaWidth;
+            const imgHeight = layout.height * areaHeight;
+            
+            // Save context for clipping
+            ctx.save();
+            
+            // Create rounded rectangle path if rounding is enabled
+            if (settings.primaryImageRounded && cornerRadius > 0) {
+              ctx.beginPath();
+              ctx.moveTo(imgX + cornerRadius, imgY);
+              ctx.lineTo(imgX + imgWidth - cornerRadius, imgY);
+              ctx.quadraticCurveTo(imgX + imgWidth, imgY, imgX + imgWidth, imgY + cornerRadius);
+              ctx.lineTo(imgX + imgWidth, imgY + imgHeight - cornerRadius);
+              ctx.quadraticCurveTo(imgX + imgWidth, imgY + imgHeight, imgX + imgWidth - cornerRadius, imgY + imgHeight);
+              ctx.lineTo(imgX + cornerRadius, imgY + imgHeight);
+              ctx.quadraticCurveTo(imgX, imgY + imgHeight, imgX, imgY + imgHeight - cornerRadius);
+              ctx.lineTo(imgX, imgY + cornerRadius);
+              ctx.quadraticCurveTo(imgX, imgY, imgX + cornerRadius, imgY);
+              ctx.closePath();
+              ctx.clip();
+            }
+            
+            // Draw image
+            ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
+            
+            // Restore context
+            ctx.restore();
+          } catch (error) {
+            console.error(`Error drawing image ${index + 1}:`, error);
+          } finally {
+            // Clean up object URL
+            URL.revokeObjectURL(imgSrc);
+            resolve();
+          }
+        };
+        
+        img.onerror = (error) => {
+          console.warn(`Image ${index + 1} failed to load:`, error);
+          URL.revokeObjectURL(imgSrc);
+          resolve(); // Continue even if one image fails
+        };
+        
+        img.src = imgSrc;
+      });
+    });
+    
+    await Promise.all(imagePromises);
+    
+    // Add blending/fade on left edge if enabled
+    if (settings.primaryImageBlend && blendWidth > 0) {
+      const gradient = ctx.createLinearGradient(areaX, 0, areaX + blendWidth, 0);
+      gradient.addColorStop(0, 'rgba(245, 241, 232, 0.7)');
+      gradient.addColorStop(1, 'rgba(245, 241, 232, 0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(areaX, areaY, blendWidth, areaHeight);
+    }
+  }
+  
   async function generateBanner() {
     generating = true;
     generatedBannerUrl = null;
@@ -278,22 +452,30 @@
         ctx.fillRect(0, 0, canvas.width, canvas.height);
       }
       
-      // Load and draw primary image (right side - remaining space after text area)
-      const primaryImageSrc = bannerSettings.primaryImageFile
-        ? URL.createObjectURL(bannerSettings.primaryImageFile)
-        : bannerSettings.primaryImageUrl;
+      // Load and draw primary image(s) (right side - remaining space after text area)
+      const imgAreaTextWidth = (canvas.width * bannerSettings.textAreaWidth) / 100;
+      const imgAreaWidth = canvas.width - imgAreaTextWidth;
+      const imgAreaHeight = canvas.height;
+      const imgAreaX = imgAreaTextWidth;
+      const imgAreaY = 0;
       
-      if (primaryImageSrc) {
+      // Check if we have multiple images for collage
+      const hasMultipleImages = bannerSettings.primaryImageFiles && bannerSettings.primaryImageFiles.length > 0;
+      const hasSingleImage = bannerSettings.primaryImageFile || bannerSettings.primaryImageUrl;
+      
+      if (hasMultipleImages) {
+        // Draw collage of multiple images
+        await drawImageCollage(ctx, bannerSettings.primaryImageFiles, imgAreaX, imgAreaY, imgAreaWidth, imgAreaHeight, bannerSettings);
+      } else if (hasSingleImage) {
+        // Draw single image
+        const primaryImageSrc = bannerSettings.primaryImageFile
+          ? URL.createObjectURL(bannerSettings.primaryImageFile)
+          : bannerSettings.primaryImageUrl;
+        
         await new Promise((resolve, reject) => {
           const img = new Image();
           img.crossOrigin = bannerSettings.primaryImageFile ? 'anonymous' : 'anonymous';
           img.onload = () => {
-            // Draw image on right side (remaining space after text area)
-            const textAreaWidth = (canvas.width * bannerSettings.textAreaWidth) / 100;
-            const imgWidth = canvas.width - textAreaWidth;
-            const imgHeight = canvas.height;
-            const imgX = textAreaWidth;
-            const imgY = 0;
             const cornerRadius = bannerSettings.primaryImageRounded ? bannerSettings.primaryImageCornerRadius : 0;
             
             // Save context for clipping
@@ -302,21 +484,21 @@
             // Create rounded rectangle path if rounding is enabled
             if (bannerSettings.primaryImageRounded && cornerRadius > 0) {
               ctx.beginPath();
-              ctx.moveTo(imgX + cornerRadius, imgY);
-              ctx.lineTo(imgX + imgWidth - cornerRadius, imgY);
-              ctx.quadraticCurveTo(imgX + imgWidth, imgY, imgX + imgWidth, imgY + cornerRadius);
-              ctx.lineTo(imgX + imgWidth, imgY + imgHeight - cornerRadius);
-              ctx.quadraticCurveTo(imgX + imgWidth, imgY + imgHeight, imgX + imgWidth - cornerRadius, imgY + imgHeight);
-              ctx.lineTo(imgX + cornerRadius, imgY + imgHeight);
-              ctx.quadraticCurveTo(imgX, imgY + imgHeight, imgX, imgY + imgHeight - cornerRadius);
-              ctx.lineTo(imgX, imgY + cornerRadius);
-              ctx.quadraticCurveTo(imgX, imgY, imgX + cornerRadius, imgY);
+              ctx.moveTo(imgAreaX + cornerRadius, imgAreaY);
+              ctx.lineTo(imgAreaX + imgAreaWidth - cornerRadius, imgAreaY);
+              ctx.quadraticCurveTo(imgAreaX + imgAreaWidth, imgAreaY, imgAreaX + imgAreaWidth, imgAreaY + cornerRadius);
+              ctx.lineTo(imgAreaX + imgAreaWidth, imgAreaY + imgAreaHeight - cornerRadius);
+              ctx.quadraticCurveTo(imgAreaX + imgAreaWidth, imgAreaY + imgAreaHeight, imgAreaX + imgAreaWidth - cornerRadius, imgAreaY + imgAreaHeight);
+              ctx.lineTo(imgAreaX + cornerRadius, imgAreaY + imgAreaHeight);
+              ctx.quadraticCurveTo(imgAreaX, imgAreaY + imgAreaHeight, imgAreaX, imgAreaY + imgAreaHeight - cornerRadius);
+              ctx.lineTo(imgAreaX, imgAreaY + cornerRadius);
+              ctx.quadraticCurveTo(imgAreaX, imgAreaY, imgAreaX + cornerRadius, imgAreaY);
               ctx.closePath();
               ctx.clip();
             }
             
             // Draw image
-            ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
+            ctx.drawImage(img, imgAreaX, imgAreaY, imgAreaWidth, imgAreaHeight);
             
             // Restore context
             ctx.restore();
@@ -324,11 +506,11 @@
             // Add blending/fade on left edge if enabled
             if (bannerSettings.primaryImageBlend) {
               const blendWidth = bannerSettings.primaryImageBlendWidth || 40;
-              const gradient = ctx.createLinearGradient(imgX, 0, imgX + blendWidth, 0);
+              const gradient = ctx.createLinearGradient(imgAreaX, 0, imgAreaX + blendWidth, 0);
               gradient.addColorStop(0, 'rgba(245, 241, 232, 0.7)'); // Antique paper color with opacity
               gradient.addColorStop(1, 'rgba(245, 241, 232, 0)');
               ctx.fillStyle = gradient;
-              ctx.fillRect(imgX, imgY, blendWidth, imgHeight);
+              ctx.fillRect(imgAreaX, imgAreaY, blendWidth, imgAreaHeight);
             }
             
             // Clean up object URL if we created one
@@ -591,7 +773,7 @@
       generatedBannerUrl = canvas.toDataURL('image/png');
     } catch (error) {
       console.error('Error generating banner:', error);
-      alert('Error generating banner. Please check image URLs.');
+      alert(`Error generating banner: ${error.message || 'Please check image files and try again.'}`);
     } finally {
       generating = false;
     }
@@ -968,13 +1150,36 @@
             <!-- Primary Image -->
             <div class="mb-4">
               <label for="primaryImage" class="block text-sm font-medium text-gray-700 mb-2">
-                Primary Image *
+                Primary Image(s) *
               </label>
               
-              <!-- File Upload Option -->
+              <!-- Multiple File Upload Option (Collage) -->
+              <div class="mb-2">
+                <label for="primaryImageFiles" class="block text-xs text-gray-600 mb-1">
+                  Upload Multiple Images (Collage)
+                </label>
+                <input
+                  id="primaryImageFiles"
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onchange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    if (files.length > 0) {
+                      bannerSettings.primaryImageFiles = files;
+                      bannerSettings.primaryImageFile = null; // Clear single file
+                      bannerSettings.primaryImageUrl = ''; // Clear URL
+                    }
+                  }}
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
+                />
+                <p class="text-xs text-gray-500 mt-1">Select multiple images for a staggered collage layout</p>
+              </div>
+              
+              <!-- Single File Upload Option -->
               <div class="mb-2">
                 <label for="primaryImageFile" class="block text-xs text-gray-600 mb-1">
-                  Upload Image File
+                  Upload Single Image File
                 </label>
                 <input
                   id="primaryImageFile"
@@ -984,7 +1189,8 @@
                     const file = e.target.files?.[0];
                     if (file) {
                       bannerSettings.primaryImageFile = file;
-                      bannerSettings.primaryImageUrl = ''; // Clear URL when file is selected
+                      bannerSettings.primaryImageFiles = []; // Clear multiple files
+                      bannerSettings.primaryImageUrl = ''; // Clear URL
                     }
                   }}
                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
@@ -1010,6 +1216,7 @@
                   oninput={(e) => {
                     if (e.target.value) {
                       bannerSettings.primaryImageFile = null; // Clear file when URL is entered
+                      bannerSettings.primaryImageFiles = []; // Clear multiple files
                     }
                   }}
                   class="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
@@ -1017,8 +1224,37 @@
                 />
               </div>
               
-              <!-- Preview -->
-              {#if bannerSettings.primaryImageFile}
+              <!-- Preview Multiple Images -->
+              {#if bannerSettings.primaryImageFiles && bannerSettings.primaryImageFiles.length > 0}
+                <div class="mt-2">
+                  <p class="text-xs text-gray-600 mb-2">Collage Preview ({bannerSettings.primaryImageFiles.length} image(s)):</p>
+                  <div class="grid grid-cols-2 gap-2">
+                    {#each bannerSettings.primaryImageFiles as file}
+                      <div class="relative">
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt="Collage image preview"
+                          class="w-full h-24 object-cover rounded-lg border border-gray-200"
+                          onerror={(e) => {
+                            e.target.style.display = 'none';
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onclick={() => {
+                            bannerSettings.primaryImageFiles = bannerSettings.primaryImageFiles.filter(f => f !== file);
+                          }}
+                          class="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+                          title="Remove image"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    {/each}
+                  </div>
+                </div>
+              <!-- Preview Single File -->
+              {:else if bannerSettings.primaryImageFile}
                 <div class="mt-2">
                   <img
                     src={URL.createObjectURL(bannerSettings.primaryImageFile)}
@@ -1030,6 +1266,7 @@
                   />
                   <p class="text-xs text-gray-500 mt-1">File: {bannerSettings.primaryImageFile.name}</p>
                 </div>
+              <!-- Preview URL -->
               {:else if bannerSettings.primaryImageUrl}
                 <div class="mt-2">
                   <img
@@ -1105,6 +1342,81 @@
                       class="w-full"
                     />
                     <p class="text-xs text-gray-500 mt-1">Controls how far the fade extends from the left edge</p>
+                  </div>
+                {/if}
+                
+                <!-- Collage Layout Options (only show if multiple images) -->
+                {#if bannerSettings.primaryImageFiles && bannerSettings.primaryImageFiles.length > 1}
+                  <div class="mt-4 pt-4 border-t border-gray-300">
+                    <h5 class="text-sm font-semibold text-gray-700 mb-3">Collage Layout Options</h5>
+                    
+                    <!-- Center Image Size -->
+                    <div class="mb-3">
+                      <label for="centerImageSize" class="block text-xs text-gray-600 mb-1">
+                        Center Image Size: {Math.round(bannerSettings.collageCenterImageSize * 100)}%
+                      </label>
+                      <input
+                        id="centerImageSize"
+                        type="range"
+                        min="0.3"
+                        max="0.8"
+                        step="0.05"
+                        bind:value={bannerSettings.collageCenterImageSize}
+                        class="w-full"
+                      />
+                      <p class="text-xs text-gray-500 mt-1">Size of the first (center) image</p>
+                    </div>
+                    
+                    <!-- Other Images Size -->
+                    <div class="mb-3">
+                      <label for="otherImageSize" class="block text-xs text-gray-600 mb-1">
+                        Other Images Size: {Math.round(bannerSettings.collageOtherImageSize * 100)}%
+                      </label>
+                      <input
+                        id="otherImageSize"
+                        type="range"
+                        min="0.15"
+                        max="0.5"
+                        step="0.05"
+                        bind:value={bannerSettings.collageOtherImageSize}
+                        class="w-full"
+                      />
+                      <p class="text-xs text-gray-500 mt-1">Size of surrounding images</p>
+                    </div>
+                    
+                    <!-- Spacing -->
+                    <div class="mb-3">
+                      <label for="collageSpacing" class="block text-xs text-gray-600 mb-1">
+                        Image Spacing: {bannerSettings.collageSpacing}px
+                      </label>
+                      <input
+                        id="collageSpacing"
+                        type="range"
+                        min="5"
+                        max="50"
+                        step="5"
+                        bind:value={bannerSettings.collageSpacing}
+                        class="w-full"
+                      />
+                      <p class="text-xs text-gray-500 mt-1">Space between images</p>
+                    </div>
+                    
+                    <!-- Stagger Amount -->
+                    <div>
+                      <label for="collageStagger" class="block text-xs text-gray-600 mb-1">
+                        Stagger Amount: {Math.round(bannerSettings.collageStaggerAmount * 100)}%
+                      </label>
+                      <input
+                        id="collageStagger"
+                        type="range"
+                        min="0"
+                        max="0.3"
+                        step="0.05"
+                        bind:value={bannerSettings.collageStaggerAmount}
+                        class="w-full"
+                      />
+                      <p class="text-xs text-gray-500 mt-1">Amount of offset/stagger for surrounding images</p>
+                    </div>
                   </div>
                 {/if}
               </div>
@@ -1423,7 +1735,7 @@
             <!-- Generate Button -->
             <button
               onclick={generateBanner}
-              disabled={generating || !bannerSettings.title || (!bannerSettings.primaryImageUrl && !bannerSettings.primaryImageFile)}
+              disabled={generating || !bannerSettings.title || (!bannerSettings.primaryImageUrl && !bannerSettings.primaryImageFile && (!bannerSettings.primaryImageFiles || bannerSettings.primaryImageFiles.length === 0))}
               class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {generating ? 'Generating...' : 'Generate Banner'}
