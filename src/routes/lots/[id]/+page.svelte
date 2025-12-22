@@ -1,0 +1,285 @@
+<script>
+  import { onMount } from 'svelte';
+  import { page } from '$app/stores';
+  import { goto } from '$app/navigation';
+  
+  let lot = $state(null);
+  let bids = $state([]);
+  let loading = $state(true);
+  let bidAmount = $state('');
+  let bidError = $state('');
+  let bidSuccess = $state(false);
+  let currentUser = $state({ id: 'user1', name: 'David Cohen' }); // Mock user - replace with real auth
+  
+  let pollInterval = null;
+  
+  $effect(() => {
+    if ($page.params.id) {
+      loadLot();
+      // Poll for updates every 5 seconds
+      pollInterval = setInterval(() => {
+        loadLot();
+        loadBids();
+      }, 5000);
+    }
+    
+    return () => {
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  });
+  
+  async function loadLot() {
+    try {
+      const response = await fetch(`/api/lots/${$page.params.id}`);
+      lot = await response.json();
+      if (lot) {
+        bidAmount = String(lot.currentBid + lot.bidIncrement);
+      }
+    } catch (error) {
+      console.error('Error loading lot:', error);
+    } finally {
+      loading = false;
+    }
+  }
+  
+  async function loadBids() {
+    try {
+      const response = await fetch(`/api/bids?lotId=${$page.params.id}`);
+      bids = await response.json();
+    } catch (error) {
+      console.error('Error loading bids:', error);
+    }
+  }
+  
+  async function placeBid() {
+    bidError = '';
+    bidSuccess = false;
+    
+    const amount = parseFloat(bidAmount);
+    
+    if (!amount || amount <= 0) {
+      bidError = 'Please enter a valid bid amount';
+      return;
+    }
+    
+    if (lot && amount < lot.currentBid + lot.bidIncrement) {
+      bidError = `Bid must be at least $${lot.currentBid + lot.bidIncrement}`;
+      return;
+    }
+    
+    try {
+      const response = await fetch('/api/bids', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          lotId: lot.id,
+          userId: currentUser.id,
+          userName: currentUser.name,
+          amount: amount
+        })
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to place bid');
+      }
+      
+      bidSuccess = true;
+      bidAmount = String(amount + lot.bidIncrement);
+      await loadLot();
+      await loadBids();
+      
+      setTimeout(() => {
+        bidSuccess = false;
+      }, 3000);
+    } catch (error) {
+      bidError = error.message;
+    }
+  }
+  
+  function formatCurrency(amount) {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD'
+    }).format(amount);
+  }
+  
+  function formatDate(dateString) {
+    return new Date(dateString).toLocaleString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+  
+  onMount(() => {
+    loadBids();
+  });
+</script>
+
+{#if loading}
+  <div class="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div class="text-center">
+      <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <p class="mt-4 text-gray-600">Loading lot...</p>
+    </div>
+  </div>
+{:else if lot}
+  <div class="min-h-screen bg-gray-50">
+    <div class="container mx-auto px-4 py-8">
+      <button
+        onclick={() => goto(`/auctions/${lot.auctionId}`)}
+        class="text-blue-600 hover:text-blue-800 mb-6 flex items-center"
+      >
+        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+        </svg>
+        Back to Auction
+      </button>
+
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Main Content -->
+        <div class="lg:col-span-2">
+          <div class="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
+            <div class="relative">
+              <img
+                src={lot.imageUrl}
+                alt={lot.title}
+                class="w-full h-96 object-cover"
+              />
+              <div class="absolute top-4 left-4 bg-white px-4 py-2 rounded-full text-lg font-bold">
+                Lot #{lot.lotNumber}
+              </div>
+            </div>
+            <div class="p-8">
+              <h1 class="text-3xl font-bold text-gray-900 mb-4">{lot.title}</h1>
+              <p class="text-gray-600 text-lg mb-6">{lot.description}</p>
+              
+              <div class="grid grid-cols-2 gap-6 mb-6">
+                <div>
+                  <p class="text-sm text-gray-500 mb-1">Starting Bid</p>
+                  <p class="text-2xl font-bold text-gray-900">{formatCurrency(lot.startingBid)}</p>
+                </div>
+                <div>
+                  <p class="text-sm text-gray-500 mb-1">Bid Increment</p>
+                  <p class="text-2xl font-bold text-gray-900">{formatCurrency(lot.bidIncrement)}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bidding History -->
+          <div class="bg-white rounded-lg shadow-lg p-8">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Bidding History</h2>
+            {#if bids.length === 0}
+              <p class="text-gray-600">No bids yet. Be the first to bid!</p>
+            {:else}
+              <div class="space-y-4">
+                {#each bids as bid}
+                  <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <div>
+                      <p class="font-semibold text-gray-900">{bid.userName}</p>
+                      <p class="text-sm text-gray-500">{formatDate(bid.timestamp)}</p>
+                    </div>
+                    <p class="text-xl font-bold text-blue-600">{formatCurrency(bid.amount)}</p>
+                  </div>
+                {/each}
+              </div>
+            {/if}
+          </div>
+        </div>
+
+        <!-- Bidding Panel -->
+        <div class="lg:col-span-1">
+          <div class="bg-white rounded-lg shadow-lg p-6 sticky top-4">
+            <h2 class="text-2xl font-bold text-gray-900 mb-6">Place Your Bid</h2>
+            
+            <div class="mb-6">
+              <p class="text-sm text-gray-500 mb-2">Current Highest Bid</p>
+              <p class="text-4xl font-bold text-blue-600 mb-4">{formatCurrency(lot.currentBid)}</p>
+              
+              {#if lot.highestBidderId === currentUser.id}
+                <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+                  <p class="font-semibold">You are the highest bidder!</p>
+                </div>
+              {:else if lot.highestBidderName}
+                <p class="text-sm text-gray-600">Highest bidder: {lot.highestBidderName}</p>
+              {/if}
+            </div>
+
+            <div class="mb-6">
+              <label for="bidAmount" class="block text-sm font-medium text-gray-700 mb-2">
+                Your Bid Amount
+              </label>
+              <div class="relative">
+                <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                <input
+                  id="bidAmount"
+                  type="number"
+                  bind:value={bidAmount}
+                  min={lot.currentBid + lot.bidIncrement}
+                  step={lot.bidIncrement}
+                  class="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  placeholder={String(lot.currentBid + lot.bidIncrement)}
+                />
+              </div>
+              <p class="mt-2 text-sm text-gray-500">
+                Minimum bid: {formatCurrency(lot.currentBid + lot.bidIncrement)}
+              </p>
+            </div>
+
+            {#if bidError}
+              <div class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                <p>{bidError}</p>
+              </div>
+            {/if}
+
+            {#if bidSuccess}
+              <div class="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+                <p class="font-semibold">Bid placed successfully!</p>
+              </div>
+            {/if}
+
+            <button
+              onclick={placeBid}
+              class="w-full bg-blue-600 text-white py-4 rounded-lg hover:bg-blue-700 transition-colors font-bold text-lg mb-4"
+            >
+              Place Bid
+            </button>
+
+            <button
+              onclick={() => {
+                bidAmount = String(lot.currentBid + lot.bidIncrement);
+              }}
+              class="w-full bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition-colors"
+            >
+              Quick Bid: {formatCurrency(lot.currentBid + lot.bidIncrement)}
+            </button>
+
+            <div class="mt-6 pt-6 border-t">
+              <p class="text-sm text-gray-600 mb-2">Lot ends:</p>
+              <p class="font-semibold">{formatDate(lot.endTime)}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+{:else}
+  <div class="min-h-screen bg-gray-50 flex items-center justify-center">
+    <div class="text-center">
+      <p class="text-gray-600 text-lg">Lot not found</p>
+      <button
+        onclick={() => goto('/')}
+        class="mt-4 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+      >
+        Back to Auctions
+      </button>
+    </div>
+  </div>
+{/if}
+

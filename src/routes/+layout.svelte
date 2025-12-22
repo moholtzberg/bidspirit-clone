@@ -6,7 +6,4 @@
 
 <Navigation />
 
-
-<div class="bg-slate-800">
-    {@render children()}
-</div>
+{@render children()}

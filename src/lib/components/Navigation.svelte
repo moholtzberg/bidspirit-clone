@@ -1,4 +1,5 @@
 <script>
+    import { page } from '$app/stores';
     let isMenuOpen = $state(false);
 </script>
 
@@ -7,21 +8,43 @@
     <div class="container mx-auto px-4 py-4 flex items-center justify-between">
       
         <a href="/" class="flex items-center space-x-2">
-            <!-- Insert your logo image here -->
-            <img src="/dealeredge-high-resolution-logo-transparent.webp" alt="DealerEdge Logo" class="h-8 w-auto">
-            <!-- <span class="text-2xl font-bold">DealerEdge</span> -->
+            <span class="text-2xl font-bold text-blue-600">BidSpirit</span>
+            <span class="text-sm text-gray-600 font-medium">Judaica Auctions</span>
         </a>
   
       <!-- Desktop Menu -->
       <ul class="hidden md:flex space-x-6 items-center">
-        <li><a href="#home" class="text-gray-700 hover:text-gray-900 transition-colors">Home</a></li>
         <li>
-          <button
-            class="bg-slate-800 text-white px-4 py-2 rounded-md hover:bg-slate-700 transition-colors"
-            onclick={() => isModalOpen = true}
+          <a 
+            href="/" 
+            class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname === '/') ? 'text-blue-600 font-semibold' : ''}"
           >
-            Request Demo
-          </button>
+            Auctions
+          </a>
+        </li>
+        <li>
+          <a 
+            href="/dashboard" 
+            class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname === '/dashboard') ? 'text-blue-600 font-semibold' : ''}"
+          >
+            Dashboard
+          </a>
+        </li>
+        <li>
+          <a 
+            href="/seller" 
+            class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname.startsWith('/seller')) ? 'text-blue-600 font-semibold' : ''}"
+          >
+            Seller Portal
+          </a>
+        </li>
+        <li>
+          <a 
+            href="/dashboard" 
+            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+          >
+            My Account
+          </a>
         </li>
       </ul>
   
@@ -47,14 +70,37 @@
     {#if isMenuOpen}
       <div class="md:hidden bg-white shadow">
         <ul class="flex flex-col items-center space-y-4 py-4">
-          <li><a href="#home" class="text-gray-700 hover:text-gray-900 transition-colors">Home</a></li>
           <li>
-            <button
-              class="bg-slate-800 text-white px-4 py-2 rounded-md hover:bg-slate-700 transition-colors"
-              onclick={() => { isModalOpen = true; isMenuOpen = false; }}
+            <a 
+              href="/" 
+              class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname === '/') ? 'text-blue-600 font-semibold' : ''}"
             >
-              Request Demo
-            </button>
+              Auctions
+            </a>
+          </li>
+          <li>
+            <a 
+              href="/dashboard" 
+              class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname === '/dashboard') ? 'text-blue-600 font-semibold' : ''}"
+            >
+              Dashboard
+            </a>
+          </li>
+          <li>
+            <a 
+              href="/seller" 
+              class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname.startsWith('/seller')) ? 'text-blue-600 font-semibold' : ''}"
+            >
+              Seller Portal
+            </a>
+          </li>
+          <li>
+            <a 
+              href="/dashboard" 
+              class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+            >
+              My Account
+            </a>
           </li>
         </ul>
       </div>
