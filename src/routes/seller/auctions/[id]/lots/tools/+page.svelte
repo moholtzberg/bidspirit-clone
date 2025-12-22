@@ -32,6 +32,8 @@
     yearHebrew: '', // Hebrew year (e.g., "תר\"נ")
     primaryImageUrl: '',
     backgroundImageUrl: '',
+    primaryImageFile: null, // For file upload
+    backgroundImageFile: null, // For file upload
     textColor: ginzeyColors.darkText,
     backgroundColor: 'rgba(245, 241, 232, 0.95)', // High opacity antique paper for text readability
     fontSize: 48,
@@ -47,7 +49,7 @@
     // Category sticker colors
     categoryColor: ginzeyColors.red, // Default to red, can be changed to blue
     baseBackgroundColor: ginzeyColors.antiquePaper,
-    backgroundImageOpacity: 0.15 // Opacity for background image (0.15 = very subtle)
+    backgroundImageOpacity: 0.25 // Opacity for background image (0.25 = subtle but visible)
   });
   
   // Available fonts - serif for English, vintage Hebrew fonts
@@ -232,29 +234,37 @@
       const ctx = canvas.getContext('2d');
       
       // Load background image if provided (much more subtle)
-      if (bannerSettings.backgroundImageUrl) {
+      const backgroundImageSrc = bannerSettings.backgroundImageFile 
+        ? URL.createObjectURL(bannerSettings.backgroundImageFile)
+        : bannerSettings.backgroundImageUrl;
+      
+      if (backgroundImageSrc) {
         await new Promise((resolve, reject) => {
           const bgImg = new Image();
-          bgImg.crossOrigin = 'anonymous';
+          bgImg.crossOrigin = bannerSettings.backgroundImageFile ? 'anonymous' : 'anonymous';
           bgImg.onload = () => {
-            // Draw background image with reduced opacity for subtlety
-            const bgOpacity = bannerSettings.backgroundImageOpacity || 0.15;
-            ctx.globalAlpha = bgOpacity; // Very subtle background image
+            // Draw background image with reduced opacity for subtlety - visible across entire canvas
+            const bgOpacity = bannerSettings.backgroundImageOpacity || 0.25;
+            ctx.globalAlpha = bgOpacity; // Subtle background image
             ctx.drawImage(bgImg, 0, 0, canvas.width, canvas.height);
             ctx.globalAlpha = 1.0; // Reset alpha
             
-            // Add strong antique paper overlay for text readability
-            ctx.fillStyle = bannerSettings.baseBackgroundColor || ginzeyColors.antiquePaper;
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            // Clean up object URL if we created one
+            if (bannerSettings.backgroundImageFile) {
+              URL.revokeObjectURL(backgroundImageSrc);
+            }
             resolve();
           };
           bgImg.onerror = () => {
             // Fallback to antique paper background if image fails to load
             ctx.fillStyle = bannerSettings.baseBackgroundColor || ginzeyColors.antiquePaper;
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+            if (bannerSettings.backgroundImageFile) {
+              URL.revokeObjectURL(backgroundImageSrc);
+            }
             resolve();
           };
-          bgImg.src = bannerSettings.backgroundImageUrl;
+          bgImg.src = backgroundImageSrc;
         });
       } else {
         // Solid antique paper background if no background image
@@ -263,10 +273,14 @@
       }
       
       // Load and draw primary image (right side - remaining space after text area)
-      if (bannerSettings.primaryImageUrl) {
+      const primaryImageSrc = bannerSettings.primaryImageFile
+        ? URL.createObjectURL(bannerSettings.primaryImageFile)
+        : bannerSettings.primaryImageUrl;
+      
+      if (primaryImageSrc) {
         await new Promise((resolve, reject) => {
           const img = new Image();
-          img.crossOrigin = 'anonymous';
+          img.crossOrigin = bannerSettings.primaryImageFile ? 'anonymous' : 'anonymous';
           img.onload = () => {
             // Draw image on right side (remaining space after text area)
             const textAreaWidth = (canvas.width * bannerSettings.textAreaWidth) / 100;
@@ -285,14 +299,21 @@
             ctx.fillStyle = gradient;
             ctx.fillRect(imgX - 20, 0, 20, canvas.height);
             
+            // Clean up object URL if we created one
+            if (bannerSettings.primaryImageFile) {
+              URL.revokeObjectURL(primaryImageSrc);
+            }
             resolve();
           };
           img.onerror = () => {
             // If primary image fails, continue without it
             console.warn('Primary image failed to load');
+            if (bannerSettings.primaryImageFile) {
+              URL.revokeObjectURL(primaryImageSrc);
+            }
             resolve();
           };
-          img.src = bannerSettings.primaryImageUrl;
+          img.src = primaryImageSrc;
         });
       }
       
@@ -316,25 +337,53 @@
       // Start from top with margin
       let currentY = bannerSettings.textMarginTop;
       
-      // Draw title (English) - centered, serif font for vintage look
+      // Draw title (English) - centered, serif font for vintage look - BIGGER
       if (bannerSettings.title) {
-        ctx.font = `bold ${bannerSettings.fontSize}px ${bannerSettings.fontFamily}`;
+        ctx.font = `bold ${bannerSettings.fontSize * 1.2}px ${bannerSettings.fontFamily}`;
         ctx.textAlign = 'center';
-        const titleHeight = wrapTextCentered(ctx, bannerSettings.title, textAreaCenterX, currentY, maxTextWidth, bannerSettings.fontSize * 1.3);
+        const titleHeight = wrapTextCentered(ctx, bannerSettings.title, textAreaCenterX, currentY, maxTextWidth, bannerSettings.fontSize * 1.5);
         currentY += titleHeight + bannerSettings.textPadding;
       }
       
-      // Draw title (Hebrew) if provided - centered, Frank Ruhl or Cardo font
+      // Draw decorative line between English and Hebrew titles
+      if (bannerSettings.title && bannerSettings.titleHebrew) {
+        const lineY = currentY - (bannerSettings.textPadding / 2);
+        const lineWidth = maxTextWidth * 0.6;
+        const lineX = textAreaCenterX - (lineWidth / 2);
+        
+        // Draw decorative vintage line with ornament
+        ctx.strokeStyle = bannerSettings.textColor;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        // Left ornament
+        ctx.moveTo(lineX, lineY);
+        ctx.lineTo(lineX + 15, lineY);
+        ctx.moveTo(lineX + 5, lineY - 3);
+        ctx.lineTo(lineX + 5, lineY + 3);
+        // Center line
+        ctx.moveTo(lineX + 20, lineY);
+        ctx.lineTo(lineX + lineWidth - 20, lineY);
+        // Right ornament
+        ctx.moveTo(lineX + lineWidth - 15, lineY);
+        ctx.lineTo(lineX + lineWidth, lineY);
+        ctx.moveTo(lineX + lineWidth - 5, lineY - 3);
+        ctx.lineTo(lineX + lineWidth - 5, lineY + 3);
+        ctx.stroke();
+        
+        currentY += bannerSettings.textPadding;
+      }
+      
+      // Draw title (Hebrew) if provided - centered, Frank Ruhl or Cardo font - BIGGER
       if (bannerSettings.titleHebrew) {
-        ctx.font = `bold ${bannerSettings.fontSize}px ${bannerSettings.hebrewFontFamily}`;
+        ctx.font = `bold ${bannerSettings.fontSize * 1.2}px ${bannerSettings.hebrewFontFamily}`;
         ctx.textAlign = 'center';
-        const titleHebrewHeight = wrapTextCentered(ctx, bannerSettings.titleHebrew, textAreaCenterX, currentY, maxTextWidth, bannerSettings.fontSize * 1.3);
+        const titleHebrewHeight = wrapTextCentered(ctx, bannerSettings.titleHebrew, textAreaCenterX, currentY, maxTextWidth, bannerSettings.fontSize * 1.5);
         currentY += titleHebrewHeight + bannerSettings.textPadding;
       }
       
-      // Draw year (English and Hebrew) - centered together with vintage styling
+      // Draw year (English and Hebrew) - centered together with vintage styling - BIGGER
       if (bannerSettings.yearEnglish || bannerSettings.yearHebrew) {
-        ctx.font = `italic ${bannerSettings.fontSize * 0.4}px ${bannerSettings.fontFamily}`;
+        ctx.font = `italic ${bannerSettings.fontSize * 0.7}px ${bannerSettings.fontFamily}`;
         ctx.textAlign = 'center';
         let yearText = '';
         if (bannerSettings.yearEnglish) {
@@ -346,7 +395,7 @@
         }
         if (yearText) {
           ctx.fillText(yearText, textAreaCenterX, currentY);
-          currentY += bannerSettings.fontSize * 0.6 + bannerSettings.textPadding;
+          currentY += bannerSettings.fontSize * 0.8 + bannerSettings.textPadding;
         }
       }
       
@@ -366,72 +415,79 @@
         currentY += subtitleHebrewHeight + bannerSettings.textPadding;
       }
       
-      // Draw category sticker badge if provided
+      // Draw category sticker badge if provided - BIGGER, starts at left edge, rounded on right
       if (bannerSettings.category || bannerSettings.categoryHebrew) {
-        ctx.font = `bold ${bannerSettings.fontSize * 0.4}px ${bannerSettings.fontFamily}`;
+        ctx.font = `bold ${bannerSettings.fontSize * 0.6}px ${bannerSettings.fontFamily}`;
         ctx.textAlign = 'left';
         const categoryText = bannerSettings.category ? bannerSettings.category.toUpperCase() : '';
         const categoryHebrewText = bannerSettings.categoryHebrew || '';
         
-        // Measure both texts
-        let categoryWidth = 40;
+        // Measure both texts with bigger font
+        let categoryWidth = 60;
         if (categoryText) {
           categoryWidth += ctx.measureText(categoryText).width;
         }
         if (categoryHebrewText) {
-          ctx.font = `bold ${bannerSettings.fontSize * 0.4}px ${bannerSettings.hebrewFontFamily}`;
-          categoryWidth += ctx.measureText(categoryHebrewText).width + 20;
+          ctx.font = `bold ${bannerSettings.fontSize * 0.6}px ${bannerSettings.hebrewFontFamily}`;
+          categoryWidth += ctx.measureText(categoryHebrewText).width + 30;
         }
         
-        // Center the category sticker
-        const categoryX = textAreaCenterX - (categoryWidth / 2);
+        // Category sticker starts at left edge, extends to the right
+        const categoryX = 0; // Start at left edge
         const categoryY = currentY;
-        const categoryHeight = 50;
-        const cornerRadius = 8; // Rounded corners for sticker effect
+        const categoryHeight = 70; // Bigger height
+        const cornerRadius = 20; // Rounded corners on right side only
         
-        // Helper function to draw rounded rectangle
-        function drawRoundedRect(x, y, width, height, radius) {
+        // Helper function to draw rounded rectangle (rounded on right side only)
+        function drawRoundedRectRight(x, y, width, height, radius) {
           ctx.beginPath();
-          ctx.moveTo(x + radius, y);
-          ctx.lineTo(x + width - radius, y);
-          ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
-          ctx.lineTo(x + width, y + height - radius);
-          ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
-          ctx.lineTo(x + radius, y + height);
-          ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
-          ctx.lineTo(x, y + radius);
-          ctx.quadraticCurveTo(x, y, x + radius, y);
+          ctx.moveTo(x, y); // Start at left (sharp corner)
+          ctx.lineTo(x + width - radius, y); // Top edge
+          ctx.quadraticCurveTo(x + width, y, x + width, y + radius); // Top-right corner
+          ctx.lineTo(x + width, y + height - radius); // Right edge
+          ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height); // Bottom-right corner
+          ctx.lineTo(x, y + height); // Bottom edge (sharp corner)
+          ctx.lineTo(x, y); // Back to start
           ctx.closePath();
         }
         
-        // Draw sticker shadow (offset slightly)
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-        drawRoundedRect(categoryX + 2, categoryY + 2, categoryWidth, categoryHeight, cornerRadius);
+        // Draw multiple shadow layers for depth
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+        drawRoundedRectRight(categoryX + 4, categoryY + 4, categoryWidth, categoryHeight, cornerRadius);
         ctx.fill();
         
-        // Draw sticker background with rounded corners
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
+        drawRoundedRectRight(categoryX + 2, categoryY + 2, categoryWidth, categoryHeight, cornerRadius);
+        ctx.fill();
+        
+        // Draw main sticker background with rounded corners on right
         ctx.fillStyle = bannerSettings.categoryColor || ginzeyColors.red;
-        drawRoundedRect(categoryX, categoryY, categoryWidth, categoryHeight, cornerRadius);
+        drawRoundedRectRight(categoryX, categoryY, categoryWidth, categoryHeight, cornerRadius);
+        ctx.fill();
+        
+        // Draw inner highlight for depth
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+        drawRoundedRectRight(categoryX, categoryY, categoryWidth, categoryHeight / 2, cornerRadius);
         ctx.fill();
         
         // Draw sticker border for definition
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-        ctx.lineWidth = 1;
-        drawRoundedRect(categoryX, categoryY, categoryWidth, categoryHeight, cornerRadius);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 2;
+        drawRoundedRectRight(categoryX, categoryY, categoryWidth, categoryHeight, cornerRadius);
         ctx.stroke();
         
-        // Draw category text (English)
+        // Draw category text (English) - bigger
         ctx.fillStyle = ginzeyColors.lightText;
         if (categoryText) {
-          ctx.font = `bold ${bannerSettings.fontSize * 0.4}px ${bannerSettings.fontFamily}`;
+          ctx.font = `bold ${bannerSettings.fontSize * 0.6}px ${bannerSettings.fontFamily}`;
           ctx.textAlign = 'left';
-          ctx.fillText(categoryText, categoryX + 20, categoryY + 15);
+          ctx.fillText(categoryText, categoryX + 30, categoryY + 20);
         }
-        // Draw category text (Hebrew)
+        // Draw category text (Hebrew) - bigger
         if (categoryHebrewText) {
-          ctx.font = `bold ${bannerSettings.fontSize * 0.4}px ${bannerSettings.hebrewFontFamily}`;
+          ctx.font = `bold ${bannerSettings.fontSize * 0.6}px ${bannerSettings.hebrewFontFamily}`;
           ctx.textAlign = 'right';
-          ctx.fillText(categoryHebrewText, categoryX + categoryWidth - 20, categoryY + 15);
+          ctx.fillText(categoryHebrewText, categoryX + categoryWidth - 30, categoryY + 20);
         }
         currentY += categoryHeight + bannerSettings.textPadding;
       }
@@ -799,20 +855,72 @@
               {/if}
             </div>
 
-            <!-- Primary Image URL -->
+            <!-- Primary Image -->
             <div class="mb-4">
               <label for="primaryImage" class="block text-sm font-medium text-gray-700 mb-2">
-                Primary Image URL *
+                Primary Image *
               </label>
-              <input
-                id="primaryImage"
-                type="url"
-                bind:value={bannerSettings.primaryImageUrl}
-                required
-                class="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                placeholder="https://example.com/image.jpg"
-              />
-              {#if bannerSettings.primaryImageUrl}
+              
+              <!-- File Upload Option -->
+              <div class="mb-2">
+                <label for="primaryImageFile" class="block text-xs text-gray-600 mb-1">
+                  Upload Image File
+                </label>
+                <input
+                  id="primaryImageFile"
+                  type="file"
+                  accept="image/*"
+                  onchange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      bannerSettings.primaryImageFile = file;
+                      bannerSettings.primaryImageUrl = ''; // Clear URL when file is selected
+                    }
+                  }}
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
+                />
+              </div>
+              
+              <!-- OR divider -->
+              <div class="flex items-center my-2">
+                <div class="flex-1 border-t border-gray-300"></div>
+                <span class="px-2 text-xs text-gray-500">OR</span>
+                <div class="flex-1 border-t border-gray-300"></div>
+              </div>
+              
+              <!-- URL Input Option -->
+              <div>
+                <label for="primaryImageUrl" class="block text-xs text-gray-600 mb-1">
+                  Image URL
+                </label>
+                <input
+                  id="primaryImageUrl"
+                  type="url"
+                  bind:value={bannerSettings.primaryImageUrl}
+                  oninput={(e) => {
+                    if (e.target.value) {
+                      bannerSettings.primaryImageFile = null; // Clear file when URL is entered
+                    }
+                  }}
+                  class="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="https://example.com/image.jpg"
+                />
+              </div>
+              
+              <!-- Preview -->
+              {#if bannerSettings.primaryImageFile}
+                <div class="mt-2">
+                  <img
+                    src={URL.createObjectURL(bannerSettings.primaryImageFile)}
+                    alt="Primary image preview"
+                    class="w-full h-32 object-cover rounded-lg border border-gray-200"
+                    onerror={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                  <p class="text-xs text-gray-500 mt-1">File: {bannerSettings.primaryImageFile.name}</p>
+                </div>
+              {:else if bannerSettings.primaryImageUrl}
                 <div class="mt-2">
                   <img
                     src={bannerSettings.primaryImageUrl}
@@ -826,29 +934,84 @@
               {/if}
             </div>
 
-            <!-- Background Image URL -->
+            <!-- Background Image -->
             <div class="mb-4">
               <label for="backgroundImage" class="block text-sm font-medium text-gray-700 mb-2">
-                Background Image URL (Optional)
+                Background Image (Optional)
               </label>
-              <input
-                id="backgroundImage"
-                type="url"
-                bind:value={bannerSettings.backgroundImageUrl}
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
-                placeholder="https://example.com/background.jpg"
-              />
+              
+              <!-- File Upload Option -->
+              <div class="mb-2">
+                <label for="backgroundImageFile" class="block text-xs text-gray-600 mb-1">
+                  Upload Image File
+                </label>
+                <input
+                  id="backgroundImageFile"
+                  type="file"
+                  accept="image/*"
+                  onchange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      bannerSettings.backgroundImageFile = file;
+                      bannerSettings.backgroundImageUrl = ''; // Clear URL when file is selected
+                    }
+                  }}
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-sm"
+                />
+              </div>
+              
+              <!-- OR divider -->
+              <div class="flex items-center my-2">
+                <div class="flex-1 border-t border-gray-300"></div>
+                <span class="px-2 text-xs text-gray-500">OR</span>
+                <div class="flex-1 border-t border-gray-300"></div>
+              </div>
+              
+              <!-- URL Input Option -->
+              <div>
+                <label for="backgroundImageUrl" class="block text-xs text-gray-600 mb-1">
+                  Image URL
+                </label>
+                <input
+                  id="backgroundImageUrl"
+                  type="url"
+                  bind:value={bannerSettings.backgroundImageUrl}
+                  oninput={(e) => {
+                    if (e.target.value) {
+                      bannerSettings.backgroundImageFile = null; // Clear file when URL is entered
+                    }
+                  }}
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white"
+                  placeholder="https://example.com/background.jpg"
+                />
+              </div>
+              
               <p class="mt-1 text-xs text-gray-500">If not provided, antique paper background will be used</p>
-              {#if bannerSettings.backgroundImageUrl}
+              
+              <!-- Preview -->
+              {#if bannerSettings.backgroundImageFile}
                 <div class="mt-2">
                   <img
-                    src={bannerSettings.backgroundImageUrl}
+                    src={URL.createObjectURL(bannerSettings.backgroundImageFile)}
                     alt="Background image preview"
-                    class="w-full h-32 object-cover rounded-lg border border-gray-200"
+                    class="w-full h-32 object-cover rounded-lg border border-gray-200 opacity-30"
                     onerror={(e) => {
                       e.target.style.display = 'none';
                     }}
                   />
+                  <p class="text-xs text-gray-500 mt-1">File: {bannerSettings.backgroundImageFile.name} (shown at 30% opacity for preview)</p>
+                </div>
+              {:else if bannerSettings.backgroundImageUrl}
+                <div class="mt-2">
+                  <img
+                    src={bannerSettings.backgroundImageUrl}
+                    alt="Background image preview"
+                    class="w-full h-32 object-cover rounded-lg border border-gray-200 opacity-30"
+                    onerror={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                  <p class="text-xs text-gray-500 mt-1">(shown at 30% opacity for preview)</p>
                 </div>
               {/if}
             </div>
@@ -978,7 +1141,7 @@
                 min="0"
                 max="0.5"
                 step="0.05"
-                value="0.15"
+                value="0.25"
                 oninput={(e) => {
                   // Store for use in generateBanner function
                   bannerSettings.backgroundImageOpacity = parseFloat(e.target.value);
@@ -1084,7 +1247,7 @@
             <!-- Generate Button -->
             <button
               onclick={generateBanner}
-              disabled={generating || !bannerSettings.title || !bannerSettings.primaryImageUrl}
+              disabled={generating || !bannerSettings.title || (!bannerSettings.primaryImageUrl && !bannerSettings.primaryImageFile)}
               class="w-full bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
             >
               {generating ? 'Generating...' : 'Generate Banner'}
