@@ -366,12 +366,64 @@
       ctx.fillStyle = `rgba(${r}, ${g}, ${b}, 0.75)`; // 75% opacity - allows background image to show through
       ctx.fillRect(0, 0, textAreaWidth, canvas.height);
       
+      // Calculate total height of all text elements first (for vertical centering)
+      let totalTextHeight = 0;
+      
+      // Title (English)
+      if (bannerSettings.title) {
+        ctx.font = `bold ${bannerSettings.fontSize * 1.2}px ${bannerSettings.fontFamily}`;
+        const titleHeight = measureTextHeight(ctx, bannerSettings.title, maxTextWidth, bannerSettings.fontSize * 1.5);
+        totalTextHeight += titleHeight + bannerSettings.textPadding;
+      }
+      
+      // Decorative line
+      if (bannerSettings.title && bannerSettings.titleHebrew) {
+        totalTextHeight += bannerSettings.textPadding;
+      }
+      
+      // Title (Hebrew)
+      if (bannerSettings.titleHebrew) {
+        ctx.font = `bold ${bannerSettings.fontSize * 1.2}px ${bannerSettings.hebrewFontFamily}`;
+        const titleHebrewHeight = measureTextHeight(ctx, bannerSettings.titleHebrew, maxTextWidth, bannerSettings.fontSize * 1.5);
+        totalTextHeight += titleHebrewHeight + bannerSettings.textPadding;
+      }
+      
+      // Year
+      if (bannerSettings.yearEnglish || bannerSettings.yearHebrew) {
+        totalTextHeight += bannerSettings.fontSize * 0.8 + bannerSettings.textPadding;
+      }
+      
+      // Subtitle (English)
+      if (bannerSettings.subtitle) {
+        ctx.font = `${bannerSettings.fontSize * 0.45}px ${bannerSettings.fontFamily}`;
+        const subtitleHeight = measureTextHeight(ctx, bannerSettings.subtitle, maxTextWidth, bannerSettings.fontSize * 0.7);
+        totalTextHeight += subtitleHeight + bannerSettings.textPadding;
+      }
+      
+      // Subtitle (Hebrew)
+      if (bannerSettings.subtitleHebrew) {
+        ctx.font = `${bannerSettings.fontSize * 0.45}px ${bannerSettings.hebrewFontFamily}`;
+        const subtitleHebrewHeight = measureTextHeight(ctx, bannerSettings.subtitleHebrew, maxTextWidth, bannerSettings.fontSize * 0.7);
+        totalTextHeight += subtitleHebrewHeight + bannerSettings.textPadding;
+      }
+      
+      // Category sticker
+      if (bannerSettings.category || bannerSettings.categoryHebrew) {
+        totalTextHeight += 70 + bannerSettings.textPadding; // Category height is 70px
+      }
+      
+      // Calculate starting Y position to center content vertically
+      const textAreaHeight = canvas.height;
+      const verticalPadding = Math.max(bannerSettings.textMarginTop, bannerSettings.textMarginBottom);
+      const availableHeight = textAreaHeight - (verticalPadding * 2);
+      const startY = (textAreaHeight - totalTextHeight) / 2;
+      
       // Now draw text
       ctx.fillStyle = bannerSettings.textColor;
       ctx.textBaseline = 'top'; // Use top baseline for consistent positioning
       
-      // Start from top with margin
-      let currentY = bannerSettings.textMarginTop;
+      // Start from calculated centered position
+      let currentY = startY;
       
       // Draw title (English) - centered, serif font for vintage look - BIGGER
       if (bannerSettings.title) {
@@ -528,7 +580,7 @@
         currentY += categoryHeight + bannerSettings.textPadding;
       }
       
-      // Draw "Ginzey America" branding at bottom - centered
+      // Draw "Ginzey America" branding at bottom - centered (always at bottom, not affected by vertical centering)
       ctx.font = `italic ${bannerSettings.fontSize * 0.35}px ${bannerSettings.fontFamily}`;
       ctx.fillStyle = ginzeyColors.darkText;
       ctx.textAlign = 'center';
@@ -617,6 +669,28 @@
       }
     }
     context.fillText(line.trim(), centerX, currentY);
+    totalHeight += lineHeight;
+    return totalHeight;
+  }
+  
+  // Helper function to measure text height without drawing (for centering calculations)
+  function measureTextHeight(context, text, maxWidth, lineHeight) {
+    const words = text.split(' ');
+    let line = '';
+    let totalHeight = 0;
+    
+    for (let n = 0; n < words.length; n++) {
+      const testLine = line + words[n] + ' ';
+      const metrics = context.measureText(testLine);
+      const testWidth = metrics.width;
+      
+      if (testWidth > maxWidth && n > 0) {
+        line = words[n] + ' ';
+        totalHeight += lineHeight;
+      } else {
+        line = testLine;
+      }
+    }
     totalHeight += lineHeight;
     return totalHeight;
   }
