@@ -698,8 +698,8 @@
       if (bannerSettings.category || bannerSettings.categoryHebrew) {
         // Scale based on banner size
         const scaleFactor = Math.min(canvas.width / 1200, canvas.height / 630);
-        const ribbonLength = 350 * scaleFactor; // Length along the diagonal
-        const ribbonThickness = 90 * scaleFactor; // Thickness perpendicular to diagonal
+        const ribbonLength = 350 * scaleFactor; // Length of the ribbon
+        const ribbonThickness = 90 * scaleFactor; // Thickness of the ribbon
         
         ctx.font = `bold ${bannerSettings.fontSize * 0.6}px ${bannerSettings.fontFamily}`;
         const categoryText = bannerSettings.category ? bannerSettings.category.toUpperCase() : '';
@@ -732,79 +732,60 @@
           cornerY = 0;
         }
         
-        // Helper function to draw diagonal ribbon (parallelogram)
-        // For top-left: goes from top-left down-right (left edge at top, right edge lower)
-        // For top-right: goes from top-right down-left (right edge at top, left edge lower)
-        function drawDiagonalRibbon(x, y, length, thickness, isRightSide) {
-          ctx.beginPath();
-          if (isRightSide) {
-            // Top-right ribbon: diagonal down-left from corner
-            // The ribbon's top edge is at the top, bottom edge is lower
-            // Top edge: from corner (x, y) going diagonally down-left
-            ctx.moveTo(x, y); // Top-right corner (start - top edge right end)
-            ctx.lineTo(x - length * cos45, y + length * sin45); // Top edge left end (diagonal down-left)
-            // Bottom edge: parallel to top, offset down by thickness
-            ctx.lineTo(x - length * cos45 + thickness * sin45, y + length * sin45 + thickness * cos45); // Bottom edge left end
-            ctx.lineTo(x + thickness * sin45, y + thickness * cos45); // Bottom edge right end
-          } else {
-            // Top-left ribbon: diagonal down-right from corner
-            // The ribbon's top edge is at the top, bottom edge is lower
-            // Top edge: from corner (x, y) going diagonally down-right
-            ctx.moveTo(x, y); // Top-left corner (start - top edge left end)
-            ctx.lineTo(x + length * cos45, y + length * sin45); // Top edge right end (diagonal down-right)
-            // Bottom edge: parallel to top, offset down by thickness
-            ctx.lineTo(x + length * cos45 + thickness * sin45, y + length * sin45 + thickness * cos45); // Bottom edge right end
-            ctx.lineTo(x + thickness * sin45, y + thickness * cos45); // Bottom edge left end
-          }
-          ctx.closePath();
-        }
+        // Calculate pivot point for rotation (the corner)
+        const pivotX = cornerX;
+        const pivotY = cornerY;
+        
+        // Calculate the center of the horizontal ribbon before rotation
+        // For top-left: ribbon extends right from corner, so center is at cornerX + ribbonLength/2
+        // For top-right: ribbon extends left from corner, so center is at cornerX - ribbonLength/2
+        const ribbonCenterX = isTopRight 
+          ? pivotX - ribbonLength / 2
+          : pivotX + ribbonLength / 2;
+        const ribbonCenterY = pivotY + ribbonThickness / 2;
         
         // Draw ribbon shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-        drawDiagonalRibbon(cornerX + 4, cornerY + 4, ribbonLength, ribbonThickness, isTopRight);
-        ctx.fill();
+        ctx.save();
+        ctx.translate(pivotX + 4, pivotY + 4);
+        ctx.rotate(isTopRight ? -angle : angle);
+        ctx.fillRect(-ribbonLength / 2, 0, ribbonLength, ribbonThickness);
+        ctx.restore();
         
         // Draw main ribbon
         ctx.fillStyle = bannerSettings.categoryColor || ginzeyColors.red;
-        drawDiagonalRibbon(cornerX, cornerY, ribbonLength, ribbonThickness, isTopRight);
-        ctx.fill();
+        ctx.save();
+        ctx.translate(pivotX, pivotY);
+        ctx.rotate(isTopRight ? -angle : angle);
+        ctx.fillRect(-ribbonLength / 2, 0, ribbonLength, ribbonThickness);
+        ctx.restore();
         
         // Draw ribbon border
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
         ctx.lineWidth = 2 * scaleFactor;
-        drawDiagonalRibbon(cornerX, cornerY, ribbonLength, ribbonThickness, isTopRight);
-        ctx.stroke();
+        ctx.save();
+        ctx.translate(pivotX, pivotY);
+        ctx.rotate(isTopRight ? -angle : angle);
+        ctx.strokeRect(-ribbonLength / 2, 0, ribbonLength, ribbonThickness);
+        ctx.restore();
         
         // Draw category text INSIDE the ribbon (rotated to match diagonal)
         ctx.fillStyle = ginzeyColors.lightText;
         ctx.textBaseline = 'middle';
         ctx.save();
-        
-        // Calculate center point of ribbon for text positioning
-        // Center is halfway along the diagonal and halfway through the thickness
-        const centerX = isTopRight 
-          ? cornerX - (ribbonLength * cos45) / 2 + (ribbonThickness * sin45) / 2
-          : cornerX + (ribbonLength * cos45) / 2 + (ribbonThickness * sin45) / 2;
-        const centerY = cornerY + (ribbonLength * sin45) / 2 + (ribbonThickness * cos45) / 2;
-        
-        // Translate to center and rotate
-        ctx.translate(centerX, centerY);
-        if (isTopRight) {
-          ctx.rotate(-angle); // Rotate for top-right diagonal (down-left)
-        } else {
-          ctx.rotate(angle); // Rotate for top-left diagonal (down-right)
-        }
+        ctx.translate(pivotX, pivotY);
+        ctx.rotate(isTopRight ? -angle : angle);
         
         // Draw text centered inside ribbon
         ctx.textAlign = 'center';
         if (categoryText) {
           ctx.font = `bold ${bannerSettings.fontSize * 0.6}px ${bannerSettings.fontFamily}`;
-          ctx.fillText(categoryText, 0, 0);
+          ctx.fillText(categoryText, 0, ribbonThickness / 2);
         }
         if (categoryHebrewText) {
           ctx.font = `bold ${bannerSettings.fontSize * 0.6}px ${bannerSettings.hebrewFontFamily}`;
           const offset = categoryText ? ctx.measureText(categoryText).width / 2 + 15 : 0;
-          ctx.fillText(categoryHebrewText, offset, 0);
+          ctx.fillText(categoryHebrewText, offset, ribbonThickness / 2);
         }
         
         ctx.restore();
