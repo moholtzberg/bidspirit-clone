@@ -47,8 +47,9 @@
     textMarginBottom: 60,
     textPadding: 20,
     textAreaWidth: 50, // 50% for text area (other 50% for image)
-    // Category sticker colors
+    // Category ribbon colors and position
     categoryColor: ginzeyColors.red, // Default to red, can be changed to blue
+    categoryRibbonPosition: 'top-right', // 'top-left' or 'top-right'
     baseBackgroundColor: ginzeyColors.antiquePaper,
     backgroundImageOpacity: 0.25, // Opacity for background image (0.25 = subtle but visible)
     // Primary image blending and rounding options
@@ -600,10 +601,7 @@
         totalTextHeight += subtitleHebrewHeight + bannerSettings.textPadding;
       }
       
-      // Category sticker
-      if (bannerSettings.category || bannerSettings.categoryHebrew) {
-        totalTextHeight += 70 + bannerSettings.textPadding; // Category height is 70px
-      }
+      // Category ribbon is positioned at corner, doesn't affect text height calculation
       
       // Calculate starting Y position to center content vertically
       const textAreaHeight = canvas.height;
@@ -696,81 +694,120 @@
         currentY += subtitleHebrewHeight + bannerSettings.textPadding;
       }
       
-      // Draw category sticker badge if provided - BIGGER, starts at left edge, rounded on right
+      // Draw category ribbon if provided - simple diagonal ribbon (no fold) from corner
       if (bannerSettings.category || bannerSettings.categoryHebrew) {
+        // Scale based on banner size
+        const scaleFactor = Math.min(canvas.width / 1200, canvas.height / 630);
+        const ribbonLength = 350 * scaleFactor; // Length along the diagonal
+        const ribbonThickness = 90 * scaleFactor; // Thickness perpendicular to diagonal
+        
         ctx.font = `bold ${bannerSettings.fontSize * 0.6}px ${bannerSettings.fontFamily}`;
-        ctx.textAlign = 'left';
         const categoryText = bannerSettings.category ? bannerSettings.category.toUpperCase() : '';
         const categoryHebrewText = bannerSettings.categoryHebrew || '';
         
-        // Measure both texts with bigger font
-        let categoryWidth = 60;
+        // Measure text to ensure it fits inside ribbon
+        let textWidth = 0;
         if (categoryText) {
-          categoryWidth += ctx.measureText(categoryText).width;
+          textWidth += ctx.measureText(categoryText).width;
         }
         if (categoryHebrewText) {
           ctx.font = `bold ${bannerSettings.fontSize * 0.6}px ${bannerSettings.hebrewFontFamily}`;
-          categoryWidth += ctx.measureText(categoryHebrewText).width + 30;
+          textWidth += ctx.measureText(categoryHebrewText).width + (categoryText ? 20 : 0);
         }
         
-        // Category sticker starts at left edge, extends to the right
-        const categoryX = 0; // Start at left edge
-        const categoryY = currentY;
-        const categoryHeight = 70; // Bigger height
-        const cornerRadius = 20; // Rounded corners on right side only
+        const isTopRight = bannerSettings.categoryRibbonPosition === 'top-right';
+        const angle = Math.PI / 4; // 45 degrees
+        const cos45 = Math.cos(angle);
+        const sin45 = Math.sin(angle);
         
-        // Helper function to draw rounded rectangle (rounded on right side only)
-        function drawRoundedRectRight(x, y, width, height, radius) {
+        // Position ribbon starting from corner
+        let cornerX, cornerY;
+        if (isTopRight) {
+          // Top-right: start at top-right corner of text area
+          cornerX = textAreaWidth;
+          cornerY = 0;
+        } else {
+          // Top-left: start at top-left corner
+          cornerX = 0;
+          cornerY = 0;
+        }
+        
+        // Helper function to draw diagonal ribbon (parallelogram)
+        // For top-left: goes from top-left down-right (left edge at top, right edge lower)
+        // For top-right: goes from top-right down-left (right edge at top, left edge lower)
+        function drawDiagonalRibbon(x, y, length, thickness, isRightSide) {
           ctx.beginPath();
-          ctx.moveTo(x, y); // Start at left (sharp corner)
-          ctx.lineTo(x + width - radius, y); // Top edge
-          ctx.quadraticCurveTo(x + width, y, x + width, y + radius); // Top-right corner
-          ctx.lineTo(x + width, y + height - radius); // Right edge
-          ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height); // Bottom-right corner
-          ctx.lineTo(x, y + height); // Bottom edge (sharp corner)
-          ctx.lineTo(x, y); // Back to start
+          if (isRightSide) {
+            // Top-right ribbon: diagonal down-left from corner
+            // The ribbon's top edge is at the top, bottom edge is lower
+            // Top edge: from corner (x, y) going diagonally down-left
+            ctx.moveTo(x, y); // Top-right corner (start - top edge right end)
+            ctx.lineTo(x - length * cos45, y + length * sin45); // Top edge left end (diagonal down-left)
+            // Bottom edge: parallel to top, offset down by thickness
+            ctx.lineTo(x - length * cos45 + thickness * sin45, y + length * sin45 + thickness * cos45); // Bottom edge left end
+            ctx.lineTo(x + thickness * sin45, y + thickness * cos45); // Bottom edge right end
+          } else {
+            // Top-left ribbon: diagonal down-right from corner
+            // The ribbon's top edge is at the top, bottom edge is lower
+            // Top edge: from corner (x, y) going diagonally down-right
+            ctx.moveTo(x, y); // Top-left corner (start - top edge left end)
+            ctx.lineTo(x + length * cos45, y + length * sin45); // Top edge right end (diagonal down-right)
+            // Bottom edge: parallel to top, offset down by thickness
+            ctx.lineTo(x + length * cos45 + thickness * sin45, y + length * sin45 + thickness * cos45); // Bottom edge right end
+            ctx.lineTo(x + thickness * sin45, y + thickness * cos45); // Bottom edge left end
+          }
           ctx.closePath();
         }
         
-        // Draw multiple shadow layers for depth
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
-        drawRoundedRectRight(categoryX + 4, categoryY + 4, categoryWidth, categoryHeight, cornerRadius);
-        ctx.fill();
-        
+        // Draw ribbon shadow
         ctx.fillStyle = 'rgba(0, 0, 0, 0.25)';
-        drawRoundedRectRight(categoryX + 2, categoryY + 2, categoryWidth, categoryHeight, cornerRadius);
+        drawDiagonalRibbon(cornerX + 4, cornerY + 4, ribbonLength, ribbonThickness, isTopRight);
         ctx.fill();
         
-        // Draw main sticker background with rounded corners on right
+        // Draw main ribbon
         ctx.fillStyle = bannerSettings.categoryColor || ginzeyColors.red;
-        drawRoundedRectRight(categoryX, categoryY, categoryWidth, categoryHeight, cornerRadius);
+        drawDiagonalRibbon(cornerX, cornerY, ribbonLength, ribbonThickness, isTopRight);
         ctx.fill();
         
-        // Draw inner highlight for depth
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
-        drawRoundedRectRight(categoryX, categoryY, categoryWidth, categoryHeight / 2, cornerRadius);
-        ctx.fill();
-        
-        // Draw sticker border for definition
+        // Draw ribbon border
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
-        ctx.lineWidth = 2;
-        drawRoundedRectRight(categoryX, categoryY, categoryWidth, categoryHeight, cornerRadius);
+        ctx.lineWidth = 2 * scaleFactor;
+        drawDiagonalRibbon(cornerX, cornerY, ribbonLength, ribbonThickness, isTopRight);
         ctx.stroke();
         
-        // Draw category text (English) - bigger
+        // Draw category text INSIDE the ribbon (rotated to match diagonal)
         ctx.fillStyle = ginzeyColors.lightText;
+        ctx.textBaseline = 'middle';
+        ctx.save();
+        
+        // Calculate center point of ribbon for text positioning
+        // Center is halfway along the diagonal and halfway through the thickness
+        const centerX = isTopRight 
+          ? cornerX - (ribbonLength * cos45) / 2 + (ribbonThickness * sin45) / 2
+          : cornerX + (ribbonLength * cos45) / 2 + (ribbonThickness * sin45) / 2;
+        const centerY = cornerY + (ribbonLength * sin45) / 2 + (ribbonThickness * cos45) / 2;
+        
+        // Translate to center and rotate
+        ctx.translate(centerX, centerY);
+        if (isTopRight) {
+          ctx.rotate(-angle); // Rotate for top-right diagonal (down-left)
+        } else {
+          ctx.rotate(angle); // Rotate for top-left diagonal (down-right)
+        }
+        
+        // Draw text centered inside ribbon
+        ctx.textAlign = 'center';
         if (categoryText) {
           ctx.font = `bold ${bannerSettings.fontSize * 0.6}px ${bannerSettings.fontFamily}`;
-          ctx.textAlign = 'left';
-          ctx.fillText(categoryText, categoryX + 30, categoryY + 20);
+          ctx.fillText(categoryText, 0, 0);
         }
-        // Draw category text (Hebrew) - bigger
         if (categoryHebrewText) {
           ctx.font = `bold ${bannerSettings.fontSize * 0.6}px ${bannerSettings.hebrewFontFamily}`;
-          ctx.textAlign = 'right';
-          ctx.fillText(categoryHebrewText, categoryX + categoryWidth - 30, categoryY + 20);
+          const offset = categoryText ? ctx.measureText(categoryText).width / 2 + 15 : 0;
+          ctx.fillText(categoryHebrewText, offset, 0);
         }
-        currentY += categoryHeight + bannerSettings.textPadding;
+        
+        ctx.restore();
       }
       
       // Draw "Ginzey America" branding at bottom - centered (always at bottom, not affected by vertical centering)
@@ -1543,35 +1580,65 @@
               <p class="text-xs text-gray-500 mt-1">Default: Dark brown (#2C1810)</p>
             </div>
 
-            <!-- Category Sticker Color -->
+            <!-- Category Ribbon -->
             <div class="mb-4">
-              <label for="categoryColor" class="block text-sm font-medium text-gray-700 mb-2">
-                Category Sticker Color
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Category Ribbon (Ginzey America Colors)
               </label>
-              <div class="flex gap-2 mb-2">
-                <button
-                  type="button"
-                  onclick={() => bannerSettings.categoryColor = ginzeyColors.red}
-                  class="flex-1 px-3 py-2 rounded-lg border-2 transition-colors {bannerSettings.categoryColor === ginzeyColors.red ? 'border-red-600 bg-red-50' : 'border-gray-300 bg-white'}"
-                >
-                  <div class="w-full h-6 rounded" style="background-color: {ginzeyColors.red};"></div>
-                  <span class="text-xs mt-1">Red</span>
-                </button>
-                <button
-                  type="button"
-                  onclick={() => bannerSettings.categoryColor = ginzeyColors.blue}
-                  class="flex-1 px-3 py-2 rounded-lg border-2 transition-colors {bannerSettings.categoryColor === ginzeyColors.blue ? 'border-blue-600 bg-blue-50' : 'border-gray-300 bg-white'}"
-                >
-                  <div class="w-full h-6 rounded" style="background-color: {ginzeyColors.blue};"></div>
-                  <span class="text-xs mt-1">Blue</span>
-                </button>
+              
+              <!-- Ribbon Position -->
+              <div class="mb-3">
+                <label for="ribbonPosition" class="block text-xs text-gray-600 mb-1">
+                  Ribbon Position
+                </label>
+                <div class="flex gap-2">
+                  <button
+                    type="button"
+                    onclick={() => bannerSettings.categoryRibbonPosition = 'top-left'}
+                    class="flex-1 px-3 py-2 rounded-lg border-2 transition-colors {bannerSettings.categoryRibbonPosition === 'top-left' ? 'border-blue-600 bg-blue-50' : 'border-gray-300 bg-white'}"
+                  >
+                    <span class="text-xs">Top Left</span>
+                  </button>
+                  <button
+                    type="button"
+                    onclick={() => bannerSettings.categoryRibbonPosition = 'top-right'}
+                    class="flex-1 px-3 py-2 rounded-lg border-2 transition-colors {bannerSettings.categoryRibbonPosition === 'top-right' ? 'border-blue-600 bg-blue-50' : 'border-gray-300 bg-white'}"
+                  >
+                    <span class="text-xs">Top Right</span>
+                  </button>
+                </div>
               </div>
-              <input
-                id="categoryColor"
-                type="color"
-                bind:value={bannerSettings.categoryColor}
-                class="w-full h-10 border border-gray-300 rounded-lg cursor-pointer"
-              />
+              
+              <!-- Ribbon Color -->
+              <div class="mb-2">
+                <label class="block text-xs text-gray-600 mb-1">
+                  Ribbon Color
+                </label>
+                <div class="flex gap-2 mb-2">
+                  <button
+                    type="button"
+                    onclick={() => bannerSettings.categoryColor = ginzeyColors.red}
+                    class="flex-1 px-3 py-2 rounded-lg border-2 transition-colors {bannerSettings.categoryColor === ginzeyColors.red ? 'border-red-600 bg-red-50' : 'border-gray-300 bg-white'}"
+                  >
+                    <div class="w-full h-6 rounded" style="background-color: {ginzeyColors.red};"></div>
+                    <span class="text-xs mt-1">Red</span>
+                  </button>
+                  <button
+                    type="button"
+                    onclick={() => bannerSettings.categoryColor = ginzeyColors.blue}
+                    class="flex-1 px-3 py-2 rounded-lg border-2 transition-colors {bannerSettings.categoryColor === ginzeyColors.blue ? 'border-blue-600 bg-blue-50' : 'border-gray-300 bg-white'}"
+                  >
+                    <div class="w-full h-6 rounded" style="background-color: {ginzeyColors.blue};"></div>
+                    <span class="text-xs mt-1">Blue</span>
+                  </button>
+                </div>
+                <input
+                  id="categoryColor"
+                  type="color"
+                  bind:value={bannerSettings.categoryColor}
+                  class="w-full h-10 border border-gray-300 rounded-lg cursor-pointer"
+                />
+              </div>
             </div>
 
             <!-- Banner Dimensions -->
