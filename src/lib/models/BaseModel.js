@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import prisma from '$lib/prisma.js';
-import { Prisma } from '@prisma/client';
+import pkg from '@prisma/client';
+const { Prisma } = pkg;
 import { convertBigIntsToStrings } from '$lib/utils/Helpers.js';
 
 export class BaseModel {
