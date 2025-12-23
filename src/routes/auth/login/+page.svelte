@@ -27,9 +27,23 @@
           ? 'Invalid email or password. Please try again.'
           : result.error;
         loading = false;
+      } else if (result?.ok || result?.url) {
+        // Login successful - check session and redirect
+        await new Promise(resolve => setTimeout(resolve, 100)); // Small delay to ensure session is set
+        const sessionRes = await fetch('/auth/session');
+        const session = await sessionRes.json();
+        
+        if (session?.user) {
+          goto('/dashboard');
+        } else {
+          // Session not set yet, try redirect anyway
+          window.location.href = '/dashboard';
+        }
       } else {
-        // Success - redirect to dashboard
-        goto('/dashboard');
+        // Fallback - try to redirect after a short delay
+        setTimeout(() => {
+          window.location.href = '/dashboard';
+        }, 500);
       }
     } catch (err) {
       console.error('Login error:', err);
