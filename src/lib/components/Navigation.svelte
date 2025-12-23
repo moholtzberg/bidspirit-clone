@@ -40,6 +40,14 @@
         </li>
         <li>
           <a 
+            href="/auction-houses/signup" 
+            class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname === '/auction-houses/signup') ? 'text-blue-600 font-semibold' : ''}"
+          >
+            Register Auction House
+          </a>
+        </li>
+        <li>
+          <a 
             href="/dashboard" 
             class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
           >
@@ -92,6 +100,14 @@
               class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname.startsWith('/seller')) ? 'text-blue-600 font-semibold' : ''}"
             >
               Seller Portal
+            </a>
+          </li>
+          <li>
+            <a 
+              href="/auction-houses/signup" 
+              class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname === '/auction-houses/signup') ? 'text-blue-600 font-semibold' : ''}"
+            >
+              Register Auction House
             </a>
           </li>
           <li>
