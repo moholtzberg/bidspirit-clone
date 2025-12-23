@@ -7,6 +7,7 @@
   let lots = $state([]);
   let loading = $state(true);
   let showCreateModal = $state(false);
+  let createError = $state('');
   
   let newLot = $state({
     lotNumber: 1,
@@ -59,6 +60,7 @@
   }
   
   async function createLot() {
+    createError = '';
     try {
       const response = await fetch('/api/lots', {
         method: 'POST',
@@ -74,8 +76,11 @@
         })
       });
       
+      const result = await response.json();
+      
       if (response.ok) {
         showCreateModal = false;
+        createError = '';
         const endDate = new Date(auction.endDate);
         const year = endDate.getFullYear();
         const month = String(endDate.getMonth() + 1).padStart(2, '0');
@@ -106,9 +111,25 @@
             totalLots: lots.length + 1
           })
         });
+      } else {
+        // Display error message
+        if (result.error) {
+          createError = result.error;
+          if (result.details) {
+            const detailMessages = Object.entries(result.details)
+              .map(([field, errors]) => `${field}: ${Array.isArray(errors) ? errors.join(', ') : errors}`)
+              .join('; ');
+            if (detailMessages) {
+              createError += ' - ' + detailMessages;
+            }
+          }
+        } else {
+          createError = 'Failed to create lot. Please try again.';
+        }
       }
     } catch (error) {
       console.error('Error creating lot:', error);
+      createError = 'An error occurred while creating the lot. Please try again.';
     }
   }
   
@@ -235,14 +256,26 @@
         <div class="flex items-center justify-between mb-6">
           <h2 class="text-2xl font-bold text-gray-900">Add New Lot</h2>
           <button
-            onclick={() => showCreateModal = false}
+            onclick={() => { showCreateModal = false; createError = ''; }}
             class="text-gray-500 hover:text-gray-700"
+            aria-label="Close modal"
           >
             <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>
         </div>
+
+        {#if createError}
+          <div class="mb-4 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div class="flex items-center">
+              <svg class="w-5 h-5 text-red-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p class="text-red-800 text-sm">{createError}</p>
+            </div>
+          </div>
+        {/if}
 
         <form onsubmit={(e) => { e.preventDefault(); createLot(); }}>
           <div class="space-y-4">

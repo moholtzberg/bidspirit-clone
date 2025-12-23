@@ -18,7 +18,10 @@ export class BaseModel {
         // Run schema validation if defined
         if (this.constructor.schema) {
             try {
-                this.constructor.schema.parse(this.data);
+                // Parse and update data with transformed values (e.g., string dates to Date objects)
+                const parsed = this.constructor.schema.parse(this.data);
+                // Update this.data with the parsed/transformed values
+                this.data = { ...this.data, ...parsed };
             } catch (error) {
                 // Handle Zod validation errors
                 if (error.issues && Array.isArray(error.issues)) {

@@ -16,8 +16,38 @@ const lotSchema = z.object({
   bidIncrement: z.number().positive('Bid increment must be positive'),
   imageUrl: z.string().url().nullable().optional().or(z.literal('')),
   imageUrls: z.array(z.string().url()).nullable().optional(),
-  status: z.enum(['ACTIVE', 'SOLD', 'UNSOLD', 'WITHDRAWN']).default('ACTIVE'),
-  endTime: z.date().nullable().optional(),
+  status: z.string()
+    .transform(val => val ? val.toUpperCase() : 'ACTIVE')
+    .refine(val => ['ACTIVE', 'SOLD', 'UNSOLD', 'WITHDRAWN'].includes(val), {
+      message: 'Status must be one of: ACTIVE, SOLD, UNSOLD, WITHDRAWN'
+    })
+    .default('ACTIVE'),
+  endTime: z.preprocess((val) => {
+    // Handle all possible input types
+    if (val === null || val === undefined || val === '') {
+      return null;
+    }
+    if (typeof val === 'string' && val.trim() === '') {
+      return null;
+    }
+    // If it's already a Date object, return it as-is (Zod will validate it)
+    if (val instanceof Date) {
+      return isNaN(val.getTime()) ? null : val;
+    }
+    // If it's a string, try to parse it to a Date
+    // Handle datetime-local format (YYYY-MM-DDTHH:mm) by adding seconds if missing
+    if (typeof val === 'string') {
+      // If the string matches datetime-local format (no seconds), add :00 for seconds
+      let dateString = val;
+      if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(val)) {
+        dateString = val + ':00'; // Add seconds
+      }
+      const date = new Date(dateString);
+      return isNaN(date.getTime()) ? null : date;
+    }
+    // For any other type (including objects), return null
+    return null;
+  }, z.union([z.date(), z.null()]).optional()),
   highestBidderId: z.string().nullable().optional(),
   highestBidderName: z.string().nullable().optional(),
   createdAt: z.date().optional(),
