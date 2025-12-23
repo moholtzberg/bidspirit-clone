@@ -6,8 +6,8 @@ const auctionSchema = z.object({
   id: z.string().optional(),
   title: z.string().min(1, 'Title is required'),
   description: z.string().nullable().optional(),
-  startDate: z.date().or(z.string()),
-  endDate: z.date().or(z.string()),
+  startDate: z.coerce.date(), // Coerce strings/numbers to Date objects
+  endDate: z.coerce.date(), // Coerce strings/numbers to Date objects
   status: z.enum(['UPCOMING', 'LIVE', 'ENDED', 'CANCELLED']).default('UPCOMING'),
   imageUrl: z.string().url().nullable().optional().or(z.literal('')),
   auctionHouseId: z.string().min(1, 'Auction house ID is required'),

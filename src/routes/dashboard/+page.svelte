@@ -1,20 +1,58 @@
 <script>
   import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
   
-  let currentUser = $state({ id: 'user1', name: 'David Cohen', email: 'david@example.com' }); // Mock user
+  let session = $state(null);
+  let currentUser = $state(null);
   let myBids = $state([]);
   let myWinningBids = $state([]);
   let loading = $state(true);
   
   onMount(async () => {
-    await loadUserData();
+    await loadSession();
+    if (session?.user) {
+      await loadUserData();
+    } else {
+      // Redirect to login if not authenticated
+      goto('/auth/login');
+    }
   });
+  
+  async function loadSession() {
+    try {
+      const res = await fetch('/auth/session');
+      const data = await res.json();
+      session = data;
+    } catch (error) {
+      console.error('Error loading session:', error);
+    }
+  }
   
   async function loadUserData() {
     try {
       loading = true;
-      const response = await fetch(`/api/bids?userId=${currentUser.id}`);
-      const allBids = await response.json();
+      
+      // Get or create user in our database
+      let userResponse = await fetch(`/api/users?email=${encodeURIComponent(session.user.email)}`);
+      if (!userResponse.ok) {
+        // User doesn't exist in our DB yet - create them
+        userResponse = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: session.user.email,
+            name: session.user.name || `${session.user.first_name || ''} ${session.user.last_name || ''}`.trim(),
+            firstName: session.user.first_name || null,
+            lastName: session.user.last_name || null,
+            role: 'BUYER'
+          })
+        });
+      }
+      currentUser = await userResponse.json();
+      
+      // Load user's bids
+      const bidsResponse = await fetch(`/api/bids?userId=${currentUser.id}`);
+      const allBids = await bidsResponse.json();
       
       // Get unique lots for these bids
       const lotIds = [...new Set(allBids.map(bid => bid.lotId))];

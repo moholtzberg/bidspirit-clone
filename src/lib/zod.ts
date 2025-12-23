@@ -28,4 +28,9 @@ export const auctionHouseSignupSchema = object({
     .nullable(),
   logoUrl: optional(string().url("Invalid logo URL").or(string().length(0)))
     .nullable(),
+  // User creation fields (required if not logged in)
+  userEmail: optional(string().email("Invalid email address")),
+  userName: optional(string().min(1, "Name is required")),
+  userFirstName: optional(string()),
+  userLastName: optional(string()),
 })

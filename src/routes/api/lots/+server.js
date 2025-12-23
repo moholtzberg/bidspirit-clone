@@ -6,7 +6,16 @@ export async function GET({ url }) {
   
   if (auctionId) {
     const lots = await db.lots.getByAuctionId(auctionId);
-    return json(lots);
+    
+    // Load bids for each lot
+    const lotsWithBids = await Promise.all(
+      lots.map(async (lot) => {
+        const bids = await db.bids.getByLotId(lot.id);
+        return { ...lot, bids };
+      })
+    );
+    
+    return json(lotsWithBids);
   }
   
   return json([]);

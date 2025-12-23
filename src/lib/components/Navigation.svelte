@@ -1,6 +1,25 @@
 <script>
     import { page } from '$app/stores';
+    import { signOut } from '@auth/sveltekit/client';
+    import { goto } from '$app/navigation';
+    
     let isMenuOpen = $state(false);
+    let session = $state(null);
+    
+    $effect(async () => {
+      try {
+        const res = await fetch('/auth/session');
+        const data = await res.json();
+        session = data;
+      } catch (error) {
+        console.error('Error loading session:', error);
+      }
+    });
+    
+    async function handleLogout() {
+      await signOut({ redirect: false });
+      goto('/');
+    }
 </script>
 
 <!-- Navigation Bar -->
@@ -46,14 +65,33 @@
             Register Auction House
           </a>
         </li>
-        <li>
-          <a 
-            href="/dashboard" 
-            class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-          >
-            My Account
-          </a>
-        </li>
+        {#if session?.user}
+          <li>
+            <a 
+              href="/dashboard" 
+              class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname === '/dashboard') ? 'text-blue-600 font-semibold' : ''}"
+            >
+              {session.user.name || session.user.email}
+            </a>
+          </li>
+          <li>
+            <button
+              onclick={handleLogout}
+              class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors"
+            >
+              Logout
+            </button>
+          </li>
+        {:else}
+          <li>
+            <a 
+              href="/auth/login" 
+              class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+            >
+              Login
+            </a>
+          </li>
+        {/if}
       </ul>
   
       <!-- Mobile Menu Button -->
@@ -110,14 +148,33 @@
               Register Auction House
             </a>
           </li>
-          <li>
-            <a 
-              href="/dashboard" 
-              class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
-            >
-              My Account
-            </a>
-          </li>
+          {#if session?.user}
+            <li>
+              <a 
+                href="/dashboard" 
+                class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname === '/dashboard') ? 'text-blue-600 font-semibold' : ''}"
+              >
+                {session.user.name || session.user.email}
+              </a>
+            </li>
+            <li>
+              <button
+                onclick={handleLogout}
+                class="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 transition-colors"
+              >
+                Logout
+              </button>
+            </li>
+          {:else}
+            <li>
+              <a 
+                href="/auth/login" 
+                class="bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700 transition-colors"
+              >
+                Login
+              </a>
+            </li>
+          {/if}
         </ul>
       </div>
     {/if}

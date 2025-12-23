@@ -20,7 +20,19 @@ export class BaseModel {
             try {
                 this.constructor.schema.parse(this.data);
             } catch (error) {
-                this.errors = error.formErrors?.fieldErrors || {};
+                // Handle Zod validation errors
+                if (error.issues && Array.isArray(error.issues)) {
+                    error.issues.forEach((issue) => {
+                        const field = issue.path.join('.') || 'root';
+                        if (!this.errors[field]) {
+                            this.errors[field] = [];
+                        }
+                        this.errors[field].push(issue.message);
+                    });
+                } else {
+                    // Fallback to formErrors if available
+                    this.errors = error.formErrors?.fieldErrors || {};
+                }
                 this.isValid = false;
             }
         }

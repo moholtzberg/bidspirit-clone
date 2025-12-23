@@ -1,18 +1,39 @@
 <script>
   import { goto } from '$app/navigation';
+  import { page } from '$app/stores';
+  
+  // Get session data
+  let session = $state(null);
+  
+  $effect(async () => {
+    try {
+      const res = await fetch('/auth/session');
+      const data = await res.json();
+      session = data;
+    } catch (err) {
+      console.error('Error fetching session:', err);
+    }
+  });
   
   let formData = $state({
     name: '',
     slug: '',
     description: '',
     domain: '',
-    logoUrl: ''
+    logoUrl: '',
+    // User creation fields (only needed if not logged in)
+    userEmail: '',
+    userName: '',
+    userFirstName: '',
+    userLastName: '',
+    userPassword: ''
   });
   
   let errors = $state({});
   let loading = $state(false);
   let success = $state(false);
   let errorMessage = $state('');
+  let isLoggedIn = $derived(!!session?.user);
   
   // Auto-generate slug from name
   function generateSlug(name) {
@@ -46,6 +67,21 @@
         logoUrl: formData.logoUrl.trim() || null
       };
       
+      // Add user creation fields if not logged in
+      if (!isLoggedIn) {
+        if (!formData.userEmail || !formData.userName || !formData.userPassword) {
+          errorMessage = 'Please provide your email, name, and password to create an account, or log in first.';
+          loading = false;
+          return;
+        }
+        
+        submitData.userEmail = formData.userEmail.trim();
+        submitData.userName = formData.userName.trim();
+        submitData.userFirstName = formData.userFirstName.trim() || null;
+        submitData.userLastName = formData.userLastName.trim() || null;
+        submitData.userPassword = formData.userPassword;
+      }
+      
       const response = await fetch('/api/auction-houses', {
         method: 'POST',
         headers: {
@@ -69,10 +105,17 @@
       // Success!
       success = true;
       
-      // Redirect after 2 seconds
-      setTimeout(() => {
-        goto(`/auction-houses/${data.slug}`);
-      }, 2000);
+      // If user was created, redirect to login
+      if (!isLoggedIn && data.message?.includes('Please log in')) {
+        setTimeout(() => {
+          goto('/auth/login');
+        }, 3000);
+      } else {
+        // Redirect to auction house page
+        setTimeout(() => {
+          goto(`/auction-houses/${data.auctionHouse.slug}`);
+        }, 2000);
+      }
       
     } catch (err) {
       console.error('Error submitting form:', err);
@@ -243,6 +286,122 @@
               URL to your auction house logo image.
             </p>
           </div>
+          
+          <!-- User Account Section (only shown if not logged in) -->
+          {#if !isLoggedIn}
+            <div class="pt-6 border-t border-gray-200">
+              <h3 class="text-lg font-semibold text-gray-900 mb-4">Create Your Account</h3>
+              <p class="text-sm text-gray-600 mb-4">
+                Create an account to manage your auction house. 
+                <a href="/auth/login" class="text-blue-600 hover:text-blue-800 font-medium">Already have an account? Log in</a>
+              </p>
+              
+              <!-- Email -->
+              <div class="mb-4">
+                <label for="userEmail" class="block text-sm font-medium text-gray-700 mb-2">
+                  Email <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="email"
+                  id="userEmail"
+                  bind:value={formData.userEmail}
+                  required={!isLoggedIn}
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="your@email.com"
+                />
+                {#if errors.userEmail}
+                  <p class="mt-1 text-sm text-red-600">{errors.userEmail}</p>
+                {/if}
+              </div>
+              
+              <!-- Full Name -->
+              <div class="mb-4">
+                <label for="userName" class="block text-sm font-medium text-gray-700 mb-2">
+                  Full Name <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="userName"
+                  bind:value={formData.userName}
+                  required={!isLoggedIn}
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="John Doe"
+                />
+                {#if errors.userName}
+                  <p class="mt-1 text-sm text-red-600">{errors.userName}</p>
+                {/if}
+              </div>
+              
+              <!-- First Name (Optional) -->
+              <div class="mb-4">
+                <label for="userFirstName" class="block text-sm font-medium text-gray-700 mb-2">
+                  First Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  id="userFirstName"
+                  bind:value={formData.userFirstName}
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="John"
+                />
+              </div>
+              
+              <!-- Last Name (Optional) -->
+              <div class="mb-4">
+                <label for="userLastName" class="block text-sm font-medium text-gray-700 mb-2">
+                  Last Name (Optional)
+                </label>
+                <input
+                  type="text"
+                  id="userLastName"
+                  bind:value={formData.userLastName}
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Doe"
+                />
+              </div>
+              
+              <!-- Password -->
+              <div class="mb-4">
+                <label for="userPassword" class="block text-sm font-medium text-gray-700 mb-2">
+                  Password <span class="text-red-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  id="userPassword"
+                  bind:value={formData.userPassword}
+                  required={!isLoggedIn}
+                  minlength="8"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="At least 8 characters"
+                />
+                <p class="mt-1 text-sm text-gray-500">
+                  Password must be at least 8 characters long.
+                </p>
+                {#if errors.userPassword}
+                  <p class="mt-1 text-sm text-red-600">{errors.userPassword}</p>
+                {/if}
+              </div>
+              
+              <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+                <p class="text-sm text-yellow-800">
+                  <strong>Note:</strong> You'll need to log in using the external authentication system to access your account. 
+                  Your user account will be created and linked to your auction house.
+                </p>
+              </div>
+            </div>
+          {:else}
+            <!-- Logged in user info -->
+            <div class="pt-6 border-t border-gray-200">
+              <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p class="text-sm text-blue-800">
+                  <strong>Logged in as:</strong> {session?.user?.email || session?.user?.name}
+                </p>
+                <p class="text-xs text-blue-600 mt-1">
+                  Your auction house will be linked to this account.
+                </p>
+              </div>
+            </div>
+          {/if}
           
           <!-- Submit Button -->
           <div class="pt-4">

@@ -2,10 +2,13 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   
-  let currentUser = $state({ id: 'seller1', name: 'Heritage Judaica Auctions', role: 'seller' }); // Mock seller
+  let session = $state(null);
+  let currentUser = $state(null);
+  let auctionHouse = $state(null);
   let myAuctions = $state([]);
   let loading = $state(true);
   let showCreateModal = $state(false);
+  let errorMessage = $state('');
   
   let newAuction = $state({
     title: '',
@@ -13,38 +16,114 @@
     startDate: '',
     endDate: '',
     imageUrl: '',
-    status: 'upcoming'
+    status: 'UPCOMING'
   });
   
   onMount(async () => {
-    await loadAuctions();
+    await loadSession();
+    if (session?.user) {
+      await loadUserData();
+    } else {
+      // Redirect to login if not authenticated
+      goto('/auth/login');
+    }
   });
   
-  async function loadAuctions() {
+  async function loadSession() {
+    try {
+      const res = await fetch('/auth/session');
+      const data = await res.json();
+      session = data;
+    } catch (error) {
+      console.error('Error loading session:', error);
+    }
+  }
+  
+  async function loadUserData() {
     try {
       loading = true;
-      const response = await fetch(`/api/auctions?sellerId=${currentUser.id}`);
-      myAuctions = await response.json();
+      errorMessage = '';
+      
+      // Get or create user in our database
+      let userResponse = await fetch(`/api/users?email=${encodeURIComponent(session.user.email)}`);
+      if (!userResponse.ok) {
+        // User doesn't exist in our DB yet
+        errorMessage = 'User account not found. Please register an auction house first.';
+        loading = false;
+        return;
+      }
+      currentUser = await userResponse.json();
+      
+      // Check if user has an auction house
+      if (!currentUser.auctionHouseId) {
+        errorMessage = 'You need to register an auction house first.';
+        loading = false;
+        return;
+      }
+      
+      // Load auction house by ID
+      const auctionHouseResponse = await fetch(`/api/auction-houses?id=${currentUser.auctionHouseId}`);
+      if (auctionHouseResponse.ok) {
+        auctionHouse = await auctionHouseResponse.json();
+      }
+      
+      // Load auctions for this auction house
+      await loadAuctions();
     } catch (error) {
-      console.error('Error loading auctions:', error);
+      console.error('Error loading user data:', error);
+      errorMessage = 'Error loading your account data. Please try again.';
     } finally {
       loading = false;
     }
   }
   
+  async function loadAuctions() {
+    try {
+      if (!currentUser?.auctionHouseId) return;
+      
+      const response = await fetch(`/api/auctions?auctionHouseId=${currentUser.auctionHouseId}`);
+      const auctions = await response.json();
+      
+      // Also filter by sellerId to show only this user's auctions
+      myAuctions = auctions.filter(a => a.sellerId === currentUser.id);
+      
+      // Load lot counts for each auction
+      for (const auction of myAuctions) {
+        const lotsResponse = await fetch(`/api/lots?auctionId=${auction.id}`);
+        const lots = await lotsResponse.json();
+        auction.totalLots = lots.length;
+        auction.currentBids = lots.reduce((sum, lot) => sum + (lot.bids?.length || 0), 0);
+      }
+    } catch (error) {
+      console.error('Error loading auctions:', error);
+    }
+  }
+  
   async function createAuction() {
     try {
+      if (!currentUser?.auctionHouseId) {
+        errorMessage = 'You must be linked to an auction house to create auctions.';
+        return;
+      }
+      
+      // Convert date strings to ISO format
+      const startDate = newAuction.startDate ? new Date(newAuction.startDate).toISOString() : new Date().toISOString();
+      const endDate = newAuction.endDate ? new Date(newAuction.endDate).toISOString() : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      
       const response = await fetch('/api/auctions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          ...newAuction,
-          sellerId: currentUser.id,
-          sellerName: currentUser.name,
-          totalLots: 0,
-          currentBids: 0
+          title: newAuction.title,
+          description: newAuction.description || null,
+          startDate: startDate,
+          endDate: endDate,
+          imageUrl: newAuction.imageUrl || null,
+          status: newAuction.status.toUpperCase(),
+          auctionHouseId: currentUser.auctionHouseId,
+          sellerId: currentUser.id
         })
       });
       
@@ -56,12 +135,16 @@
           startDate: '',
           endDate: '',
           imageUrl: '',
-          status: 'upcoming'
+          status: 'UPCOMING'
         };
         await loadAuctions();
+      } else {
+        const error = await response.json();
+        errorMessage = error.message || 'Failed to create auction. Please try again.';
       }
     } catch (error) {
       console.error('Error creating auction:', error);
+      errorMessage = 'An error occurred while creating the auction. Please try again.';
     }
   }
   
@@ -76,12 +159,15 @@
   }
   
   function getStatusBadgeClass(status) {
-    switch (status) {
-      case 'live':
+    const statusUpper = status?.toUpperCase();
+    switch (statusUpper) {
+      case 'LIVE':
         return 'bg-red-100 text-red-800';
-      case 'upcoming':
+      case 'UPCOMING':
         return 'bg-blue-100 text-blue-800';
-      case 'ended':
+      case 'ENDED':
+        return 'bg-gray-100 text-gray-800';
+      case 'CANCELLED':
         return 'bg-gray-100 text-gray-800';
       default:
         return 'bg-gray-100 text-gray-800';
@@ -91,17 +177,48 @@
 
 <div class="min-h-screen bg-gray-50">
   <div class="container mx-auto px-4 py-8">
+    {#if errorMessage}
+      <div class="bg-red-50 border border-red-200 rounded-lg p-4 mb-6">
+        <div class="flex items-center justify-between">
+          <p class="text-red-800">{errorMessage}</p>
+          {#if errorMessage.includes('register an auction house')}
+            <a href="/auction-houses/signup" class="text-blue-600 hover:text-blue-800 font-semibold">
+              Register Now →
+            </a>
+          {/if}
+        </div>
+      </div>
+    {/if}
+    
+    {#if auctionHouse}
+      <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-2xl font-bold text-gray-900">{auctionHouse.name}</h2>
+            {#if auctionHouse.description}
+              <p class="text-gray-600 mt-1">{auctionHouse.description}</p>
+            {/if}
+          </div>
+          {#if auctionHouse.logoUrl}
+            <img src={auctionHouse.logoUrl} alt={auctionHouse.name} class="h-16 w-16 object-contain" />
+          {/if}
+        </div>
+      </div>
+    {/if}
+    
     <div class="flex items-center justify-between mb-8">
       <div>
-        <h1 class="text-4xl font-bold text-gray-900">Judaica Auction Management</h1>
-        <p class="text-gray-600 mt-2">Create and manage your Judaica auctions - menorahs, Torah scrolls, ceremonial objects, and more</p>
+        <h1 class="text-4xl font-bold text-gray-900">Auction Management</h1>
+        <p class="text-gray-600 mt-2">Create and manage your auctions</p>
       </div>
-      <button
-        onclick={() => showCreateModal = true}
-        class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-      >
-        Create New Auction
-      </button>
+      {#if currentUser?.auctionHouseId}
+        <button
+          onclick={() => showCreateModal = true}
+          class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+        >
+          Create New Auction
+        </button>
+      {/if}
     </div>
 
     {#if loading}
@@ -130,7 +247,7 @@
                 class="w-full h-48 object-cover"
               />
               <span class="absolute top-4 right-4 px-3 py-1 rounded-full text-sm font-semibold {getStatusBadgeClass(auction.status)}">
-                {auction.status.toUpperCase()}
+                {auction.status?.toUpperCase() || 'UNKNOWN'}
               </span>
             </div>
             <div class="p-6">
@@ -275,9 +392,10 @@
                 required
                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
-                <option value="upcoming">Upcoming</option>
-                <option value="live">Live</option>
-                <option value="ended">Ended</option>
+                <option value="UPCOMING">Upcoming</option>
+                <option value="LIVE">Live</option>
+                <option value="ENDED">Ended</option>
+                <option value="CANCELLED">Cancelled</option>
               </select>
             </div>
           </div>
