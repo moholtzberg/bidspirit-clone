@@ -9,6 +9,6 @@ export default defineConfig({
 		noExternal: []
 	},
 	optimizeDeps: {
-		exclude: ['@prisma/client']
+		exclude: ['@prisma/client', '@aws-sdk/client-s3', 'cloudinary']
 	}
 });

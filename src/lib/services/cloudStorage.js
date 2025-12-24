@@ -45,84 +45,132 @@ export async function deleteFile(key, folder = 'lots') {
 
 // ===== S3 Implementation =====
 async function uploadToS3(buffer, filename, folder) {
-  // Install: npm install @aws-sdk/client-s3
-  const { S3Client, PutObjectCommand, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
-  
-  const s3Client = new S3Client({
-    region: process.env.AWS_REGION || 'us-east-1',
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+  try {
+    // Install: npm install @aws-sdk/client-s3
+    // Lazy import to prevent Vite from analyzing at build time
+    const s3Package = '@aws-sdk/client-s3';
+    const s3Module = await import(/* @vite-ignore */ s3Package).catch(() => {
+      throw new Error('@aws-sdk/client-s3 is not installed. Run: npm install @aws-sdk/client-s3');
+    });
+    const { S3Client, PutObjectCommand } = s3Module;
+    
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION || 'us-east-1',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+      }
+    });
+
+    const ext = filename.split('.').pop() || 'jpg';
+    const key = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+    const bucket = process.env.AWS_S3_BUCKET;
+
+    await s3Client.send(new PutObjectCommand({
+      Bucket: bucket,
+      Key: key,
+      Body: buffer,
+      ContentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`
+    }));
+
+    const url = `https://${bucket}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${key}`;
+    return { url, key };
+  } catch (error) {
+    if (error.message.includes('not installed')) {
+      throw error;
     }
-  });
-
-  const ext = filename.split('.').pop() || 'jpg';
-  const key = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
-  const bucket = process.env.AWS_S3_BUCKET;
-
-  await s3Client.send(new PutObjectCommand({
-    Bucket: bucket,
-    Key: key,
-    Body: buffer,
-    ContentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`
-  }));
-
-  const url = `https://${bucket}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${key}`;
-  return { url, key };
+    throw new Error(`S3 upload failed: ${error.message}`);
+  }
 }
 
 async function deleteFromS3(key, folder) {
-  const { S3Client, DeleteObjectCommand } = await import('@aws-sdk/client-s3');
-  
-  const s3Client = new S3Client({
-    region: process.env.AWS_REGION || 'us-east-1',
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
-    }
-  });
+  try {
+    // Lazy import to prevent Vite from analyzing at build time
+    const s3Package = '@aws-sdk/client-s3';
+    const s3Module = await import(/* @vite-ignore */ s3Package).catch(() => {
+      throw new Error('@aws-sdk/client-s3 is not installed. Run: npm install @aws-sdk/client-s3');
+    });
+    const { S3Client, DeleteObjectCommand } = s3Module;
+    
+    const s3Client = new S3Client({
+      region: process.env.AWS_REGION || 'us-east-1',
+      credentials: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+      }
+    });
 
-  await s3Client.send(new DeleteObjectCommand({
-    Bucket: process.env.AWS_S3_BUCKET,
-    Key: key
-  }));
+    await s3Client.send(new DeleteObjectCommand({
+      Bucket: process.env.AWS_S3_BUCKET,
+      Key: key
+    }));
+  } catch (error) {
+    if (error.message.includes('not installed')) {
+      throw error;
+    }
+    throw new Error(`S3 delete failed: ${error.message}`);
+  }
 }
 
 // ===== Cloudinary Implementation =====
 async function uploadToCloudinary(buffer, filename, folder) {
-  // Install: npm install cloudinary
-  const cloudinary = (await import('cloudinary')).v2;
-  
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-  });
+  try {
+    // Install: npm install cloudinary
+    // Lazy import to prevent Vite from analyzing at build time
+    const cloudinaryPackage = 'cloudinary';
+    const cloudinaryModule = await import(/* @vite-ignore */ cloudinaryPackage).catch(() => {
+      throw new Error('cloudinary is not installed. Run: npm install cloudinary');
+    });
+    const cloudinary = cloudinaryModule.v2;
+    
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET
+    });
 
-  return new Promise((resolve, reject) => {
-    cloudinary.uploader.upload_stream(
-      {
-        folder: folder,
-        resource_type: 'image'
-      },
-      (error, result) => {
-        if (error) reject(error);
-        else resolve({ url: result.secure_url, key: result.public_id });
-      }
-    ).end(buffer);
-  });
+    return new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          folder: folder,
+          resource_type: 'image'
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve({ url: result.secure_url, key: result.public_id });
+        }
+      ).end(buffer);
+    });
+  } catch (error) {
+    if (error.message.includes('not installed')) {
+      throw error;
+    }
+    throw new Error(`Cloudinary upload failed: ${error.message}`);
+  }
 }
 
 async function deleteFromCloudinary(key) {
-  const cloudinary = (await import('cloudinary')).v2;
-  
-  cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET
-  });
+  try {
+    // Lazy import to prevent Vite from analyzing at build time
+    const cloudinaryPackage = 'cloudinary';
+    const cloudinaryModule = await import(/* @vite-ignore */ cloudinaryPackage).catch(() => {
+      throw new Error('cloudinary is not installed. Run: npm install cloudinary');
+    });
+    const cloudinary = cloudinaryModule.v2;
+    
+    cloudinary.config({
+      cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+      api_key: process.env.CLOUDINARY_API_KEY,
+      api_secret: process.env.CLOUDINARY_API_SECRET
+    });
 
-  await cloudinary.uploader.destroy(key);
+    await cloudinary.uploader.destroy(key);
+  } catch (error) {
+    if (error.message.includes('not installed')) {
+      throw error;
+    }
+    throw new Error(`Cloudinary delete failed: ${error.message}`);
+  }
 }
 
 // ===== Local Storage Implementation =====
