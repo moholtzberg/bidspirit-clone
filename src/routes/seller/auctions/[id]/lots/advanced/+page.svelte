@@ -704,15 +704,15 @@
                     class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                 </th>
-                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Pos</th>
-                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Lot #</th>
+                <th class="px-1 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">Pos</th>
+                <th class="px-1 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">Lot #</th>
                 <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Images</th>
                 <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[250px]">Title & Description</th>
                 <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Category</th>
-                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Start Bid</th>
-                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Current Bid</th>
-                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Increment</th>
-                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Status</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Start Bid</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Current Bid</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Increment</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Status</th>
                 <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">End Time</th>
               </tr>
             </thead>
@@ -737,14 +737,14 @@
                   </td>
                   
                   <!-- Position -->
-                  <td class="px-2 py-1 whitespace-nowrap">
-                    <div class="flex items-center gap-1">
-                      <span class="text-sm font-semibold text-blue-600">{lot.position || index + 1}</span>
+                  <td class="px-1 py-1 whitespace-nowrap">
+                    <div class="flex items-center gap-0.5">
+                      <span class="text-xs font-semibold text-blue-600">{lot.position || index + 1}</span>
                       <div class="flex flex-col">
                         <button
                           onclick={(e) => { e.stopPropagation(); moveLotUp(index); }}
                           disabled={index === 0 || reordering}
-                          class="text-xs text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                          class="text-[10px] leading-none text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Move up"
                         >
                           ↑
@@ -752,7 +752,7 @@
                         <button
                           onclick={(e) => { e.stopPropagation(); moveLotDown(index); }}
                           disabled={index === lots.length - 1 || reordering}
-                          class="text-xs text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                          class="text-[10px] leading-none text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Move down"
                         >
                           ↓
@@ -762,20 +762,20 @@
                   </td>
                   
                   <!-- Lot Number -->
-                  <td class="px-2 py-1 whitespace-nowrap">
+                  <td class="px-1 py-1 whitespace-nowrap">
                     {#if editingCell?.lotId === lot.id && editingCell?.field === 'lotNumber'}
                       <input
                         type="number"
                         bind:value={editingCell.value}
                         onblur={() => saveCell(lot.id, 'lotNumber', editingCell.value)}
                         onkeydown={(e) => handleKeydown(e, lot.id, 'lotNumber', editingCell.value)}
-                        class="w-full px-1 py-0.5 text-xs border-2 border-blue-500 rounded focus:outline-none"
+                        class="w-full px-0.5 py-0.5 text-xs border-2 border-blue-500 rounded focus:outline-none"
                         autofocus
                       />
                     {:else}
                       <span
                         ondblclick={() => startEdit(lot.id, 'lotNumber', lot.lotNumber)}
-                        class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded"
+                        class="cursor-pointer hover:bg-blue-50 px-0.5 py-0.5 rounded text-xs"
                       >
                         {lot.lotNumber}
                       </span>
