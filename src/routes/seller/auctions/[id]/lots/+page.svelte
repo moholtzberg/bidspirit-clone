@@ -824,8 +824,11 @@
                 </label>
                 <select
                   bind:value={selectedBannerLotId}
-                  onchange={(e) => {
+                  onchange={async (e) => {
                     const lotId = e.target.value;
+                    selectedBannerImages = [];
+                    selectedLotImages = [];
+                    
                     if (lotId) {
                       const lot = lots.find(l => l.id === lotId);
                       if (lot) {
@@ -833,12 +836,89 @@
                         bannerSettings.titleHebrew = lot.hebrewTitle || lot.HebrewTitle || '';
                         bannerSettings.subtitle = lot.description ? lot.description.substring(0, 150) : '';
                         bannerSettings.subtitleHebrew = lot.hebrewDescription || lot.HebrewDescription || '';
-                        bannerSettings.primaryImageUrl = lot.imageUrl || '';
+                        
                         // Extract year from title if it contains a year
                         const yearMatch = lot.title?.match(/\b(18|19|20)\d{2}\b/);
                         if (yearMatch) {
                           bannerSettings.yearEnglish = yearMatch[0];
                           bannerSettings.yearHebrew = convertToHebrewYear(yearMatch[0]);
+                        }
+                        
+                        // Load all images from the lot
+                        console.log('Loading images for lot:', lot.id, lot);
+                        const images = [];
+                        
+                        // Check for new images array (from LotImage relation)
+                        // Images from db.lots.getByAuctionId are already presigned URLs
+                        if (lot.images && Array.isArray(lot.images) && lot.images.length > 0) {
+                          console.log('Found images array:', lot.images);
+                          lot.images.forEach(img => {
+                            // Handle both object format {url, id, isPrimary} and string format
+                            const imageUrl = typeof img === 'string' ? img : (img.url || img);
+                            const imageId = img.id || `img-${images.length}`;
+                            const isPrimary = img.isPrimary || false;
+                            
+                            images.push({
+                              url: imageUrl,
+                              id: imageId,
+                              isPrimary: isPrimary
+                            });
+                          });
+                        }
+                        
+                        // Fallback to legacy imageUrls
+                        if (images.length === 0 && lot.imageUrls) {
+                          try {
+                            const parsed = typeof lot.imageUrls === 'string' 
+                              ? JSON.parse(lot.imageUrls) 
+                              : lot.imageUrls;
+                            if (Array.isArray(parsed) && parsed.length > 0) {
+                              console.log('Found imageUrls:', parsed);
+                              parsed.forEach((url, index) => {
+                                images.push({
+                                  url: url,
+                                  id: `legacy-${index}`,
+                                  isPrimary: index === 0
+                                });
+                              });
+                            }
+                          } catch (e) {
+                            console.warn('Failed to parse imageUrls:', e);
+                          }
+                        }
+                        
+                        // Fallback to single imageUrl
+                        if (images.length === 0 && lot.imageUrl) {
+                          console.log('Found single imageUrl:', lot.imageUrl);
+                          images.push({
+                            url: lot.imageUrl,
+                            id: 'legacy-single',
+                            isPrimary: true
+                          });
+                        }
+                        
+                        console.log('Processed images:', images);
+                        
+                        // Images from database are already presigned URLs, so use them directly
+                        const imagesWithPresigned = images.map((img) => {
+                          // The images from db.lots.getByAuctionId are already presigned
+                          // Use the url as both displayUrl and url (they're the same)
+                          return {
+                            ...img,
+                            url: img.url, // Already presigned from database
+                            displayUrl: img.url // Use same URL for display (already presigned)
+                          };
+                        });
+                        
+                        console.log('Final images with presigned:', imagesWithPresigned);
+                        
+                        selectedLotImages = imagesWithPresigned;
+                        
+                        // Auto-select first image (or primary image)
+                        const primaryImage = imagesWithPresigned.find(img => img.isPrimary) || imagesWithPresigned[0];
+                        if (primaryImage) {
+                          selectedBannerImages = [primaryImage];
+                          bannerSettings.primaryImageUrl = primaryImage.url;
                         }
                       }
                     } else {
@@ -864,6 +944,57 @@
                   {/each}
                 </select>
               </div>
+              
+              <!-- Image Selection -->
+              {#if selectedLotImages.length > 0}
+                <div class="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                  <h3 class="text-lg font-semibold text-gray-900 mb-3">Select Images for Banner</h3>
+                  <div class="grid grid-cols-3 gap-3 max-h-64 overflow-y-auto">
+                    {#each selectedLotImages as image}
+                      {@const isSelected = selectedBannerImages.some(sel => sel.id === image.id || sel.url === image.url)}
+                      <div
+                        class="relative cursor-pointer border-2 rounded-lg overflow-hidden transition-all {isSelected ? 'border-purple-600 ring-2 ring-purple-300' : 'border-gray-300 hover:border-purple-400'}"
+                        onclick={() => {
+                          if (isSelected) {
+                            selectedBannerImages = selectedBannerImages.filter(sel => sel.id !== image.id && sel.url !== image.url);
+                          } else {
+                            selectedBannerImages = [...selectedBannerImages, image];
+                          }
+                          // Update primary image URL to first selected
+                          if (selectedBannerImages.length > 0) {
+                            bannerSettings.primaryImageUrl = selectedBannerImages[0].url;
+                          } else {
+                            bannerSettings.primaryImageUrl = '';
+                          }
+                        }}
+                      >
+                        <img
+                          src={image.displayUrl || image.url}
+                          alt="Lot image"
+                          class="w-full h-24 object-cover"
+                          onerror={(e) => {
+                            e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ddd" width="100" height="100"/%3E%3Ctext x="50" y="50" text-anchor="middle" dy=".3em" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E';
+                          }}
+                        />
+                        {#if isSelected}
+                          <div class="absolute top-1 right-1 bg-purple-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
+                            ✓
+                          </div>
+                        {/if}
+                        {#if image.isPrimary}
+                          <div class="absolute bottom-1 left-1 bg-blue-600 text-white text-xs px-1 rounded">
+                            Primary
+                          </div>
+                        {/if}
+                      </div>
+                    {/each}
+                  </div>
+                  <p class="text-xs text-gray-600 mt-2">
+                    {selectedBannerImages.length} image{selectedBannerImages.length !== 1 ? 's' : ''} selected
+                    {selectedBannerImages.length > 1 ? ' (will create collage)' : ''}
+                  </p>
+                </div>
+              {/if}
               
               <!-- English Fields -->
               <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
@@ -1028,7 +1159,7 @@
               
               <button
                 onclick={generateQuickBanner}
-                disabled={generatingBanner || (!bannerSettings.title && !bannerSettings.titleHebrew) || !bannerSettings.primaryImageUrl}
+                disabled={generatingBanner || (!bannerSettings.title && !bannerSettings.titleHebrew) || (selectedBannerImages.length === 0 && !bannerSettings.primaryImageUrl)}
                 class="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
               >
                 {generatingBanner ? 'Generating...' : 'Generate Banner'}
