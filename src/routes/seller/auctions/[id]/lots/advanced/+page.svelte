@@ -155,6 +155,16 @@
 
   function startEdit(lotId, field, currentValue) {
     editingCell = { lotId, field, value: currentValue || '' };
+    // Initialize category input if editing category
+    if (field === 'category') {
+      const lot = lots.find(l => l.id === lotId);
+      categoryInputs[lotId] = lot?.category || '';
+    }
+    // Initialize tag input if editing tags
+    if (field === 'tags') {
+      const lot = lots.find(l => l.id === lotId);
+      tagInputs[lotId] = '';
+    }
   }
 
   function cancelEdit() {
@@ -198,7 +208,9 @@
       }
 
       // Update local state immediately
-      if (field !== 'tags') {
+      if (field === 'category') {
+        lot.category = updateValue;
+      } else if (field !== 'tags') {
         lot[field] = updateValue;
       }
 
@@ -241,7 +253,11 @@
         const index = lots.findIndex(l => l.id === lotId);
         if (index !== -1) {
           // Replace the temporary lot with the created one
-          lots[index] = { ...created, _images: getLotImages(created) };
+          lots[index] = { 
+            ...created, 
+            _images: getLotImages(created),
+            _tags: created.tags ? (typeof created.tags === 'string' ? JSON.parse(created.tags) : created.tags) : []
+          };
         }
 
         editingCell = null;
@@ -265,7 +281,11 @@
         const updated = await response.json();
         const index = lots.findIndex(l => l.id === lotId);
         if (index !== -1) {
-          lots[index] = { ...updated, _images: getLotImages(updated) };
+          lots[index] = { 
+            ...updated, 
+            _images: getLotImages(updated),
+            _tags: updated.tags ? (typeof updated.tags === 'string' ? JSON.parse(updated.tags) : updated.tags) : []
+          };
         }
 
         editingCell = null;
