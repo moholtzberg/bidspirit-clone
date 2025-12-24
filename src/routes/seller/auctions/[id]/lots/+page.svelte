@@ -37,6 +37,86 @@
   let currentAuctionId = $state(null);
   let draggedLot = $state(null);
   let reordering = $state(false);
+  let showBannerTool = $state(false);
+  
+  // Banner tool state
+  let selectedBannerLotId = $state('');
+  let selectedLotImages = $state([]); // All images from selected lot
+  let selectedBannerImages = $state([]); // Images selected for banner
+  let bannerSettings = $state({
+    title: '',
+    titleHebrew: '',
+    subtitle: '',
+    subtitleHebrew: '',
+    yearEnglish: '',
+    yearHebrew: '',
+    category: '',
+    categoryHebrew: '',
+    primaryImageUrl: '',
+    width: 1200,
+    height: 630,
+    fontSize: 48,
+    fontFamily: 'Cormorant Garamond, Times New Roman, serif',
+    hebrewFontFamily: 'Frank Ruhl Libre, Cardo, serif',
+    textColor: '#2C1810',
+    backgroundColor: 'rgba(245, 241, 232, 0.95)'
+  });
+  let generatedBannerUrl = $state(null);
+  let generatingBanner = $state(false);
+  
+  // Available fonts
+  const fonts = [
+    { name: 'Cormorant Garamond (Serif)', value: 'Cormorant Garamond, serif' },
+    { name: 'Playfair Display (Serif)', value: 'Playfair Display, serif' },
+    { name: 'Times New Roman (Serif)', value: 'Times New Roman, serif' },
+    { name: 'Georgia (Serif)', value: 'Georgia, serif' },
+    { name: 'Arial', value: 'Arial, sans-serif' }
+  ];
+  
+  const hebrewFonts = [
+    { name: 'Frank Ruhl Libre (Recommended)', value: 'Frank Ruhl Libre, serif' },
+    { name: 'Cardo (Recommended)', value: 'Cardo, serif' },
+    { name: 'David', value: 'David, Arial, sans-serif' },
+    { name: 'Heebo', value: 'Heebo, sans-serif' },
+    { name: 'Rubik', value: 'Rubik, sans-serif' }
+  ];
+  
+  // Convert Gregorian year to Hebrew year format
+  function convertToHebrewYear(year) {
+    if (!year || isNaN(year)) return '';
+    const yearNum = parseInt(year);
+    if (yearNum < 1000 || yearNum > 9999) return '';
+    const hebrewYear = yearNum + 3760;
+    // Simplified Hebrew year conversion
+    const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
+    const tens = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
+    const hundreds = ['', 'ק', 'ר', 'ש', 'ת'];
+    let result = '';
+    let remaining = hebrewYear;
+    if (remaining >= 5000) {
+      result += 'ה\'';
+      remaining -= 5000;
+    }
+    const hundredsDigit = Math.floor(remaining / 100);
+    if (hundredsDigit > 0 && hundredsDigit <= 4) {
+      result += hundreds[hundredsDigit];
+      remaining -= hundredsDigit * 100;
+    }
+    const tensDigit = Math.floor(remaining / 10);
+    if (tensDigit > 0 && tensDigit <= 9) {
+      result += tens[tensDigit];
+      remaining -= tensDigit * 10;
+    }
+    if (remaining > 0 && remaining <= 9) {
+      result += ones[remaining];
+    }
+    if (result.length > 1 && !result.startsWith('ה\'')) {
+      const lastChar = result.slice(-1);
+      const beforeLast = result.slice(0, -1);
+      result = beforeLast + '׳' + lastChar;
+    }
+    return result || '';
+  }
   
   onMount(() => {
     if ($page.params.id) {
@@ -218,11 +298,300 @@
         const minutes = String(endDate.getMinutes()).padStart(2, '0');
         newLot.endTime = `${year}-${month}-${day}T${hours}:${minutes}`;
       }
+      
+      // Initialize banner settings with auction defaults
+      if (auction) {
+        bannerSettings.title = auction.title || '';
+        bannerSettings.subtitle = auction.description ? auction.description.substring(0, 150) : '';
+        bannerSettings.primaryImageUrl = auction.imageUrl || '';
+      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
       loading = false;
     }
+  }
+  
+  // Quick banner generation with Hebrew support
+  async function generateQuickBanner() {
+    generatingBanner = true;
+    generatedBannerUrl = null;
+    
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = bannerSettings.width;
+      canvas.height = bannerSettings.height;
+      const ctx = canvas.getContext('2d');
+      
+      // Background color
+      ctx.fillStyle = '#F5F1E8'; // Antique paper color
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Load and draw images (right side) - use selected images or fallback to primaryImageUrl
+      const imagesToUse = selectedBannerImages.length > 0 
+        ? selectedBannerImages.map(img => img.url)
+        : (bannerSettings.primaryImageUrl ? [bannerSettings.primaryImageUrl] : []);
+      
+      if (imagesToUse.length > 0) {
+        // Get presigned URLs for all images
+        const imageUrls = await Promise.all(
+          imagesToUse.map(async (imageUrl) => {
+            // If it's an S3 URL, try to get presigned URL
+            if (imageUrl.includes('.s3.') || imageUrl.includes('s3.amazonaws.com')) {
+              try {
+                const match = imageUrl.match(/s3[^/]*\.amazonaws\.com\/(.+?)(?:\?|$)/);
+                if (match) {
+                  const key = match[1];
+                  const response = await fetch('/api/images/presigned', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keys: [key] })
+                  });
+                  if (response.ok) {
+                    const { urls } = await response.json();
+                    if (urls[key]) {
+                      return urls[key];
+                    }
+                  }
+                }
+              } catch (error) {
+                console.warn('Failed to get presigned URL, using original:', error);
+              }
+            }
+            return imageUrl;
+          })
+        );
+        
+        // Draw images - single image or collage
+        if (imageUrls.length === 1) {
+          // Single image - draw on right side (60% of width)
+          await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+              const imgWidth = canvas.width * 0.6;
+              const imgHeight = canvas.height;
+              const imgX = canvas.width * 0.4;
+              const imgY = 0;
+              
+              ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
+              resolve();
+            };
+            img.onerror = () => {
+              console.warn('Failed to load image:', imageUrls[0]);
+              // Draw placeholder
+              ctx.fillStyle = '#E5E5E5';
+              ctx.fillRect(canvas.width * 0.4, 0, canvas.width * 0.6, canvas.height);
+              ctx.fillStyle = '#999';
+              ctx.font = '24px Arial';
+              ctx.textAlign = 'center';
+              ctx.fillText('Image failed to load', canvas.width * 0.7, canvas.height / 2);
+              resolve();
+            };
+            img.src = imageUrls[0];
+          });
+        } else if (imageUrls.length > 1) {
+          // Multiple images - create collage
+          const imgAreaWidth = canvas.width * 0.6;
+          const imgAreaHeight = canvas.height;
+          const imgAreaX = canvas.width * 0.4;
+          const imgAreaY = 0;
+          
+          // Load all images first
+          const loadedImages = await Promise.all(
+            imageUrls.map((url) => {
+              return new Promise((resolve) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = () => resolve(null);
+                img.src = url;
+              });
+            })
+          );
+          
+          // Filter out failed loads
+          const validImages = loadedImages.filter(img => img !== null);
+          
+          if (validImages.length > 0) {
+            // Simple collage layout: first image larger in center, others around it
+            const centerSize = 0.6;
+            const otherSize = 0.35;
+            const spacing = 15;
+            
+            // Draw center image (first)
+            const centerImg = validImages[0];
+            const centerWidth = imgAreaWidth * centerSize;
+            const centerHeight = imgAreaHeight * centerSize;
+            const centerX = imgAreaX + (imgAreaWidth - centerWidth) / 2;
+            const centerY = imgAreaY + (imgAreaHeight - centerHeight) / 2;
+            ctx.drawImage(centerImg, centerX, centerY, centerWidth, centerHeight);
+            
+            // Draw other images around center
+            if (validImages.length > 1) {
+              const otherWidth = imgAreaWidth * otherSize;
+              const otherHeight = imgAreaHeight * otherSize;
+              const positions = [
+                { x: imgAreaX + spacing, y: imgAreaY + spacing }, // Top-left
+                { x: imgAreaX + imgAreaWidth - otherWidth - spacing, y: imgAreaY + spacing }, // Top-right
+                { x: imgAreaX + spacing, y: imgAreaY + imgAreaHeight - otherHeight - spacing }, // Bottom-left
+                { x: imgAreaX + imgAreaWidth - otherWidth - spacing, y: imgAreaY + imgAreaHeight - otherHeight - spacing } // Bottom-right
+              ];
+              
+              validImages.slice(1, 5).forEach((img, index) => {
+                if (positions[index]) {
+                  ctx.drawImage(img, positions[index].x, positions[index].y, otherWidth, otherHeight);
+                }
+              });
+            }
+          } else {
+            // All images failed - draw placeholder
+            ctx.fillStyle = '#E5E5E5';
+            ctx.fillRect(imgAreaX, imgAreaY, imgAreaWidth, imgAreaHeight);
+            ctx.fillStyle = '#999';
+            ctx.font = '24px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Images failed to load', imgAreaX + imgAreaWidth / 2, imgAreaY + imgAreaHeight / 2);
+          }
+        }
+      }
+      
+      // Draw text on left side (40% of width)
+      const textAreaWidth = canvas.width * 0.4;
+      const textAreaX = 0;
+      const textAreaY = 0;
+      
+      // Semi-transparent background for text
+      ctx.fillStyle = bannerSettings.backgroundColor || 'rgba(245, 241, 232, 0.95)';
+      ctx.fillRect(textAreaX, textAreaY, textAreaWidth, canvas.height);
+      
+      // Text settings
+      ctx.fillStyle = bannerSettings.textColor || '#2C1810';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      
+      const centerX = textAreaWidth / 2;
+      const padding = 30;
+      let currentY = canvas.height * 0.2;
+      
+      // Title (English)
+      if (bannerSettings.title) {
+        ctx.font = `bold ${bannerSettings.fontSize * 1.2}px ${bannerSettings.fontFamily}`;
+        const titleLines = wrapText(ctx, bannerSettings.title, textAreaWidth - (padding * 2));
+        titleLines.forEach((line, index) => {
+          ctx.fillText(line, centerX, currentY + (index * bannerSettings.fontSize * 1.5));
+        });
+        currentY += titleLines.length * bannerSettings.fontSize * 1.5 + 20;
+      }
+      
+      // Decorative line between English and Hebrew (if both exist)
+      if (bannerSettings.title && bannerSettings.titleHebrew) {
+        const lineY = currentY - 10;
+        const lineWidth = (textAreaWidth - (padding * 2)) * 0.6;
+        const lineX = centerX - (lineWidth / 2);
+        
+        ctx.strokeStyle = bannerSettings.textColor || '#2C1810';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        // Left ornament
+        ctx.moveTo(lineX, lineY);
+        ctx.lineTo(lineX + 15, lineY);
+        ctx.moveTo(lineX + 5, lineY - 3);
+        ctx.lineTo(lineX + 5, lineY + 3);
+        // Center line
+        ctx.moveTo(lineX + 20, lineY);
+        ctx.lineTo(lineX + lineWidth - 20, lineY);
+        // Right ornament
+        ctx.moveTo(lineX + lineWidth - 15, lineY);
+        ctx.lineTo(lineX + lineWidth, lineY);
+        ctx.moveTo(lineX + lineWidth - 5, lineY - 3);
+        ctx.lineTo(lineX + lineWidth - 5, lineY + 3);
+        ctx.stroke();
+        currentY += 20;
+      }
+      
+      // Title (Hebrew)
+      if (bannerSettings.titleHebrew) {
+        ctx.font = `bold ${bannerSettings.fontSize * 1.2}px ${bannerSettings.hebrewFontFamily}`;
+        ctx.textAlign = 'center';
+        const titleHebrewLines = wrapText(ctx, bannerSettings.titleHebrew, textAreaWidth - (padding * 2));
+        titleHebrewLines.forEach((line, index) => {
+          ctx.fillText(line, centerX, currentY + (index * bannerSettings.fontSize * 1.5));
+        });
+        currentY += titleHebrewLines.length * bannerSettings.fontSize * 1.5 + 20;
+      }
+      
+      // Year (English and Hebrew)
+      if (bannerSettings.yearEnglish || bannerSettings.yearHebrew) {
+        ctx.font = `${bannerSettings.fontSize * 0.8}px ${bannerSettings.fontFamily}`;
+        let yearText = '';
+        if (bannerSettings.yearEnglish && bannerSettings.yearHebrew) {
+          yearText = `${bannerSettings.yearEnglish} / ${bannerSettings.yearHebrew}`;
+        } else if (bannerSettings.yearEnglish) {
+          yearText = bannerSettings.yearEnglish;
+        } else if (bannerSettings.yearHebrew) {
+          yearText = bannerSettings.yearHebrew;
+        }
+        ctx.fillText(yearText, centerX, currentY);
+        currentY += bannerSettings.fontSize * 0.8 + 20;
+      }
+      
+      // Subtitle (English)
+      if (bannerSettings.subtitle) {
+        ctx.font = `${bannerSettings.fontSize * 0.45}px ${bannerSettings.fontFamily}`;
+        const subtitleLines = wrapText(ctx, bannerSettings.subtitle, textAreaWidth - (padding * 2));
+        subtitleLines.forEach((line, index) => {
+          ctx.fillText(line, centerX, currentY + (index * bannerSettings.fontSize * 0.7));
+        });
+        currentY += subtitleLines.length * bannerSettings.fontSize * 0.7 + 15;
+      }
+      
+      // Subtitle (Hebrew)
+      if (bannerSettings.subtitleHebrew) {
+        ctx.font = `${bannerSettings.fontSize * 0.45}px ${bannerSettings.hebrewFontFamily}`;
+        ctx.textAlign = 'center';
+        const subtitleHebrewLines = wrapText(ctx, bannerSettings.subtitleHebrew, textAreaWidth - (padding * 2));
+        subtitleHebrewLines.forEach((line, index) => {
+          ctx.fillText(line, centerX, currentY + (index * bannerSettings.fontSize * 0.7));
+        });
+      }
+      
+      // Convert canvas to image
+      generatedBannerUrl = canvas.toDataURL('image/png');
+    } catch (error) {
+      console.error('Error generating banner:', error);
+      alert('Failed to generate banner. Please try again.');
+    } finally {
+      generatingBanner = false;
+    }
+  }
+  
+  function wrapText(ctx, text, maxWidth) {
+    const words = text.split(' ');
+    const lines = [];
+    let currentLine = words[0];
+    
+    for (let i = 1; i < words.length; i++) {
+      const word = words[i];
+      const width = ctx.measureText(currentLine + ' ' + word).width;
+      if (width < maxWidth) {
+        currentLine += ' ' + word;
+      } else {
+        lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    lines.push(currentLine);
+    return lines;
+  }
+  
+  function downloadBanner() {
+    if (!generatedBannerUrl) return;
+    
+    const link = document.createElement('a');
+    link.download = `banner-${Date.now()}.png`;
+    link.href = generatedBannerUrl;
+    link.click();
   }
   
   async function handleImageUpload(event) {
@@ -413,10 +782,16 @@
         </div>
         <div class="flex gap-3">
           <button
-            onclick={() => goto(`/seller/auctions/${auction.id}/lots/tools`)}
+            onclick={() => showBannerTool = !showBannerTool}
             class="bg-purple-600 text-white px-6 py-3 rounded-lg hover:bg-purple-700 transition-colors font-semibold"
           >
-            Banner Tools
+            {showBannerTool ? 'Hide' : 'Show'} Banner Tool
+          </button>
+          <button
+            onclick={() => goto(`/seller/auctions/${auction.id}/lots/tools`)}
+            class="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors font-semibold"
+          >
+            Full Banner Tools
           </button>
           <button
             onclick={() => showCreateModal = true}
@@ -426,6 +801,270 @@
           </button>
         </div>
       </div>
+
+      <!-- Banner Tool Section -->
+      {#if showBannerTool}
+        <div class="mb-8 bg-white rounded-lg shadow-lg p-6 border-2 border-purple-200">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-2xl font-bold text-gray-900">Quick Banner Generator</h2>
+            <button
+              onclick={() => showBannerTool = false}
+              class="text-gray-500 hover:text-gray-700"
+            >
+              ✕
+            </button>
+          </div>
+          
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Left: Settings -->
+            <div>
+              <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">
+                  Select Lot (Optional)
+                </label>
+                <select
+                  bind:value={selectedBannerLotId}
+                  onchange={(e) => {
+                    const lotId = e.target.value;
+                    if (lotId) {
+                      const lot = lots.find(l => l.id === lotId);
+                      if (lot) {
+                        bannerSettings.title = lot.title || '';
+                        bannerSettings.titleHebrew = lot.hebrewTitle || lot.HebrewTitle || '';
+                        bannerSettings.subtitle = lot.description ? lot.description.substring(0, 150) : '';
+                        bannerSettings.subtitleHebrew = lot.hebrewDescription || lot.HebrewDescription || '';
+                        bannerSettings.primaryImageUrl = lot.imageUrl || '';
+                        // Extract year from title if it contains a year
+                        const yearMatch = lot.title?.match(/\b(18|19|20)\d{2}\b/);
+                        if (yearMatch) {
+                          bannerSettings.yearEnglish = yearMatch[0];
+                          bannerSettings.yearHebrew = convertToHebrewYear(yearMatch[0]);
+                        }
+                      }
+                    } else {
+                      // Reset to auction defaults
+                      if (auction) {
+                        bannerSettings.title = auction.title || '';
+                        bannerSettings.subtitle = auction.description ? auction.description.substring(0, 150) : '';
+                        bannerSettings.primaryImageUrl = auction.imageUrl || '';
+                        bannerSettings.titleHebrew = '';
+                        bannerSettings.subtitleHebrew = '';
+                        bannerSettings.yearEnglish = '';
+                        bannerSettings.yearHebrew = '';
+                      }
+                    }
+                  }}
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-white"
+                >
+                  <option value="">-- Use Auction Defaults --</option>
+                  {#each lots as lot}
+                    <option value={lot.id}>
+                      Lot #{lot.lotNumber}: {lot.title}
+                    </option>
+                  {/each}
+                </select>
+              </div>
+              
+              <!-- English Fields -->
+              <div class="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">English Text</h3>
+                
+                <div class="mb-4">
+                  <label for="title-en" class="block text-sm font-medium text-gray-700 mb-2">
+                    Title (English)
+                  </label>
+                  <input
+                    id="title-en"
+                    type="text"
+                    bind:value={bannerSettings.title}
+                    placeholder="Banner title"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+                
+                <div class="mb-4">
+                  <label for="subtitle-en" class="block text-sm font-medium text-gray-700 mb-2">
+                    Subtitle (English)
+                  </label>
+                  <textarea
+                    id="subtitle-en"
+                    bind:value={bannerSettings.subtitle}
+                    placeholder="Banner subtitle"
+                    rows="2"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  ></textarea>
+                </div>
+                
+                <div class="mb-4">
+                  <label for="year-en" class="block text-sm font-medium text-gray-700 mb-2">
+                    Year (English)
+                  </label>
+                  <input
+                    id="year-en"
+                    type="text"
+                    bind:value={bannerSettings.yearEnglish}
+                    placeholder="e.g., 1890"
+                    oninput={(e) => {
+                      bannerSettings.yearEnglish = e.target.value;
+                      if (bannerSettings.yearEnglish) {
+                        bannerSettings.yearHebrew = convertToHebrewYear(bannerSettings.yearEnglish);
+                      }
+                    }}
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              
+              <!-- Hebrew Fields -->
+              <div class="mb-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Hebrew Text</h3>
+                
+                <div class="mb-4">
+                  <label for="title-he" class="block text-sm font-medium text-gray-700 mb-2">
+                    Title (Hebrew)
+                  </label>
+                  <input
+                    id="title-he"
+                    type="text"
+                    bind:value={bannerSettings.titleHebrew}
+                    placeholder="כותרת בעברית"
+                    dir="rtl"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+                
+                <div class="mb-4">
+                  <label for="subtitle-he" class="block text-sm font-medium text-gray-700 mb-2">
+                    Subtitle (Hebrew)
+                  </label>
+                  <textarea
+                    id="subtitle-he"
+                    bind:value={bannerSettings.subtitleHebrew}
+                    placeholder="תת-כותרת בעברית"
+                    rows="2"
+                    dir="rtl"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  ></textarea>
+                </div>
+                
+                <div class="mb-4">
+                  <label for="year-he" class="block text-sm font-medium text-gray-700 mb-2">
+                    Year (Hebrew)
+                  </label>
+                  <input
+                    id="year-he"
+                    type="text"
+                    bind:value={bannerSettings.yearHebrew}
+                    placeholder="תר״נ"
+                    dir="rtl"
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              
+              <!-- Font & Size Settings -->
+              <div class="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Typography</h3>
+                
+                <div class="mb-4">
+                  <label for="font-size" class="block text-sm font-medium text-gray-700 mb-2">
+                    Font Size: {bannerSettings.fontSize}px
+                  </label>
+                  <input
+                    id="font-size"
+                    type="range"
+                    min="24"
+                    max="72"
+                    bind:value={bannerSettings.fontSize}
+                    class="w-full"
+                  />
+                </div>
+                
+                <div class="mb-4">
+                  <label for="font-family" class="block text-sm font-medium text-gray-700 mb-2">
+                    English Font
+                  </label>
+                  <select
+                    id="font-family"
+                    bind:value={bannerSettings.fontFamily}
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    {#each fonts as font}
+                      <option value={font.value}>{font.name}</option>
+                    {/each}
+                  </select>
+                </div>
+                
+                <div class="mb-4">
+                  <label for="hebrew-font-family" class="block text-sm font-medium text-gray-700 mb-2">
+                    Hebrew Font
+                  </label>
+                  <select
+                    id="hebrew-font-family"
+                    bind:value={bannerSettings.hebrewFontFamily}
+                    class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  >
+                    {#each hebrewFonts as font}
+                      <option value={font.value}>{font.name}</option>
+                    {/each}
+                  </select>
+                </div>
+              </div>
+              
+              <!-- Image Settings -->
+              <div class="mb-4">
+                <label for="image-url" class="block text-sm font-medium text-gray-700 mb-2">
+                  Image URL
+                </label>
+                <input
+                  id="image-url"
+                  type="text"
+                  bind:value={bannerSettings.primaryImageUrl}
+                  placeholder="Image URL"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+                <p class="text-xs text-gray-500 mt-1">Make sure the image URL is accessible (CORS enabled or presigned URL)</p>
+              </div>
+              
+              <button
+                onclick={generateQuickBanner}
+                disabled={generatingBanner || (!bannerSettings.title && !bannerSettings.titleHebrew) || !bannerSettings.primaryImageUrl}
+                class="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {generatingBanner ? 'Generating...' : 'Generate Banner'}
+              </button>
+              
+              {#if generatedBannerUrl}
+                <button
+                  onclick={downloadBanner}
+                  class="w-full mt-3 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors font-semibold"
+                >
+                  Download Banner
+                </button>
+              {/if}
+            </div>
+            
+            <!-- Right: Preview -->
+            <div>
+              <h3 class="text-lg font-semibold text-gray-900 mb-4">Preview</h3>
+              {#if generatedBannerUrl}
+                <img
+                  src={generatedBannerUrl}
+                  alt="Generated Banner"
+                  class="w-full rounded-lg shadow-lg border border-gray-200"
+                />
+              {:else}
+                <div class="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center bg-gray-50">
+                  <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <p class="text-gray-600">Configure settings and click "Generate Banner"</p>
+                </div>
+              {/if}
+            </div>
+          </div>
+        </div>
+      {/if}
 
       {#if lots.length === 0}
         <div class="bg-white rounded-lg shadow-lg p-12 text-center">
@@ -912,4 +1551,5 @@
     </div>
   </div>
 {/if}
+
 
