@@ -704,17 +704,16 @@
                     class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                 </th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Pos</th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Lot #</th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Images</th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[300px]">Title & Description</th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Category</th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Start Bid</th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Current Bid</th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Increment</th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Tags</th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Status</th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">End Time</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Pos</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Lot #</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Images</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[250px]">Title & Description</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Category</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Start Bid</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Current Bid</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Increment</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Status</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">End Time</th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
@@ -727,7 +726,7 @@
                   ondragend={handleDragEnd}
                 >
                   <!-- Checkbox -->
-                  <td class="px-3 py-2 whitespace-nowrap">
+                  <td class="px-2 py-1 whitespace-nowrap">
                     <input
                       type="checkbox"
                       checked={selectedLots.has(lot.id)}
@@ -738,7 +737,7 @@
                   </td>
                   
                   <!-- Position -->
-                  <td class="px-4 py-2 whitespace-nowrap">
+                  <td class="px-2 py-1 whitespace-nowrap">
                     <div class="flex items-center gap-1">
                       <span class="text-sm font-semibold text-blue-600">{lot.position || index + 1}</span>
                       <div class="flex flex-col">
@@ -763,14 +762,14 @@
                   </td>
                   
                   <!-- Lot Number -->
-                  <td class="px-4 py-2 whitespace-nowrap">
+                  <td class="px-2 py-1 whitespace-nowrap">
                     {#if editingCell?.lotId === lot.id && editingCell?.field === 'lotNumber'}
                       <input
                         type="number"
                         bind:value={editingCell.value}
                         onblur={() => saveCell(lot.id, 'lotNumber', editingCell.value)}
                         onkeydown={(e) => handleKeydown(e, lot.id, 'lotNumber', editingCell.value)}
-                        class="w-full px-2 py-1 text-sm border-2 border-blue-500 rounded focus:outline-none"
+                        class="w-full px-1 py-0.5 text-xs border-2 border-blue-500 rounded focus:outline-none"
                         autofocus
                       />
                     {:else}
@@ -784,7 +783,7 @@
                   </td>
                   
                   <!-- Images -->
-                  <td class="px-4 py-2">
+                  <td class="px-2 py-1">
                     <div class="relative">
                       <div class="grid grid-cols-2 gap-1 w-20">
                         {#each (lot._images || []).slice(0, 2) as image, i}
@@ -820,19 +819,19 @@
                           </div>
                         </div>
                       {/if}
-                      <button
+                      <!-- <button
                         onclick={() => toggleImageRow(lot.id)}
                         class="mt-1 text-xs text-blue-600 hover:text-blue-800 underline"
                         title="Manage images"
                       >
                         
-                      </button>
+                      </button> -->
                     </div>
                   </td>
                   
                   <!-- Title & Description -->
-                  <td class="px-4 py-2">
-                    <div class="space-y-1">
+                  <td class="px-2 py-1">
+                    <div class="space-y-0.5">
                       <!-- Title -->
                       <div>
                         {#if editingCell?.lotId === lot.id && editingCell?.field === 'title'}
@@ -841,18 +840,18 @@
                             bind:value={editingCell.value}
                             onblur={() => saveCell(lot.id, 'title', editingCell.value)}
                             onkeydown={(e) => handleKeydown(e, lot.id, 'title', editingCell.value)}
-                            class="w-full px-2 py-1 text-sm border-2 border-blue-500 rounded focus:outline-none"
+                            class="w-full px-1 py-0.5 text-xs border-2 border-blue-500 rounded focus:outline-none"
                             autofocus
                           />
                         {:else}
                           <span
                             ondblclick={() => startEdit(lot.id, 'title', lot.title)}
-                            class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded block font-medium"
+                            class="cursor-pointer hover:bg-blue-50 px-1 py-0.5 rounded block text-xs font-medium"
                           >
                             {#if lot.title}
                               {lot.title}
                             {:else}
-                              <span class="text-gray-400 italic">Double-click to edit title</span>
+                              <span class="text-gray-400 italic">Double-click to edit</span>
                             {/if}
                           </span>
                         {/if}
@@ -864,19 +863,19 @@
                             bind:value={editingCell.value}
                             onblur={() => saveCell(lot.id, 'description', editingCell.value)}
                             onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
-                            class="w-full px-2 py-1 text-xs border-2 border-blue-500 rounded focus:outline-none"
+                            class="w-full px-1 py-1 text-xs border-2 border-blue-500 rounded focus:outline-none"
                             rows="2"
                             autofocus
                           ></textarea>
                         {:else}
                           <span
                             ondblclick={() => startEdit(lot.id, 'description', lot.description)}
-                            class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded block text-xs text-gray-500"
+                            class="cursor-pointer hover:bg-blue-50 px-1 py-1 rounded block text-xs text-gray-500"
                           >
                             {#if lot.description}
                               {lot.description}
                             {:else}
-                              <span class="text-gray-400 italic">Double-click to edit description</span>
+                              <span class="text-gray-400 italic">Double-click to edit</span>
                             {/if}
                           </span>
                         {/if}
@@ -884,73 +883,192 @@
                     </div>
                   </td>
                   
-                  <!-- Category -->
-                  <td class="px-4 py-2 whitespace-nowrap">
-                    {#if editingCell?.lotId === lot.id && editingCell?.field === 'category'}
-                      <div class="relative">
-                        <input
-                          type="text"
-                          value={categoryInputs[lot.id] || lot.category || ''}
-                          oninput={(e) => {
-                            categoryInputs[lot.id] = e.target.value;
-                            editingCell.value = e.target.value;
-                            showCategoryDropdown[lot.id] = e.target.value.length > 0;
-                          }}
-                          onfocus={() => showCategoryDropdown[lot.id] = (categoryInputs[lot.id] || lot.category || '').length > 0}
-                          onblur={() => setTimeout(() => showCategoryDropdown[lot.id] = false, 200)}
-                          onkeydown={(e) => handleKeydown(e, lot.id, 'category', editingCell.value)}
-                          class="w-full px-2 py-1 text-sm border-2 border-blue-500 rounded focus:outline-none"
-                          autofocus
-                        />
-                        {#if showCategoryDropdown[lot.id] && availableCategories.length > 0}
-                          <div class="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                            {#each availableCategories.filter(c => c.toLowerCase().includes((categoryInputs[lot.id] || lot.category || '').toLowerCase())) as cat}
-                              <button
-                                type="button"
-                                onclick={() => {
-                                  categoryInputs[lot.id] = cat;
-                                  editingCell.value = cat;
-                                  showCategoryDropdown[lot.id] = false;
+                  <!-- Category with Tags below -->
+                  <td class="px-2 py-1">
+                    <div class="space-y-1">
+                      <!-- Category -->
+                      <div>
+                        {#if editingCell?.lotId === lot.id && editingCell?.field === 'category'}
+                          <div class="relative">
+                            <input
+                              type="text"
+                              value={categoryInputs[lot.id] || lot.category || ''}
+                              oninput={(e) => {
+                                categoryInputs[lot.id] = e.target.value;
+                                editingCell.value = e.target.value;
+                                showCategoryDropdown[lot.id] = e.target.value.length > 0;
+                              }}
+                              onfocus={() => showCategoryDropdown[lot.id] = (categoryInputs[lot.id] || lot.category || '').length > 0}
+                              onblur={() => setTimeout(() => showCategoryDropdown[lot.id] = false, 200)}
+                              onkeydown={(e) => handleKeydown(e, lot.id, 'category', editingCell.value)}
+                              class="w-full px-1 py-0.5 text-xs border-2 border-blue-500 rounded focus:outline-none"
+                              autofocus
+                            />
+                            {#if showCategoryDropdown[lot.id] && availableCategories.length > 0}
+                              <div class="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-32 overflow-y-auto">
+                                {#each availableCategories.filter(c => c.toLowerCase().includes((categoryInputs[lot.id] || lot.category || '').toLowerCase())) as cat}
+                                  <button
+                                    type="button"
+                                    onclick={() => {
+                                      categoryInputs[lot.id] = cat;
+                                      editingCell.value = cat;
+                                      showCategoryDropdown[lot.id] = false;
+                                    }}
+                                    class="w-full text-left px-2 py-1 hover:bg-blue-50 text-xs"
+                                  >
+                                    {cat}
+                                  </button>
+                                {/each}
+                                {#if categoryInputs[lot.id] && !availableCategories.some(c => c.toLowerCase() === (categoryInputs[lot.id] || '').toLowerCase())}
+                                  <button
+                                    type="button"
+                                    onclick={() => {
+                                      editingCell.value = categoryInputs[lot.id];
+                                      showCategoryDropdown[lot.id] = false;
+                                    }}
+                                    class="w-full text-left px-2 py-1 hover:bg-green-50 text-xs text-green-600 font-semibold"
+                                  >
+                                    + Create "{categoryInputs[lot.id]}"
+                                  </button>
+                                {/if}
+                              </div>
+                            {/if}
+                          </div>
+                        {:else}
+                          <span
+                            ondblclick={() => {
+                              categoryInputs[lot.id] = lot.category || '';
+                              startEdit(lot.id, 'category', lot.category || '');
+                            }}
+                            class="cursor-pointer hover:bg-blue-50 px-1 py-0.5 rounded text-xs"
+                          >
+                            {#if lot.category}
+                              {lot.category}
+                            {:else}
+                              <span class="text-gray-400 italic">-</span>
+                            {/if}
+                          </span>
+                        {/if}
+                      </div>
+                      
+                      <!-- Tags -->
+                      <div>
+                        {#if editingCell?.lotId === lot.id && editingCell?.field === 'tags'}
+                          <div class="space-y-1">
+                            <div class="flex flex-wrap gap-0.5 mb-0.5">
+                              {#each (lot._tags || []) as tag, index}
+                                <span class="inline-flex items-center px-1 py-0.5 rounded text-xs bg-blue-100 text-blue-800">
+                                  {tag}
+                                  <button
+                                    type="button"
+                                    onclick={() => {
+                                      const tags = [...(lot._tags || [])];
+                                      tags.splice(index, 1);
+                                      lot._tags = tags;
+                                      editingCell.value = JSON.stringify(tags);
+                                      saveCell(lot.id, 'tags', JSON.stringify(tags));
+                                    }}
+                                    class="ml-0.5 text-blue-600 hover:text-blue-800 text-xs"
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              {/each}
+                            </div>
+                            <div class="relative">
+                              <input
+                                type="text"
+                                value={tagInputs[lot.id] || ''}
+                                oninput={(e) => {
+                                  tagInputs[lot.id] = e.target.value;
+                                  showTagDropdown[lot.id] = e.target.value.length > 0;
                                 }}
-                                class="w-full text-left px-2 py-1 hover:bg-blue-50 text-xs"
-                              >
-                                {cat}
-                              </button>
-                            {/each}
-                            {#if categoryInputs[lot.id] && !availableCategories.some(c => c.toLowerCase() === (categoryInputs[lot.id] || '').toLowerCase())}
-                              <button
-                                type="button"
-                                onclick={() => {
-                                  editingCell.value = categoryInputs[lot.id];
-                                  showCategoryDropdown[lot.id] = false;
+                                onfocus={() => showTagDropdown[lot.id] = (tagInputs[lot.id] || '').length > 0}
+                                onblur={() => {
+                                  setTimeout(() => {
+                                    showTagDropdown[lot.id] = false;
+                                    if (editingCell?.lotId === lot.id && editingCell?.field === 'tags') {
+                                      saveCell(lot.id, 'tags', editingCell.value);
+                                    }
+                                  }, 200);
                                 }}
-                                class="w-full text-left px-2 py-1 hover:bg-green-50 text-xs text-green-600 font-semibold"
-                              >
-                                + Create "{categoryInputs[lot.id]}"
-                              </button>
+                                onkeydown={(e) => {
+                                  if (e.key === 'Enter' && tagInputs[lot.id]?.trim()) {
+                                    e.preventDefault();
+                                    const tags = [...(lot._tags || [])];
+                                    if (!tags.includes(tagInputs[lot.id].trim())) {
+                                      tags.push(tagInputs[lot.id].trim());
+                                    }
+                                    lot._tags = tags;
+                                    editingCell.value = JSON.stringify(tags);
+                                    tagInputs[lot.id] = '';
+                                    showTagDropdown[lot.id] = false;
+                                    saveCell(lot.id, 'tags', JSON.stringify(tags));
+                                  } else if (e.key === 'Escape') {
+                                    cancelEdit();
+                                  }
+                                }}
+                                placeholder="Add tag..."
+                                class="w-full px-1 py-0.5 text-xs border-2 border-blue-500 rounded focus:outline-none"
+                                autofocus
+                              />
+                              {#if showTagDropdown[lot.id] && availableTags.length > 0}
+                                <div class="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-32 overflow-y-auto">
+                                  {#each availableTags.filter(t => t.toLowerCase().includes((tagInputs[lot.id] || '').toLowerCase()) && !(lot._tags || []).includes(t)) as tag}
+                                    <button
+                                      type="button"
+                                      onclick={() => {
+                                        const tags = [...(lot._tags || [])];
+                                        if (!tags.includes(tag)) {
+                                          tags.push(tag);
+                                        }
+                                        lot._tags = tags;
+                                        editingCell.value = JSON.stringify(tags);
+                                        tagInputs[lot.id] = '';
+                                        showTagDropdown[lot.id] = false;
+                                        saveCell(lot.id, 'tags', JSON.stringify(tags));
+                                      }}
+                                      class="w-full text-left px-2 py-1 hover:bg-blue-50 text-xs"
+                                    >
+                                      {tag}
+                                    </button>
+                                  {/each}
+                                </div>
+                              {/if}
+                            </div>
+                          </div>
+                        {:else}
+                          <div
+                            ondblclick={() => {
+                              tagInputs[lot.id] = '';
+                              startEdit(lot.id, 'tags', JSON.stringify(lot._tags || []));
+                            }}
+                            class="cursor-pointer hover:bg-blue-50 px-1 py-0.5 rounded min-h-[18px]"
+                          >
+                            {#if lot._tags && lot._tags.length > 0}
+                              <div class="flex flex-wrap gap-0.5">
+                                {#each lot._tags.slice(0, 3) as tag}
+                                  <span class="inline-flex items-center px-1 py-0.5 rounded text-xs bg-blue-100 text-blue-800">
+                                    {tag}
+                                  </span>
+                                {/each}
+                                {#if lot._tags.length > 3}
+                                  <span class="inline-flex items-center px-1 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
+                                    +{lot._tags.length - 3}
+                                  </span>
+                                {/if}
+                              </div>
+                            {:else}
+                              <span class="text-gray-400 italic text-xs">Double-click to add tags</span>
                             {/if}
                           </div>
                         {/if}
                       </div>
-                    {:else}
-                      <span
-                        ondblclick={() => {
-                          categoryInputs[lot.id] = lot.category || '';
-                          startEdit(lot.id, 'category', lot.category || '');
-                        }}
-                        class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded"
-                      >
-                        {#if lot.category}
-                          {lot.category}
-                        {:else}
-                          <span class="text-gray-400 italic">-</span>
-                        {/if}
-                      </span>
-                    {/if}
+                    </div>
                   </td>
                   
                   <!-- Starting Bid -->
-                  <td class="px-4 py-2 whitespace-nowrap">
+                  <td class="px-2 py-1 whitespace-nowrap">
                     {#if editingCell?.lotId === lot.id && editingCell?.field === 'startingBid'}
                       <input
                         type="number"
@@ -958,13 +1076,13 @@
                         bind:value={editingCell.value}
                         onblur={() => saveCell(lot.id, 'startingBid', editingCell.value)}
                         onkeydown={(e) => handleKeydown(e, lot.id, 'startingBid', editingCell.value)}
-                        class="w-full px-2 py-1 text-sm border-2 border-blue-500 rounded focus:outline-none"
+                        class="w-full px-1 py-0.5 text-xs border-2 border-blue-500 rounded focus:outline-none"
                         autofocus
                       />
                     {:else}
                       <span
                         ondblclick={() => startEdit(lot.id, 'startingBid', lot.startingBid)}
-                        class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded"
+                        class="cursor-pointer hover:bg-blue-50 px-1 py-0.5 rounded text-xs"
                       >
                         ${lot.startingBid?.toFixed(2) || '0.00'}
                       </span>
@@ -972,14 +1090,14 @@
                   </td>
                   
                   <!-- Current Bid -->
-                  <td class="px-4 py-2 whitespace-nowrap">
-                    <span class="px-2 py-1 rounded font-semibold">
+                  <td class="px-2 py-1 whitespace-nowrap">
+                    <span class="px-1 py-0.5 rounded text-xs font-semibold">
                       ${lot.currentBid?.toFixed(2) || '0.00'}
                     </span>
                   </td>
                   
                   <!-- Bid Increment -->
-                  <td class="px-4 py-2 whitespace-nowrap">
+                  <td class="px-2 py-1 whitespace-nowrap">
                     {#if editingCell?.lotId === lot.id && editingCell?.field === 'bidIncrement'}
                       <input
                         type="number"
@@ -987,145 +1105,27 @@
                         bind:value={editingCell.value}
                         onblur={() => saveCell(lot.id, 'bidIncrement', editingCell.value)}
                         onkeydown={(e) => handleKeydown(e, lot.id, 'bidIncrement', editingCell.value)}
-                        class="w-full px-2 py-1 text-sm border-2 border-blue-500 rounded focus:outline-none"
+                        class="w-full px-1 py-0.5 text-xs border-2 border-blue-500 rounded focus:outline-none"
                         autofocus
                       />
                     {:else}
                       <span
                         ondblclick={() => startEdit(lot.id, 'bidIncrement', lot.bidIncrement)}
-                        class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded"
+                        class="cursor-pointer hover:bg-blue-50 px-1 py-0.5 rounded text-xs"
                       >
                         ${lot.bidIncrement?.toFixed(2) || '0.00'}
                       </span>
                     {/if}
                   </td>
                   
-                  <!-- Tags -->
-                  <td class="px-4 py-2">
-                    {#if editingCell?.lotId === lot.id && editingCell?.field === 'tags'}
-                      <div class="space-y-2">
-                        <div class="flex flex-wrap gap-1 mb-1">
-                          {#each (lot._tags || []) as tag, index}
-                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800">
-                              {tag}
-                              <button
-                                type="button"
-                                onclick={() => {
-                                  const tags = [...(lot._tags || [])];
-                                  tags.splice(index, 1);
-                                  lot._tags = tags;
-                                  editingCell.value = JSON.stringify(tags);
-                                  // Save immediately when tag is removed
-                                  saveCell(lot.id, 'tags', JSON.stringify(tags));
-                                }}
-                                class="ml-1 text-blue-600 hover:text-blue-800"
-                              >
-                                ×
-                              </button>
-                            </span>
-                          {/each}
-                        </div>
-                        <div class="relative">
-                          <input
-                            type="text"
-                            value={tagInputs[lot.id] || ''}
-                            oninput={(e) => {
-                              tagInputs[lot.id] = e.target.value;
-                              showTagDropdown[lot.id] = e.target.value.length > 0;
-                            }}
-                            onfocus={() => showTagDropdown[lot.id] = (tagInputs[lot.id] || '').length > 0}
-                            onblur={() => {
-                              // Save when input loses focus and hide dropdown
-                              setTimeout(() => {
-                                showTagDropdown[lot.id] = false;
-                                if (editingCell?.lotId === lot.id && editingCell?.field === 'tags') {
-                                  saveCell(lot.id, 'tags', editingCell.value);
-                                }
-                              }, 200);
-                            }}
-                            onkeydown={(e) => {
-                              if (e.key === 'Enter' && tagInputs[lot.id]?.trim()) {
-                                e.preventDefault();
-                                const tags = [...(lot._tags || [])];
-                                if (!tags.includes(tagInputs[lot.id].trim())) {
-                                  tags.push(tagInputs[lot.id].trim());
-                                }
-                                lot._tags = tags;
-                                editingCell.value = JSON.stringify(tags);
-                                tagInputs[lot.id] = '';
-                                showTagDropdown[lot.id] = false;
-                                // Save immediately when tag is added
-                                saveCell(lot.id, 'tags', JSON.stringify(tags));
-                              } else if (e.key === 'Escape') {
-                                cancelEdit();
-                              }
-                            }}
-                            placeholder="Add tag..."
-                            class="w-full px-2 py-1 text-xs border-2 border-blue-500 rounded focus:outline-none"
-                            autofocus
-                          />
-                          {#if showTagDropdown[lot.id] && availableTags.length > 0}
-                            <div class="absolute z-20 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-32 overflow-y-auto">
-                              {#each availableTags.filter(t => t.toLowerCase().includes((tagInputs[lot.id] || '').toLowerCase()) && !(lot._tags || []).includes(t)) as tag}
-                                <button
-                                  type="button"
-                                  onclick={() => {
-                                    const tags = [...(lot._tags || [])];
-                                    if (!tags.includes(tag)) {
-                                      tags.push(tag);
-                                    }
-                                    lot._tags = tags;
-                                    editingCell.value = JSON.stringify(tags);
-                                    tagInputs[lot.id] = '';
-                                    showTagDropdown[lot.id] = false;
-                                    // Save immediately when tag is selected from dropdown
-                                    saveCell(lot.id, 'tags', JSON.stringify(tags));
-                                  }}
-                                  class="w-full text-left px-2 py-1 hover:bg-blue-50 text-xs"
-                                >
-                                  {tag}
-                                </button>
-                              {/each}
-                            </div>
-                          {/if}
-                        </div>
-                      </div>
-                    {:else}
-                      <div
-                        ondblclick={() => {
-                          tagInputs[lot.id] = '';
-                          startEdit(lot.id, 'tags', JSON.stringify(lot._tags || []));
-                        }}
-                        class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded min-h-[24px]"
-                      >
-                        {#if lot._tags && lot._tags.length > 0}
-                          <div class="flex flex-wrap gap-1">
-                            {#each lot._tags.slice(0, 3) as tag}
-                              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-blue-100 text-blue-800">
-                                {tag}
-                              </span>
-                            {/each}
-                            {#if lot._tags.length > 3}
-                              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-gray-100 text-gray-600">
-                                +{lot._tags.length - 3}
-                              </span>
-                            {/if}
-                          </div>
-                        {:else}
-                          <span class="text-gray-400 italic text-xs">Double-click to add tags</span>
-                        {/if}
-                      </div>
-                    {/if}
-                  </td>
-                  
                   <!-- Status -->
-                  <td class="px-4 py-2 whitespace-nowrap">
+                  <td class="px-2 py-1 whitespace-nowrap">
                     {#if editingCell?.lotId === lot.id && editingCell?.field === 'status'}
                       <select
                         bind:value={editingCell.value}
                         onblur={() => saveCell(lot.id, 'status', editingCell.value)}
                         onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
-                        class="w-full px-2 py-1 text-sm border-2 border-blue-500 rounded focus:outline-none"
+                        class="w-full px-1 py-0.5 text-xs border-2 border-blue-500 rounded focus:outline-none"
                         autofocus
                       >
                         <option value="ACTIVE">Active</option>
@@ -1144,14 +1144,14 @@
                   </td>
                   
                   <!-- End Time -->
-                  <td class="px-4 py-2 whitespace-nowrap">
+                  <td class="px-2 py-1 whitespace-nowrap">
                     {#if editingCell?.lotId === lot.id && editingCell?.field === 'endTime'}
                       <input
                         type="datetime-local"
                         bind:value={editingCell.value}
                         onblur={() => saveCell(lot.id, 'endTime', editingCell.value)}
                         onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
-                        class="w-full px-2 py-1 text-sm border-2 border-blue-500 rounded focus:outline-none"
+                        class="w-full px-1 py-0.5 text-xs border-2 border-blue-500 rounded focus:outline-none"
                         autofocus
                       />
                     {:else}
@@ -1160,7 +1160,7 @@
                           const endTime = lot.endTime ? new Date(lot.endTime).toISOString().slice(0, 16) : '';
                           startEdit(lot.id, 'endTime', endTime);
                         }}
-                        class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded text-xs"
+                        class="cursor-pointer hover:bg-blue-50 px-1 py-0.5 rounded text-xs"
                       >
                         {#if lot.endTime}
                           {new Date(lot.endTime).toLocaleString()}
@@ -1175,7 +1175,7 @@
                 <!-- Expandable Image Management Row -->
                 {#if expandedImageRows.has(lot.id)}
                   <tr class="bg-gray-50">
-                    <td colspan="12" class="px-4 py-4">
+                    <td colspan="11" class="px-4 py-4">
                       <div class="bg-white rounded-lg border border-gray-200 p-4">
                         <div class="flex items-center justify-between mb-4">
                           <h3 class="text-lg font-semibold text-gray-900">Image Management - Lot #{lot.lotNumber}</h3>
