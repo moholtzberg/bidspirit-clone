@@ -31,3 +31,37 @@ export function convertBigIntsToStrings(obj) {
   return obj;
 }
 
+/**
+ * Convert Gregorian year to Hebrew year format
+ */
+export function convertToHebrewYear(year) {
+  if (!year || isNaN(year)) return '';
+  const yearNum = parseInt(year);
+  if (yearNum < 1000 || yearNum > 9999) return '';
+  const hebrewYear = yearNum + 3760;
+  // Simplified Hebrew year conversion
+  const ones = ['', 'א', 'ב', 'ג', 'ד', 'ה', 'ו', 'ז', 'ח', 'ט'];
+  const tens = ['', 'י', 'כ', 'ל', 'מ', 'נ', 'ס', 'ע', 'פ', 'צ'];
+  const hundreds = ['', 'ק', 'ר', 'ש', 'ת'];
+  let result = '';
+  let remaining = hebrewYear;
+  if (remaining >= 5000) {
+    result += 'ה\'';
+    remaining -= 5000;
+  }
+  const hundredsDigit = Math.floor(remaining / 100);
+  if (hundredsDigit > 0 && hundredsDigit <= 4) {
+    result += hundreds[hundredsDigit];
+    remaining -= hundredsDigit * 100;
+  }
+  const tensDigit = Math.floor(remaining / 10);
+  if (tensDigit > 0 && tensDigit <= 9) {
+    result += tens[tensDigit];
+    remaining -= tensDigit * 10;
+  }
+  if (remaining > 0 && remaining <= 9) {
+    result += ones[remaining];
+  }
+  return result || '';
+}
+
