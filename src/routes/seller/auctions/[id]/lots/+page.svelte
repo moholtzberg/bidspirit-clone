@@ -393,12 +393,20 @@
                     <span class="font-semibold">{formatCurrency(lot.bidIncrement)}</span>
                   </div>
                 </div>
-                <button
-                  onclick={() => goto(`/lots/${lot.id}`)}
-                  class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-                >
-                  View Lot
-                </button>
+                <div class="flex gap-2">
+                  <button
+                    onclick={() => goto(`/lots/${lot.id}`)}
+                    class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-sm"
+                  >
+                    View
+                  </button>
+                  <button
+                    onclick={() => goto(`/seller/auctions/${$page.params.id}/lots/${lot.id}/edit`)}
+                    class="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors font-semibold text-sm"
+                  >
+                    Edit
+                  </button>
+                </div>
               </div>
             </div>
           {/each}
