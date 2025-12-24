@@ -19,6 +19,15 @@ export async function PATCH({ params, request }) {
       updates.imageUrls = JSON.stringify(updates.imageUrls);
     }
     
+    // Handle tags - if it's a string, keep it; if array, stringify it
+    if (updates.tags !== undefined) {
+      if (Array.isArray(updates.tags)) {
+        updates.tags = JSON.stringify(updates.tags);
+      } else if (updates.tags === '' || updates.tags === null) {
+        updates.tags = null;
+      }
+    }
+    
     // Transform status to uppercase
     if (updates.status) {
       updates.status = updates.status.toUpperCase();

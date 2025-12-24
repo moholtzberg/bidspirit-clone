@@ -102,6 +102,7 @@ model Lot {
   description       String?
   hebrewDescription String?   @map("hebrew_description")
   category          String?
+  tags              String?    // JSON array of tags
   startingBid       Float      @map("starting_bid")
   currentBid        Float      @default(0) @map("current_bid")
   bidIncrement      Float      @map("bid_increment")

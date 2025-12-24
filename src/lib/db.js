@@ -79,6 +79,7 @@ function mapLot(prismaLot) {
     HebrewDescription: prismaLot.hebrewDescription,
     hebrewDescription: prismaLot.hebrewDescription,
     category: prismaLot.category,
+    tags: prismaLot.tags,
     startingBid: prismaLot.startingBid,
     currentBid: prismaLot.currentBid,
     bidIncrement: prismaLot.bidIncrement,

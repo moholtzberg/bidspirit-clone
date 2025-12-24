@@ -13,6 +13,8 @@
     lotNumber: 1,
     title: '',
     description: '',
+    category: '',
+    tags: [],
     startingBid: 0,
     bidIncrement: 100,
     imageUrl: '',
@@ -21,11 +23,39 @@
     endTime: ''
   });
   
+  let availableCategories = $state([]);
+  let availableTags = $state([]);
+  let categoryInput = $state('');
+  let tagInput = $state('');
+  let showCategoryDropdown = $state(false);
+  let showTagDropdown = $state(false);
+  
   $effect(() => {
     if ($page.params.id) {
       loadData();
+      loadCategoriesAndTags();
     }
   });
+  
+  async function loadCategoriesAndTags() {
+    try {
+      if (!auction?.auctionHouseId) return;
+      
+      const [categoriesRes, tagsRes] = await Promise.all([
+        fetch(`/api/categories?auctionHouseId=${auction.auctionHouseId}`),
+        fetch(`/api/tags?auctionHouseId=${auction.auctionHouseId}`)
+      ]);
+      
+      if (categoriesRes.ok) {
+        availableCategories = await categoriesRes.json();
+      }
+      if (tagsRes.ok) {
+        availableTags = await tagsRes.json();
+      }
+    } catch (error) {
+      console.error('Error loading categories and tags:', error);
+    }
+  }
   
   async function loadData() {
     try {
@@ -42,6 +72,9 @@
       if (lots.length > 0) {
         newLot.lotNumber = lots.length + 1;
       }
+      
+      // Load categories and tags after auction is loaded
+      await loadCategoriesAndTags();
       
       // Set default end time to auction end time
       if (auction && !newLot.endTime) {
@@ -126,6 +159,7 @@
           currentBid: newLot.startingBid,
           highestBidderId: null,
           highestBidderName: null,
+          tags: newLot.tags.length > 0 ? JSON.stringify(newLot.tags) : null,
           images
         })
       });
@@ -147,6 +181,8 @@
           lotNumber: lots.length + 2,
           title: '',
           description: '',
+          category: '',
+          tags: [],
           startingBid: 0,
           bidIncrement: 100,
           imageUrl: '',
@@ -154,6 +190,8 @@
           status: 'active',
           endTime: defaultEndTime
         };
+        categoryInput = '';
+        tagInput = '';
         await loadData();
         
         // Update auction total lots count
@@ -401,6 +439,135 @@
                 class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Describe the lot..."
               ></textarea>
+            </div>
+
+            <!-- Category with autocomplete -->
+            <div class="relative">
+              <label for="category" class="block text-sm font-medium text-gray-700 mb-2">
+                Category
+              </label>
+              <div class="relative">
+                <input
+                  id="category"
+                  type="text"
+                  bind:value={categoryInput}
+                  oninput={() => {
+                    showCategoryDropdown = categoryInput.length > 0;
+                    newLot.category = categoryInput;
+                  }}
+                  onfocus={() => showCategoryDropdown = categoryInput.length > 0}
+                  onblur={() => setTimeout(() => showCategoryDropdown = false, 200)}
+                  placeholder="Type to search or create new category"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {#if showCategoryDropdown && availableCategories.length > 0}
+                  <div class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {#each availableCategories.filter(c => c.toLowerCase().includes(categoryInput.toLowerCase())) as cat}
+                      <button
+                        type="button"
+                        onclick={() => {
+                          categoryInput = cat;
+                          newLot.category = cat;
+                          showCategoryDropdown = false;
+                        }}
+                        class="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm"
+                      >
+                        {cat}
+                      </button>
+                    {/each}
+                    {#if categoryInput && !availableCategories.some(c => c.toLowerCase() === categoryInput.toLowerCase())}
+                      <button
+                        type="button"
+                        onclick={() => {
+                          newLot.category = categoryInput;
+                          showCategoryDropdown = false;
+                        }}
+                        class="w-full text-left px-4 py-2 hover:bg-green-50 text-sm text-green-600 font-semibold"
+                      >
+                        + Create "{categoryInput}"
+                      </button>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
+            </div>
+
+            <!-- Tags with autocomplete -->
+            <div class="relative">
+              <label class="block text-sm font-medium text-gray-700 mb-2">
+                Tags
+              </label>
+              <div class="flex flex-wrap gap-2 mb-2">
+                {#each newLot.tags as tag, index}
+                  <span class="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
+                    {tag}
+                    <button
+                      type="button"
+                      onclick={() => {
+                        newLot.tags = newLot.tags.filter((_, i) => i !== index);
+                      }}
+                      class="ml-2 text-blue-600 hover:text-blue-800"
+                    >
+                      ×
+                    </button>
+                  </span>
+                {/each}
+              </div>
+              <div class="relative">
+                <input
+                  type="text"
+                  bind:value={tagInput}
+                  oninput={() => showTagDropdown = tagInput.length > 0}
+                  onfocus={() => showTagDropdown = tagInput.length > 0}
+                  onblur={() => setTimeout(() => showTagDropdown = false, 200)}
+                  onkeydown={(e) => {
+                    if (e.key === 'Enter' && tagInput.trim()) {
+                      e.preventDefault();
+                      if (!newLot.tags.includes(tagInput.trim())) {
+                        newLot.tags = [...newLot.tags, tagInput.trim()];
+                      }
+                      tagInput = '';
+                      showTagDropdown = false;
+                    }
+                  }}
+                  placeholder="Type and press Enter to add tag"
+                  class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {#if showTagDropdown && availableTags.length > 0}
+                  <div class="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                    {#each availableTags.filter(t => t.toLowerCase().includes(tagInput.toLowerCase()) && !newLot.tags.includes(t)) as tag}
+                      <button
+                        type="button"
+                        onclick={() => {
+                          if (!newLot.tags.includes(tag)) {
+                            newLot.tags = [...newLot.tags, tag];
+                          }
+                          tagInput = '';
+                          showTagDropdown = false;
+                        }}
+                        class="w-full text-left px-4 py-2 hover:bg-blue-50 text-sm"
+                      >
+                        {tag}
+                      </button>
+                    {/each}
+                    {#if tagInput && !availableTags.some(t => t.toLowerCase() === tagInput.toLowerCase())}
+                      <button
+                        type="button"
+                        onclick={() => {
+                          if (!newLot.tags.includes(tagInput.trim())) {
+                            newLot.tags = [...newLot.tags, tagInput.trim()];
+                          }
+                          tagInput = '';
+                          showTagDropdown = false;
+                        }}
+                        class="w-full text-left px-4 py-2 hover:bg-green-50 text-sm text-green-600 font-semibold"
+                      >
+                        + Create "{tagInput}"
+                      </button>
+                    {/if}
+                  </div>
+                {/if}
+              </div>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
