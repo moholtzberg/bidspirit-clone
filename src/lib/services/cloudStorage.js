@@ -188,19 +188,19 @@ async function getS3PresignedUrl(key, expiresIn = 3600) {
     });
     const { S3Client, GetObjectCommand } = s3Module;
     
-    // Try to import presigner - it might be in a separate package or included
+    // Import presigner package
     let getSignedUrl;
     try {
       const presignerModule = await import(/* @vite-ignore */ '@aws-sdk/s3-request-presigner');
       getSignedUrl = presignerModule.getSignedUrl;
-    } catch {
-      // Try alternative import path (some SDK versions include it)
-      try {
-        const presignerModule = await import(/* @vite-ignore */ '@aws-sdk/s3-request-presigner/getSignedUrl');
-        getSignedUrl = presignerModule.getSignedUrl;
-      } catch {
+      if (!getSignedUrl) {
+        throw new Error('getSignedUrl not found in @aws-sdk/s3-request-presigner');
+      }
+    } catch (error) {
+      if (error.message.includes('not installed') || error.message.includes('Cannot find module')) {
         throw new Error('@aws-sdk/s3-request-presigner is not installed. Run: npm install @aws-sdk/s3-request-presigner');
       }
+      throw error;
     }
     
     const s3Client = new S3Client({
