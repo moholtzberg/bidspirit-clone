@@ -282,15 +282,21 @@
               <div class="flex gap-2">
                 <button
                   onclick={() => goto(`/auctions/${auction.id}`)}
-                  class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+                  class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-sm"
                 >
                   View
                 </button>
                 <button
                   onclick={() => goto(`/seller/auctions/${auction.id}/lots`)}
-                  class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition-colors font-semibold"
+                  class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition-colors font-semibold text-sm"
                 >
                   Manage Lots
+                </button>
+                <button
+                  onclick={() => goto(`/seller/auctions/${auction.id}/settings`)}
+                  class="flex-1 bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700 transition-colors font-semibold text-sm"
+                >
+                  Settings
                 </button>
               </div>
             </div>

@@ -102,3 +102,38 @@ export const auctionHouseSettingsSchema = z.object({
   taxNumber: z.string().optional().nullable(),
   invoiceProvider: z.string().optional().nullable(),
 })
+
+// Auction settings schema (nested within each auction)
+export const auctionSettingsSchema = z.object({
+  // Default Auction Settings
+  defaultAuctionDurationDays: z.coerce.number().min(1).optional().nullable(),
+  defaultPreviewPeriodDays: z.coerce.number().min(0).optional().nullable(),
+  autoStartAuctions: z.boolean().default(false),
+  autoCloseAuctions: z.boolean().default(false),
+  staggeredLotClosing: z.boolean().default(false),
+  lotClosingIntervalSeconds: z.coerce.number().min(0).optional().nullable(),
+  requireRegistrationToBid: z.boolean().default(false),
+  allowAbsenteeBids: z.boolean().default(true),
+  extendBiddingOnLastMinuteBid: z.boolean().default(false),
+  biddingExtensionSeconds: z.coerce.number().min(0).optional().nullable(),
+  minimumBidIncrement: z.coerce.number().min(0).optional().nullable(),
+  allowProxyBidding: z.boolean().default(true),
+  maxProxyBidAmount: z.coerce.number().min(0).optional().nullable(),
+  defaultAuctionStatus: z.enum(['UPCOMING', 'LIVE', 'ENDED', 'CANCELLED']).optional().nullable(),
+  
+  // Catalog Settings
+  displayStartPriceInCatalog: z.boolean().default(true),
+  enableAbsenteeBids: z.boolean().default(true),
+  buyersPremium: z.coerce.number().min(0).max(100).optional().nullable(),
+  daysToAllowPostAuctionSale: z.coerce.number().min(0).optional().nullable(),
+  
+  // Live Auction Settings
+  baseLiveAuctionStartPriceOnAbsenteeBids: z.boolean().default(false),
+  
+  // Automatic Auction Settings
+  automaticAuctionInitialTimerSeconds: z.coerce.number().min(1).optional().nullable(),
+  automaticAuctionTimerResetSeconds: z.coerce.number().min(1).optional().nullable(),
+  
+  // Currency
+  currency: z.string().optional().nullable(),
+})
