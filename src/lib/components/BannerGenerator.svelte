@@ -63,6 +63,8 @@
   let generatedBannerUrl = $state(null);
   let generatingBanner = $state(false);
   let showAdvancedSettings = $state(false);
+  let presetPreviews = $state({}); // Store preview URLs for each preset
+  let generatingPreviews = $state(false);
 
   // Available fonts
   const fonts = [
@@ -120,6 +122,284 @@
     { value: 'collage', label: 'Image Collage' },
     { value: 'split', label: 'Split Screen' }
   ];
+
+  // Preset layout templates
+  const layoutPresets = [
+    {
+      id: 'classic-right',
+      name: 'Classic Right',
+      description: 'Image on right, text on left',
+      preview: 'right',
+      settings: {
+        imageLayout: 'right',
+        textImageRatio: 0.4,
+        backgroundType: 'solid',
+        backgroundColor: '#F5F1E8',
+        textAlign: 'center',
+        imagePosition: 'cover',
+        imageOpacity: 1.0
+      }
+    },
+    {
+      id: 'classic-left',
+      name: 'Classic Left',
+      description: 'Image on left, text on right',
+      preview: 'left',
+      settings: {
+        imageLayout: 'left',
+        textImageRatio: 0.4,
+        backgroundType: 'solid',
+        backgroundColor: '#F5F1E8',
+        textAlign: 'center',
+        imagePosition: 'cover',
+        imageOpacity: 1.0
+      }
+    },
+    {
+      id: 'full-background',
+      name: 'Full Background',
+      description: 'Image as full background with text overlay',
+      preview: 'full',
+      settings: {
+        imageLayout: 'full',
+        backgroundType: 'image',
+        textAlign: 'center',
+        imagePosition: 'cover',
+        imageOpacity: 1.0,
+        textBackgroundOpacity: 0.85
+      }
+    },
+    {
+      id: 'centered-overlay',
+      name: 'Centered Overlay',
+      description: 'Centered image with text overlay',
+      preview: 'center',
+      settings: {
+        imageLayout: 'center',
+        backgroundType: 'gradient',
+        backgroundGradient: {
+          type: 'radial',
+          direction: 'center',
+          colors: ['#F5F1E8', '#E8E0D0'],
+          stops: [0, 100]
+        },
+        textAlign: 'center',
+        imagePosition: 'contain',
+        imageOpacity: 1.0
+      }
+    },
+    {
+      id: 'collage-grid',
+      name: 'Collage Grid',
+      description: 'Multiple images in a grid layout',
+      preview: 'collage',
+      settings: {
+        imageLayout: 'collage',
+        textImageRatio: 0.4,
+        backgroundType: 'solid',
+        backgroundColor: '#F5F1E8',
+        textAlign: 'center',
+        imagePosition: 'cover',
+        imageOpacity: 1.0
+      }
+    },
+    {
+      id: 'split-screen',
+      name: 'Split Screen',
+      description: 'Split screen with image and text',
+      preview: 'split',
+      settings: {
+        imageLayout: 'split',
+        backgroundType: 'solid',
+        backgroundColor: '#F5F1E8',
+        textAlign: 'center',
+        imagePosition: 'cover',
+        imageOpacity: 1.0
+      }
+    },
+    {
+      id: 'elegant-gradient',
+      name: 'Elegant Gradient',
+      description: 'Gradient background with image on right',
+      preview: 'right',
+      settings: {
+        imageLayout: 'right',
+        textImageRatio: 0.4,
+        backgroundType: 'gradient',
+        backgroundGradient: {
+          type: 'linear',
+          direction: 'to right',
+          colors: ['#2C1810', '#4A3428'],
+          stops: [0, 100]
+        },
+        textColor: '#FFFFFF',
+        textBackground: 'rgba(0, 0, 0, 0.3)',
+        textBackgroundOpacity: 0.5,
+        textAlign: 'center',
+        imagePosition: 'cover',
+        imageOpacity: 1.0
+      }
+    },
+    {
+      id: 'minimal-pattern',
+      name: 'Minimal Pattern',
+      description: 'Pattern background with image on left',
+      preview: 'left',
+      settings: {
+        imageLayout: 'left',
+        textImageRatio: 0.4,
+        backgroundType: 'pattern',
+        backgroundColor: '#F5F1E8',
+        backgroundPattern: 'dots',
+        textAlign: 'center',
+        imagePosition: 'cover',
+        imageOpacity: 1.0
+      }
+    }
+  ];
+
+  // Apply a preset layout
+  function applyPreset(preset) {
+    bannerSettings = {
+      ...bannerSettings,
+      ...preset.settings
+    };
+  }
+
+  // Generate preview for a specific preset
+  async function generatePresetPreview(preset) {
+    if (presetPreviews[preset.id]) {
+      return presetPreviews[preset.id]; // Return cached preview
+    }
+
+    try {
+      const canvas = document.createElement('canvas');
+      // Use smaller size for previews
+      canvas.width = 400;
+      canvas.height = 210; // Maintain 1200:630 ratio
+      const ctx = canvas.getContext('2d');
+      
+      // Save current settings
+      const originalSettings = { ...bannerSettings };
+      
+      // Temporarily apply preset settings
+      const tempSettings = {
+        ...bannerSettings,
+        ...preset.settings,
+        // Use demo content for preview
+        title: preset.name,
+        titleHebrew: '',
+        subtitle: preset.description,
+        subtitleHebrew: '',
+        yearEnglish: '',
+        yearHebrew: '',
+        primaryImageUrl: bannerSettings.primaryImageUrl || '',
+        backgroundImageUrl: bannerSettings.backgroundImageUrl || ''
+      };
+      
+      // Temporarily set bannerSettings for drawing
+      const originalBannerSettings = bannerSettings;
+      bannerSettings = tempSettings;
+      
+      // Draw background
+      await drawBackground(ctx, canvas.width, canvas.height);
+      
+      // Draw a simple placeholder image if no image is available
+      if (!tempSettings.primaryImageUrl && tempSettings.backgroundType !== 'image') {
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
+        if (tempSettings.imageLayout === 'right') {
+          ctx.fillRect(canvas.width * 0.4, 0, canvas.width * 0.6, canvas.height);
+        } else if (tempSettings.imageLayout === 'left') {
+          ctx.fillRect(0, 0, canvas.width * 0.6, canvas.height);
+        } else if (tempSettings.imageLayout === 'split') {
+          ctx.fillRect(canvas.width * 0.5, 0, canvas.width * 0.5, canvas.height);
+        } else if (tempSettings.imageLayout === 'collage') {
+          const cols = 2;
+          const rows = 2;
+          const cellWidth = canvas.width / cols;
+          const cellHeight = canvas.height / rows;
+          for (let i = 0; i < 4; i++) {
+            const col = i % cols;
+            const row = Math.floor(i / cols);
+            ctx.fillRect(col * cellWidth, row * cellHeight, cellWidth, cellHeight);
+          }
+        } else {
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+      } else if (tempSettings.primaryImageUrl) {
+        await drawImages(ctx, canvas.width, canvas.height);
+      }
+      
+      // Draw text
+      drawText(ctx, canvas.width, canvas.height);
+      
+      // Restore original settings
+      bannerSettings = originalBannerSettings;
+      
+      const previewUrl = canvas.toDataURL('image/png');
+      presetPreviews[preset.id] = previewUrl;
+      return previewUrl;
+    } catch (error) {
+      console.error('Error generating preset preview:', error);
+      return null;
+    }
+  }
+
+  // Generate all preset previews (lazy, one at a time to avoid blocking)
+  async function generateAllPresetPreviews() {
+    if (generatingPreviews) return;
+    generatingPreviews = true;
+    
+    try {
+      // Generate previews one at a time to avoid blocking the UI
+      for (const preset of layoutPresets) {
+        if (!presetPreviews[preset.id]) {
+          await generatePresetPreview(preset);
+          // Small delay to allow UI to update
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      }
+    } catch (error) {
+      console.error('Error generating preset previews:', error);
+    } finally {
+      generatingPreviews = false;
+    }
+  }
+
+  // Generate preview for a single preset on demand
+  async function ensurePresetPreview(preset) {
+    if (!presetPreviews[preset.id] && !generatingPreviews) {
+      await generatePresetPreview(preset);
+    }
+  }
+
+  // Download preset preview
+  function downloadPresetPreview(preset, event) {
+    event.stopPropagation();
+    const previewUrl = presetPreviews[preset.id];
+    if (!previewUrl) {
+      alert('Preview not ready yet. Please wait a moment.');
+      return;
+    }
+    
+    const link = document.createElement('a');
+    link.download = `banner-template-${preset.id}-${Date.now()}.png`;
+    link.href = previewUrl;
+    link.click();
+  }
+
+  // Generate previews lazily when component is visible
+  let previewsGenerated = $state(false);
+  
+  onMount(() => {
+    // Delay preview generation to allow UI to render first
+    setTimeout(() => {
+      if (!previewsGenerated) {
+        previewsGenerated = true;
+        generateAllPresetPreviews();
+      }
+    }, 100);
+  });
 
   const backgroundTypes = [
     { value: 'solid', label: 'Solid Color' },
@@ -332,7 +612,7 @@
       const ctx = canvas.getContext('2d');
       
       // Draw background
-      drawBackground(ctx, canvas.width, canvas.height);
+      await drawBackground(ctx, canvas.width, canvas.height);
       
       // Draw images based on layout
       await drawImages(ctx, canvas.width, canvas.height);
@@ -354,7 +634,7 @@
     }
   }
 
-  function drawBackground(ctx, width, height) {
+  async function drawBackground(ctx, width, height) {
     switch (bannerSettings.backgroundType) {
       case 'solid':
         ctx.fillStyle = bannerSettings.backgroundColor;
@@ -375,9 +655,69 @@
         ctx.fillRect(0, 0, width, height);
         break;
       case 'image':
-        // Background image will be drawn in drawImages
-        ctx.fillStyle = bannerSettings.backgroundColor; // Fallback
-        ctx.fillRect(0, 0, width, height);
+        // Draw background image first
+        if (bannerSettings.backgroundImageUrl) {
+          await new Promise((resolve) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+              // Draw background image to fill entire canvas
+              if (bannerSettings.imagePosition === 'cover') {
+                const scale = Math.max(width / img.width, height / img.height);
+                const x = (width - img.width * scale) / 2;
+                const y = (height - img.height * scale) / 2;
+                ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+              } else {
+                const scale = Math.min(width / img.width, height / img.height);
+                const x = (width - img.width * scale) / 2;
+                const y = (height - img.height * scale) / 2;
+                ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+              }
+              resolve();
+            };
+            img.onerror = () => {
+              // Fallback to solid color if image fails
+              ctx.fillStyle = bannerSettings.backgroundColor || '#F5F1E8';
+              ctx.fillRect(0, 0, width, height);
+              resolve();
+            };
+            // Get presigned URL if it's S3
+            let imageUrl = bannerSettings.backgroundImageUrl;
+            if (imageUrl.includes('.s3.') || imageUrl.includes('s3.amazonaws.com')) {
+              try {
+                const match = imageUrl.match(/s3[^/]*\.amazonaws\.com\/(.+?)(?:\?|$)/);
+                if (match) {
+                  const key = match[1];
+                  fetch('/api/images/presigned', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ keys: [key] })
+                  }).then(async (response) => {
+                    if (response.ok) {
+                      const { urls } = await response.json();
+                      if (urls[key]) {
+                        imageUrl = urls[key];
+                      }
+                    }
+                    img.src = imageUrl;
+                  }).catch(() => {
+                    img.src = imageUrl;
+                  });
+                } else {
+                  img.src = imageUrl;
+                }
+              } catch (error) {
+                img.src = imageUrl;
+              }
+            } else {
+              img.src = imageUrl;
+            }
+          });
+        } else {
+          // Fallback to solid color if no background image URL
+          ctx.fillStyle = bannerSettings.backgroundColor || '#F5F1E8';
+          ctx.fillRect(0, 0, width, height);
+        }
         break;
       case 'pattern':
         ctx.fillStyle = bannerSettings.backgroundColor;
@@ -864,6 +1204,72 @@
         />
       </div>
       
+      <!-- Layout Presets -->
+      <div class="p-4 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border-2 border-purple-200">
+        <h3 class="text-lg font-semibold text-gray-900 mb-3">Layout Presets</h3>
+        <p class="text-sm text-gray-600 mb-4">Choose a preset layout to get started quickly. Hover to download.</p>
+        <div class="grid grid-cols-2 gap-4">
+          {#each layoutPresets as preset}
+            <div
+              class="relative bg-white rounded-lg border-2 border-gray-200 hover:border-purple-400 hover:shadow-lg transition-all group cursor-pointer overflow-hidden"
+              role="button"
+              tabindex="0"
+              onclick={() => applyPreset(preset)}
+              onkeydown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  applyPreset(preset);
+                }
+              }}
+            >
+              <!-- Preview Image -->
+              <div 
+                class="relative w-full aspect-[400/210] bg-gray-100 rounded-t-lg overflow-hidden"
+                onmouseenter={() => ensurePresetPreview(preset)}
+              >
+                {#if presetPreviews[preset.id]}
+                  <img
+                    src={presetPreviews[preset.id]}
+                    alt="{preset.name} preview"
+                    class="w-full h-full object-cover"
+                  />
+                {:else if generatingPreviews}
+                  <div class="w-full h-full flex items-center justify-center">
+                    <div class="text-gray-400 text-sm">Generating...</div>
+                  </div>
+                {:else}
+                  <div class="w-full h-full flex items-center justify-center bg-gray-100">
+                    <div class="text-gray-400 text-sm">Hover to generate preview</div>
+                  </div>
+                {/if}
+                
+                <!-- Download Button (appears on hover) -->
+                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
+                  <button
+                    type="button"
+                    onclick={(e) => downloadPresetPreview(preset, e)}
+                    class="px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold shadow-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
+                  >
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                    </svg>
+                    Download
+                  </button>
+                </div>
+              </div>
+              
+              <!-- Preset Info -->
+              <div class="p-3">
+                <div class="font-semibold text-sm text-gray-900 group-hover:text-purple-600 transition-colors">
+                  {preset.name}
+                </div>
+                <div class="text-xs text-gray-500 mt-0.5">{preset.description}</div>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </div>
+      
       <!-- Layout Settings -->
       <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
         <h3 class="text-lg font-semibold text-gray-900 mb-4">Layout</h3>
@@ -954,28 +1360,56 @@
             <label for="background-color" class="block text-sm font-medium text-gray-700 mb-2">
               Background Color
             </label>
-            <input
-              id="background-color"
-              type="color"
-              bind:value={bannerSettings.backgroundColor}
-              class="w-full h-12 border border-gray-300 rounded-lg"
-            />
+            <div class="flex gap-2">
+              <input
+                id="background-color"
+                type="color"
+                bind:value={bannerSettings.backgroundColor}
+                class="h-12 w-20 border border-gray-300 rounded-lg cursor-pointer"
+              />
+              <input
+                type="text"
+                bind:value={bannerSettings.backgroundColor}
+                placeholder="#F5F1E8"
+                class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
           </div>
         {/if}
         
         {#if bannerSettings.backgroundType === 'gradient'}
           <div class="mb-4">
-            <label class="block text-sm font-medium text-gray-700 mb-2">Gradient Colors</label>
+            <label for="gradient-type" class="block text-sm font-medium text-gray-700 mb-2">
+              Gradient Type
+            </label>
+            <select
+              id="gradient-type"
+              bind:value={bannerSettings.backgroundGradient.type}
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-3"
+            >
+              <option value="linear">Linear</option>
+              <option value="radial">Radial</option>
+            </select>
+            <div class="block text-sm font-medium text-gray-700 mb-2">Gradient Colors</div>
             <div class="grid grid-cols-2 gap-2">
               {#each bannerSettings.backgroundGradient.colors as color, index}
                 <div>
-                  <label class="block text-xs text-gray-600 mb-1">Color {index + 1}</label>
-                  <input
-                    type="color"
-                    value={color}
-                    oninput={(e) => updateGradientColor(index, e.target.value)}
-                    class="w-full h-10 border border-gray-300 rounded-lg"
-                  />
+                  <label for="gradient-color-{index}" class="block text-xs text-gray-600 mb-1">Color {index + 1}</label>
+                  <div class="flex gap-2">
+                    <input
+                      id="gradient-color-{index}"
+                      type="color"
+                      value={color}
+                      oninput={(e) => updateGradientColor(index, e.target.value)}
+                      class="h-10 w-16 border border-gray-300 rounded-lg cursor-pointer"
+                    />
+                    <input
+                      type="text"
+                      value={color}
+                      oninput={(e) => updateGradientColor(index, e.target.value)}
+                      class="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    />
+                  </div>
                 </div>
               {/each}
             </div>
@@ -991,21 +1425,37 @@
               id="background-image-url"
               type="text"
               bind:value={bannerSettings.backgroundImageUrl}
-              placeholder="Background image URL"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              placeholder="https://example.com/image.jpg"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-2"
             />
+            <p class="text-xs text-gray-500 mb-2">This image will be used as the full background</p>
+            {#if bannerSettings.backgroundImageUrl}
+              <div class="mt-2 p-2 bg-white rounded border border-gray-200">
+                <img
+                  src={bannerSettings.backgroundImageUrl}
+                  alt="Background preview"
+                  class="w-full h-24 object-cover rounded"
+                  onerror={(e) => {
+                    e.target.style.display = 'none';
+                    const errorDiv = e.target.nextElementSibling;
+                    if (errorDiv) errorDiv.style.display = 'block';
+                  }}
+                />
+                <div class="hidden text-xs text-red-500 text-center py-2">Failed to load image</div>
+              </div>
+            {/if}
           </div>
         {/if}
         
         {#if bannerSettings.backgroundType === 'pattern'}
           <div class="mb-4">
             <label for="background-pattern" class="block text-sm font-medium text-gray-700 mb-2">
-              Pattern
+              Pattern Style
             </label>
             <select
               id="background-pattern"
               bind:value={bannerSettings.backgroundPattern}
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-3"
             >
               <option value="none">None</option>
               <option value="dots">Dots</option>
@@ -1013,6 +1463,25 @@
               <option value="grid">Grid</option>
               <option value="diagonal">Diagonal</option>
             </select>
+            {#if bannerSettings.backgroundPattern !== 'none'}
+              <label for="pattern-background-color" class="block text-sm font-medium text-gray-700 mb-2">
+                Pattern Base Color
+              </label>
+              <div class="flex gap-2">
+                <input
+                  id="pattern-background-color"
+                  type="color"
+                  bind:value={bannerSettings.backgroundColor}
+                  class="h-12 w-20 border border-gray-300 rounded-lg cursor-pointer"
+                />
+                <input
+                  type="text"
+                  bind:value={bannerSettings.backgroundColor}
+                  placeholder="#F5F1E8"
+                  class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+            {/if}
           </div>
         {/if}
       </div>
