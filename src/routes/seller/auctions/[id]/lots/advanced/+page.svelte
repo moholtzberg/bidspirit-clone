@@ -809,6 +809,8 @@
                                   tags.splice(index, 1);
                                   lot._tags = tags;
                                   editingCell.value = JSON.stringify(tags);
+                                  // Save immediately when tag is removed
+                                  saveCell(lot.id, 'tags', JSON.stringify(tags));
                                 }}
                                 class="ml-1 text-blue-600 hover:text-blue-800"
                               >
@@ -826,7 +828,15 @@
                               showTagDropdown[lot.id] = e.target.value.length > 0;
                             }}
                             onfocus={() => showTagDropdown[lot.id] = (tagInputs[lot.id] || '').length > 0}
-                            onblur={() => setTimeout(() => showTagDropdown[lot.id] = false, 200)}
+                            onblur={() => {
+                              // Save when input loses focus and hide dropdown
+                              setTimeout(() => {
+                                showTagDropdown[lot.id] = false;
+                                if (editingCell?.lotId === lot.id && editingCell?.field === 'tags') {
+                                  saveCell(lot.id, 'tags', editingCell.value);
+                                }
+                              }, 200);
+                            }}
                             onkeydown={(e) => {
                               if (e.key === 'Enter' && tagInputs[lot.id]?.trim()) {
                                 e.preventDefault();
@@ -838,6 +848,8 @@
                                 editingCell.value = JSON.stringify(tags);
                                 tagInputs[lot.id] = '';
                                 showTagDropdown[lot.id] = false;
+                                // Save immediately when tag is added
+                                saveCell(lot.id, 'tags', JSON.stringify(tags));
                               } else if (e.key === 'Escape') {
                                 cancelEdit();
                               }
@@ -860,6 +872,8 @@
                                     editingCell.value = JSON.stringify(tags);
                                     tagInputs[lot.id] = '';
                                     showTagDropdown[lot.id] = false;
+                                    // Save immediately when tag is selected from dropdown
+                                    saveCell(lot.id, 'tags', JSON.stringify(tags));
                                   }}
                                   class="w-full text-left px-2 py-1 hover:bg-blue-50 text-xs"
                                 >
