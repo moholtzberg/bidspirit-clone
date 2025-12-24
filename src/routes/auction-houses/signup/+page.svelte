@@ -141,7 +141,7 @@
     <div class="text-center mb-8">
       <h1 class="text-4xl font-bold text-gray-900 mb-2">Register Your Auction House</h1>
       <p class="text-lg text-gray-600">
-        Join BidSpirit and start hosting your own auctions
+        Join Pumbi and start hosting your own auctions
       </p>
     </div>
     
@@ -205,7 +205,7 @@
               URL Slug <span class="text-red-500">*</span>
             </label>
             <div class="flex items-center">
-              <span class="text-gray-500 mr-2">bidspirit.com/</span>
+              <span class="text-gray-500 mr-2">pumbi.com/</span>
               <input
                 type="text"
                 id="slug"

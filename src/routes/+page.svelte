@@ -70,7 +70,7 @@
   <!-- Hero Section -->
   <div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white py-16">
     <div class="container mx-auto px-4">
-      <h1 class="text-4xl md:text-5xl font-bold mb-4">Welcome to BidSpirit</h1>
+      <h1 class="text-4xl md:text-5xl font-bold mb-4">Welcome to Pumbi</h1>
       <p class="text-xl mb-2">Your premier destination for Judaica auctions</p>
       <p class="text-lg mb-8 opacity-90">Discover rare menorahs, Torah scrolls, ceremonial silver, and authentic Jewish artifacts</p>
       

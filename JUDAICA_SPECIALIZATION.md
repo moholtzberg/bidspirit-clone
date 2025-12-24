@@ -1,7 +1,7 @@
-# BidSpirit - Judaica Specialization
+# Pumbi - Judaica Specialization
 
 ## Overview
-BidSpirit is a specialized auction platform focused exclusively on **Judaica** - Jewish ceremonial objects, religious artifacts, and cultural items.
+Pumbi is a specialized auction platform focused exclusively on **Judaica** - Jewish ceremonial objects, religious artifacts, and cultural items.
 
 ## Our Specialty
 We specialize in authenticating, cataloging, and auctioning:
