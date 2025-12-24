@@ -30,9 +30,17 @@ export async function POST({ request }) {
     // Separate images from lot data
     const { images, imageUrl, imageUrls, ...lotData } = data;
     
+    // Get the highest position for this auction to set default position
+    const existingLots = await db.lots.getByAuctionId(lotData.auctionId);
+    const maxPosition = existingLots.length > 0 
+      ? Math.max(...existingLots.map(l => l.position || 0))
+      : 0;
+    
     // Transform data to match Lot model expectations
     const transformedData = {
       ...lotData,
+      // Set position if not provided (default to next position)
+      position: lotData.position !== undefined ? lotData.position : (maxPosition + 1),
       // Convert status to uppercase if it's lowercase
       status: lotData.status ? lotData.status.toUpperCase() : 'ACTIVE',
       // Keep endTime as string - let the schema handle conversion

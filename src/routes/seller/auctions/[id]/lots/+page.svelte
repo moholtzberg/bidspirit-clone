@@ -35,6 +35,8 @@
   let showTagDropdown = $state(false);
   
   let currentAuctionId = $state(null);
+  let draggedLot = $state(null);
+  let reordering = $state(false);
   
   onMount(() => {
     if ($page.params.id) {
@@ -91,6 +93,93 @@
     return categoryMetaFieldsConfig[category];
   }
   
+  async function initializePositions() {
+    // Set positions based on current order (1, 2, 3, ...)
+    const updates = lots.map((lot, index) => {
+      return fetch(`/api/lots/${lot.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position: index + 1 })
+      });
+    });
+    await Promise.all(updates);
+  }
+  
+  async function reorderLots() {
+    if (reordering) return;
+    reordering = true;
+    
+    try {
+      const lotIds = lots.map(lot => lot.id);
+      const response = await fetch('/api/lots/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auctionId: $page.params.id,
+          lotIds: lotIds
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to reorder lots');
+      }
+      
+      // Reload data to get updated positions
+      await loadData();
+    } catch (error) {
+      console.error('Error reordering lots:', error);
+      alert('Failed to reorder lots. Please try again.');
+    } finally {
+      reordering = false;
+    }
+  }
+  
+  function handleDragStart(lot) {
+    draggedLot = lot;
+  }
+  
+  function handleDragOver(event, targetLot) {
+    event.preventDefault();
+    if (!draggedLot || draggedLot.id === targetLot.id) return;
+    
+    const draggedIndex = lots.findIndex(l => l.id === draggedLot.id);
+    const targetIndex = lots.findIndex(l => l.id === targetLot.id);
+    
+    if (draggedIndex === -1 || targetIndex === -1) return;
+    
+    // Reorder in local state
+    const newLots = [...lots];
+    const [removed] = newLots.splice(draggedIndex, 1);
+    newLots.splice(targetIndex, 0, removed);
+    lots = newLots;
+    
+    // Update dragged lot reference
+    draggedLot = removed;
+  }
+  
+  function handleDragEnd() {
+    if (draggedLot) {
+      reorderLots();
+      draggedLot = null;
+    }
+  }
+  
+  function moveLotUp(index) {
+    if (index === 0) return;
+    const newLots = [...lots];
+    [newLots[index - 1], newLots[index]] = [newLots[index], newLots[index - 1]];
+    lots = newLots;
+    reorderLots();
+  }
+  
+  function moveLotDown(index) {
+    if (index === lots.length - 1) return;
+    const newLots = [...lots];
+    [newLots[index], newLots[index + 1]] = [newLots[index + 1], newLots[index]];
+    lots = newLots;
+    reorderLots();
+  }
+  
   async function loadData() {
     try {
       loading = true;
@@ -106,6 +195,11 @@
       // Set default lot number
       if (lots.length > 0) {
         newLot.lotNumber = lots.length + 1;
+      }
+      
+      // Initialize positions if not set
+      if (lots.length > 0 && lots.some(lot => !lot.position || lot.position === 0)) {
+        await initializePositions();
       }
       
       // Load categories and tags after auction is loaded
@@ -345,8 +439,16 @@
         </div>
       {:else}
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {#each lots as lot}
-            <div class="bg-white rounded-lg shadow-md overflow-hidden">
+          {#each lots as lot, index (lot.id)}
+            <div 
+              class="bg-white rounded-lg shadow-md overflow-hidden cursor-move hover:shadow-lg transition-shadow"
+              role="button"
+              tabindex="0"
+              draggable="true"
+              ondragstart={() => handleDragStart(lot)}
+              ondragover={(e) => handleDragOver(e, lot)}
+              ondragend={handleDragEnd}
+            >
               <div class="relative">
                 {#if lot.imageUrl}
                   <img
@@ -375,6 +477,9 @@
                 <div class="absolute top-4 left-4 bg-white px-3 py-1 rounded-full text-sm font-bold">
                   Lot #{lot.lotNumber}
                 </div>
+                <div class="absolute top-4 right-4 bg-blue-600 text-white px-3 py-1 rounded-full text-sm font-bold">
+                  #{lot.position || index + 1}
+                </div>
               </div>
               <div class="p-6">
                 <h3 class="text-lg font-bold text-gray-900 mb-2">{lot.title}</h3>
@@ -393,7 +498,7 @@
                     <span class="font-semibold">{formatCurrency(lot.bidIncrement)}</span>
                   </div>
                 </div>
-                <div class="flex gap-2">
+                <div class="flex gap-2 mb-2">
                   <button
                     onclick={() => goto(`/lots/${lot.id}`)}
                     class="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold text-sm"
@@ -405,6 +510,24 @@
                     class="flex-1 bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors font-semibold text-sm"
                   >
                     Edit
+                  </button>
+                </div>
+                <div class="flex gap-1">
+                  <button
+                    onclick={() => moveLotUp(index)}
+                    disabled={index === 0 || reordering}
+                    class="flex-1 bg-gray-200 text-gray-700 py-1 rounded hover:bg-gray-300 transition-colors text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Move up"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    onclick={() => moveLotDown(index)}
+                    disabled={index === lots.length - 1 || reordering}
+                    class="flex-1 bg-gray-200 text-gray-700 py-1 rounded hover:bg-gray-300 transition-colors text-xs font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Move down"
+                  >
+                    ↓
                   </button>
                 </div>
               </div>

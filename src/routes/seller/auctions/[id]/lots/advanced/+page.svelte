@@ -17,6 +17,8 @@
   let showTagDropdown = $state({}); // { lotId: boolean }
   let categoryInputs = $state({}); // { lotId: string }
   let tagInputs = $state({}); // { lotId: string }
+  let draggedLot = $state(null);
+  let reordering = $state(false);
 
   // Color coding rules for problematic lots
   function getLotStatus(lot) {
@@ -141,6 +143,11 @@
         _tags: lot.tags ? (typeof lot.tags === 'string' ? JSON.parse(lot.tags) : lot.tags) : []
       }));
       
+      // Initialize positions if not set
+      if (lots.length > 0 && lots.some(lot => !lot.position || lot.position === 0)) {
+        await initializePositions();
+      }
+      
       // Load categories and tags
       await loadCategoriesAndTags();
       
@@ -169,6 +176,93 @@
 
   function cancelEdit() {
     editingCell = null;
+  }
+  
+  async function initializePositions() {
+    // Set positions based on current order (1, 2, 3, ...)
+    const updates = lots.map((lot, index) => {
+      return fetch(`/api/lots/${lot.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position: index + 1 })
+      });
+    });
+    await Promise.all(updates);
+  }
+  
+  async function reorderLots() {
+    if (reordering) return;
+    reordering = true;
+    
+    try {
+      const lotIds = lots.map(lot => lot.id);
+      const response = await fetch('/api/lots/reorder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          auctionId: $page.params.id,
+          lotIds: lotIds
+        })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to reorder lots');
+      }
+      
+      // Reload data to get updated positions
+      await loadData();
+    } catch (error) {
+      console.error('Error reordering lots:', error);
+      alert('Failed to reorder lots. Please try again.');
+    } finally {
+      reordering = false;
+    }
+  }
+  
+  function handleDragStart(lot) {
+    draggedLot = lot;
+  }
+  
+  function handleDragOver(event, targetLot) {
+    event.preventDefault();
+    if (!draggedLot || draggedLot.id === targetLot.id) return;
+    
+    const draggedIndex = lots.findIndex(l => l.id === draggedLot.id);
+    const targetIndex = lots.findIndex(l => l.id === targetLot.id);
+    
+    if (draggedIndex === -1 || targetIndex === -1) return;
+    
+    // Reorder in local state
+    const newLots = [...lots];
+    const [removed] = newLots.splice(draggedIndex, 1);
+    newLots.splice(targetIndex, 0, removed);
+    lots = newLots;
+    
+    // Update dragged lot reference
+    draggedLot = removed;
+  }
+  
+  function handleDragEnd() {
+    if (draggedLot) {
+      reorderLots();
+      draggedLot = null;
+    }
+  }
+  
+  function moveLotUp(index) {
+    if (index === 0) return;
+    const newLots = [...lots];
+    [newLots[index - 1], newLots[index]] = [newLots[index], newLots[index - 1]];
+    lots = newLots;
+    reorderLots();
+  }
+  
+  function moveLotDown(index) {
+    if (index === lots.length - 1) return;
+    const newLots = [...lots];
+    [newLots[index], newLots[index + 1]] = [newLots[index + 1], newLots[index]];
+    lots = newLots;
+    reorderLots();
   }
 
   async function saveCell(lotId, field, value) {
@@ -600,6 +694,7 @@
                     class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                 </th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Pos</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Lot #</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Images</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Title</th>
@@ -614,8 +709,15 @@
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-              {#each lots as lot (lot.id)}
-                <tr class="{getLotRowClass(lot)} hover:bg-gray-50 transition-colors">
+              {#each lots as lot, index (lot.id)}
+                <tr 
+                  class="{getLotRowClass(lot)} hover:bg-gray-50 transition-colors cursor-move"
+                  role="row"
+                  draggable="true"
+                  ondragstart={() => handleDragStart(lot)}
+                  ondragover={(e) => handleDragOver(e, lot)}
+                  ondragend={handleDragEnd}
+                >
                   <!-- Checkbox -->
                   <td class="px-3 py-2 whitespace-nowrap">
                     <input
@@ -623,7 +725,33 @@
                       checked={selectedLots.has(lot.id)}
                       onchange={() => toggleLotSelection(lot.id)}
                       class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                      onclick={(e) => e.stopPropagation()}
                     />
+                  </td>
+                  
+                  <!-- Position -->
+                  <td class="px-4 py-2 whitespace-nowrap">
+                    <div class="flex items-center gap-1">
+                      <span class="text-sm font-semibold text-blue-600">{lot.position || index + 1}</span>
+                      <div class="flex flex-col">
+                        <button
+                          onclick={(e) => { e.stopPropagation(); moveLotUp(index); }}
+                          disabled={index === 0 || reordering}
+                          class="text-xs text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Move up"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          onclick={(e) => { e.stopPropagation(); moveLotDown(index); }}
+                          disabled={index === lots.length - 1 || reordering}
+                          class="text-xs text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title="Move down"
+                        >
+                          ↓
+                        </button>
+                      </div>
+                    </div>
                   </td>
                   
                   <!-- Lot Number -->

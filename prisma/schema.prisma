@@ -97,6 +97,7 @@ model Lot {
   id                String     @id @default(cuid())
   auctionId         String     @map("auction_id")
   lotNumber         Int        @map("lot_number")
+  position          Int        @default(0) // Order/position for displaying lots (1, 2, 3, ...)
   title             String
   hebrewTitle       String?    @map("hebrew_title")
   description       String?
@@ -123,6 +124,7 @@ model Lot {
   @@index([auctionId])
   @@index([status])
   @@index([endTime])
+  @@index([position])
   @@map("lots")
 }
 

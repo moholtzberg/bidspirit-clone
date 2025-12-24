@@ -72,6 +72,7 @@ function mapLot(prismaLot) {
     id: prismaLot.id,
     auctionId: prismaLot.auctionId,
     lotNumber: prismaLot.lotNumber,
+    position: prismaLot.position || 0,
     title: prismaLot.title,
     HebrewTitle: prismaLot.hebrewTitle,
     hebrewTitle: prismaLot.hebrewTitle,
@@ -213,7 +214,10 @@ export const db = {
               orderBy: [{ isPrimary: 'desc' }, { displayOrder: 'asc' }]
             }
           },
-          orderBy: { lotNumber: 'asc' }
+          orderBy: [
+            { position: 'asc' },
+            { lotNumber: 'asc' }
+          ]
         });
         return lots.map(mapLot);
       } catch (error) {
@@ -221,7 +225,10 @@ export const db = {
         if (error.message?.includes('Unknown field `images`')) {
           const lots = await prisma.lot.findMany({
             where: { auctionId },
-            orderBy: { lotNumber: 'asc' }
+            orderBy: [
+              { position: 'asc' },
+              { lotNumber: 'asc' }
+            ]
           });
           return lots.map(mapLot);
         }

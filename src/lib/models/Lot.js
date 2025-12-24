@@ -6,6 +6,7 @@ const lotSchema = z.object({
   id: z.string().optional(),
   auctionId: z.string().min(1, 'Auction ID is required'),
   lotNumber: z.number().int().positive('Lot number must be positive'),
+  position: z.number().int().nonnegative('Position must be non-negative').default(0),
   title: z.string().min(1, 'Title is required'),
   hebrewTitle: z.string().nullable().optional(),
   description: z.string().nullable().optional(),
