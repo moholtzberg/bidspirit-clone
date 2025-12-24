@@ -16,6 +16,7 @@
     startingBid: 0,
     bidIncrement: 100,
     imageUrl: '',
+    uploadedImages: [],
     status: 'active',
     endTime: ''
   });
@@ -59,9 +60,61 @@
     }
   }
   
+  async function handleImageUpload(event) {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    try {
+      const formData = new FormData();
+      files.forEach(file => formData.append('files', file));
+
+      const uploadResponse = await fetch('/api/upload/image', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload images');
+      }
+
+      const { images: uploadedImages } = await uploadResponse.json();
+      newLot.uploadedImages = [...(newLot.uploadedImages || []), ...uploadedImages];
+      
+      // Clear the file input
+      event.target.value = '';
+    } catch (error) {
+      console.error('Error uploading images:', error);
+      alert('Failed to upload images. Please try again.');
+    }
+  }
+
   async function createLot() {
     createError = '';
     try {
+      // Prepare images array for lot creation
+      const images = [];
+      
+      // Add uploaded images
+      if (newLot.uploadedImages && newLot.uploadedImages.length > 0) {
+        newLot.uploadedImages.forEach((img, index) => {
+          images.push({
+            url: img.url || img,
+            key: img.key,
+            displayOrder: index,
+            isPrimary: index === 0
+          });
+        });
+      }
+      
+      // Add URL input if provided
+      if (newLot.imageUrl && newLot.imageUrl.trim() !== '') {
+        images.push({
+          url: newLot.imageUrl.trim(),
+          displayOrder: images.length,
+          isPrimary: images.length === 0
+        });
+      }
+
       const response = await fetch('/api/lots', {
         method: 'POST',
         headers: {
@@ -72,7 +125,8 @@
           auctionId: auction.id,
           currentBid: newLot.startingBid,
           highestBidderId: null,
-          highestBidderName: null
+          highestBidderName: null,
+          images
         })
       });
       
@@ -96,6 +150,7 @@
           startingBid: 0,
           bidIncrement: 100,
           imageUrl: '',
+          uploadedImages: [],
           status: 'active',
           endTime: defaultEndTime
         };
@@ -215,11 +270,30 @@
           {#each lots as lot}
             <div class="bg-white rounded-lg shadow-md overflow-hidden">
               <div class="relative">
-                <img
-                  src={lot.imageUrl}
-                  alt={lot.title}
-                  class="w-full h-48 object-cover"
-                />
+                {#if lot.imageUrl}
+                  <img
+                    src={lot.imageUrl}
+                    alt={lot.title}
+                    class="w-full h-48 object-cover"
+                  />
+                {:else if lot.imageUrls}
+                  {@const images = (() => { try { return JSON.parse(lot.imageUrls); } catch { return []; } })()}
+                  {#if images.length > 0}
+                    <img
+                      src={images[0]}
+                      alt={lot.title}
+                      class="w-full h-48 object-cover"
+                    />
+                  {:else}
+                    <div class="w-full h-48 bg-gray-200 flex items-center justify-center">
+                      <span class="text-gray-400">No image</span>
+                    </div>
+                  {/if}
+                {:else}
+                  <div class="w-full h-48 bg-gray-200 flex items-center justify-center">
+                    <span class="text-gray-400">No image</span>
+                  </div>
+                {/if}
                 <div class="absolute top-4 left-4 bg-white px-3 py-1 rounded-full text-sm font-bold">
                   Lot #{lot.lotNumber}
                 </div>
@@ -363,16 +437,36 @@
 
             <div>
               <label for="imageUrl" class="block text-sm font-medium text-gray-700 mb-2">
-                Image URL *
+                Image URL
               </label>
               <input
                 id="imageUrl"
                 type="url"
                 bind:value={newLot.imageUrl}
-                required
-                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-2"
                 placeholder="https://example.com/image.jpg"
               />
+              <p class="text-xs text-gray-500 mb-2">OR</p>
+              <label for="imageFiles" class="block text-sm font-medium text-gray-700 mb-2">
+                Upload Images
+              </label>
+              <input
+                id="imageFiles"
+                type="file"
+                accept="image/*"
+                multiple
+                onchange={handleImageUpload}
+                class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+              {#if newLot.uploadedImages && newLot.uploadedImages.length > 0}
+                <div class="mt-2 flex flex-wrap gap-2">
+                  {#each newLot.uploadedImages as image}
+                    <div class="relative">
+                      <img src={image.url || image} alt="Uploaded" class="w-20 h-20 object-cover rounded border border-gray-300" />
+                    </div>
+                  {/each}
+                </div>
+              {/if}
             </div>
 
             <div>

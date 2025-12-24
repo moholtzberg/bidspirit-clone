@@ -55,6 +55,12 @@
   }
 
   function getLotImages(lot) {
+    // Use new images array if available
+    if (lot.images && Array.isArray(lot.images)) {
+      return lot.images.map(img => img.url || img);
+    }
+    
+    // Fallback to legacy fields
     if (lot.imageUrls) {
       try {
         const parsed = JSON.parse(lot.imageUrls);
@@ -110,10 +116,11 @@
       
       console.log('Loaded lots:', loadedLots);
       
-      // Parse imageUrls for each lot
+      // Parse images for each lot
       lots = loadedLots.map(lot => ({
         ...lot,
-        _images: getLotImages(lot)
+        _images: getLotImages(lot),
+        images: lot.images || []
       }));
       
       console.log('Processed lots:', lots);
@@ -263,32 +270,70 @@
     const lot = lots.find(l => l.id === lotId);
     if (!lot) return;
 
-    // For now, we'll just store the file references
-    // In production, you'd upload to a storage service
-    imageUploads[lotId] = [...(imageUploads[lotId] || []), ...files];
-    
-    // Create preview URLs
-    const newImages = files.map(file => URL.createObjectURL(file));
-    const currentImages = lot._images || [];
-    lot._images = [...currentImages, ...newImages];
-    
-    // Update the lot's image fields
-    setLotImages(lot, lot._images);
-    
-    // Save to server
-    await saveCell(lotId, 'imageUrls', lot.imageUrls);
+    try {
+      // Upload files to cloud storage
+      const formData = new FormData();
+      files.forEach(file => formData.append('files', file));
+      formData.append('lotId', lotId);
+
+      const uploadResponse = await fetch('/api/upload/image', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload images');
+      }
+
+      const { images: uploadedImages } = await uploadResponse.json();
+      
+      // Create image records in database
+      const imageResponse = await fetch(`/api/lots/${lotId}/images`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          images: uploadedImages.map((img, index) => ({
+            url: img.url,
+            key: img.key,
+            displayOrder: index,
+            isPrimary: index === 0 && (!lot.images || lot.images.length === 0)
+          }))
+        })
+      });
+
+      if (!imageResponse.ok) {
+        throw new Error('Failed to save image records');
+      }
+
+      // Reload lot data to get updated images
+      await loadData();
+      
+      // Clear the file input
+      event.target.value = '';
+    } catch (error) {
+      console.error('Error uploading images:', error);
+      alert('Failed to upload images. Please try again.');
+    }
   }
 
-  function removeImage(lotId, imageIndex) {
-    const lot = lots.find(l => l.id === lotId);
-    if (!lot) return;
+  async function removeImage(lotId, imageId) {
+    try {
+      const response = await fetch(`/api/lots/${lotId}/images?imageId=${imageId}`, {
+        method: 'DELETE'
+      });
 
-    const images = lot._images || [];
-    images.splice(imageIndex, 1);
-    lot._images = images;
-    setLotImages(lot, images);
-    
-    saveCell(lotId, 'imageUrls', lot.imageUrls);
+      if (!response.ok) {
+        throw new Error('Failed to delete image');
+      }
+
+      // Reload lot data to get updated images
+      await loadData();
+    } catch (error) {
+      console.error('Error deleting image:', error);
+      alert('Failed to delete image. Please try again.');
+    }
   }
 
   function openImageModal(lotId) {
@@ -706,14 +751,19 @@
               
               <div class="grid grid-cols-4 gap-4 mb-4">
                 {#each showImageModal.images as image, index}
+                  {@const lot = lots.find(l => l.id === showImageModal.lotId)}
+                  {@const imageObj = lot?.images?.[index] || (typeof image === 'string' ? { url: image } : image)}
+                  {@const imageId = imageObj.id || (imageObj.url ? null : imageObj)}
                   <div class="relative">
-                    <img src={image} alt="Image {index + 1}" class="w-full h-32 object-cover rounded border border-gray-300" />
-                    <button
-                      onclick={() => removeImage(showImageModal.lotId, index)}
-                      class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-700"
-                    >
-                      ×
-                    </button>
+                    <img src={imageObj.url || image} alt="Image {index + 1}" class="w-full h-32 object-cover rounded border border-gray-300" />
+                    {#if imageId}
+                      <button
+                        onclick={() => removeImage(showImageModal.lotId, imageId)}
+                        class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-700"
+                      >
+                        ×
+                      </button>
+                    {/if}
                   </div>
                 {/each}
               </div>
