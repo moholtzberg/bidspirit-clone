@@ -37,6 +37,37 @@ function mapAuction(prismaAuction) {
 
 function mapLot(prismaLot) {
   if (!prismaLot) return null;
+  
+  // Get images from relation or fallback to legacy fields
+  let imageUrl = null;
+  let imageUrls = null;
+  let images = [];
+  
+  if (prismaLot.images && Array.isArray(prismaLot.images)) {
+    images = prismaLot.images.map(img => ({
+      id: img.id,
+      url: img.url,
+      cloudKey: img.cloudKey,
+      displayOrder: img.displayOrder,
+      isPrimary: img.isPrimary
+    }));
+    
+    // Set primary image as imageUrl for backward compatibility
+    const primaryImage = images.find(img => img.isPrimary) || images[0];
+    if (primaryImage) {
+      imageUrl = primaryImage.url;
+    }
+    
+    // Set all image URLs for backward compatibility
+    if (images.length > 0) {
+      imageUrls = JSON.stringify(images.map(img => img.url));
+    }
+  } else {
+    // Fallback to legacy fields
+    imageUrl = prismaLot.imageUrl;
+    imageUrls = prismaLot.imageUrls ? (typeof prismaLot.imageUrls === 'string' ? JSON.parse(prismaLot.imageUrls) : prismaLot.imageUrls) : null;
+  }
+  
   return {
     id: prismaLot.id,
     auctionId: prismaLot.auctionId,
@@ -51,8 +82,9 @@ function mapLot(prismaLot) {
     startingBid: prismaLot.startingBid,
     currentBid: prismaLot.currentBid,
     bidIncrement: prismaLot.bidIncrement,
-    imageUrl: prismaLot.imageUrl,
-    imageUrls: prismaLot.imageUrls ? (typeof prismaLot.imageUrls === 'string' ? JSON.parse(prismaLot.imageUrls) : prismaLot.imageUrls) : null,
+    imageUrl,
+    imageUrls: typeof imageUrls === 'string' ? imageUrls : (imageUrls ? JSON.stringify(imageUrls) : null),
+    images, // New: array of image objects
     status: prismaLot.status.toLowerCase(),
     endTime: prismaLot.endTime,
     highestBidderId: prismaLot.highestBidderId,
@@ -171,33 +203,100 @@ export const db = {
   },
   lots: {
     getByAuctionId: async (auctionId) => {
-      const lots = await prisma.lot.findMany({
-        where: { auctionId },
-        orderBy: { lotNumber: 'asc' }
-      });
-      return lots.map(mapLot);
+      try {
+        const lots = await prisma.lot.findMany({
+          where: { auctionId },
+          include: {
+            images: {
+              orderBy: [{ isPrimary: 'desc' }, { displayOrder: 'asc' }]
+            }
+          },
+          orderBy: { lotNumber: 'asc' }
+        });
+        return lots.map(mapLot);
+      } catch (error) {
+        // Fallback if images relation doesn't exist yet (before migration)
+        if (error.message?.includes('Unknown field `images`')) {
+          const lots = await prisma.lot.findMany({
+            where: { auctionId },
+            orderBy: { lotNumber: 'asc' }
+          });
+          return lots.map(mapLot);
+        }
+        throw error;
+      }
     },
     getById: async (id) => {
-      const lot = await prisma.lot.findUnique({
-        where: { id },
-        include: {
-          auction: true
+      try {
+        const lot = await prisma.lot.findUnique({
+          where: { id },
+          include: {
+            auction: true,
+            images: {
+              orderBy: [{ isPrimary: 'desc' }, { displayOrder: 'asc' }]
+            }
+          }
+        });
+        return mapLot(lot);
+      } catch (error) {
+        // Fallback if images relation doesn't exist yet (before migration)
+        if (error.message?.includes('Unknown field `images`')) {
+          const lot = await prisma.lot.findUnique({
+            where: { id },
+            include: {
+              auction: true
+            }
+          });
+          return mapLot(lot);
         }
-      });
-      return mapLot(lot);
+        throw error;
+      }
     },
     create: async (lot) => {
-      const created = await prisma.lot.create({
-        data: lot
-      });
-      return mapLot(created);
+      const { images, ...lotData } = lot;
+      try {
+        const created = await prisma.lot.create({
+          data: lotData,
+          include: {
+            images: true
+          }
+        });
+        return mapLot(created);
+      } catch (error) {
+        // Fallback if images relation doesn't exist yet (before migration)
+        if (error.message?.includes('Unknown field `images`')) {
+          const created = await prisma.lot.create({
+            data: lotData
+          });
+          return mapLot(created);
+        }
+        throw error;
+      }
     },
     update: async (id, updates) => {
-      const updated = await prisma.lot.update({
-        where: { id },
-        data: updates
-      });
-      return mapLot(updated);
+      const { images, ...lotData } = updates;
+      try {
+        const updated = await prisma.lot.update({
+          where: { id },
+          data: lotData,
+          include: {
+            images: {
+              orderBy: [{ isPrimary: 'desc' }, { displayOrder: 'asc' }]
+            }
+          }
+        });
+        return mapLot(updated);
+      } catch (error) {
+        // Fallback if images relation doesn't exist yet (before migration)
+        if (error.message?.includes('Unknown field `images`')) {
+          const updated = await prisma.lot.update({
+            where: { id },
+            data: lotData
+          });
+          return mapLot(updated);
+        }
+        throw error;
+      }
     }
   },
   bids: {

@@ -66,7 +66,7 @@ model Auction {
   endDate       DateTime      @map("end_date")
   status        AuctionStatus  @default(UPCOMING)
   imageUrl      String?       @map("image_url")
-  // settings      String?       // JSON string for auction-specific settings
+  settings      String?       // JSON string for auction-specific settings
   auctionHouseId String       @map("auction_house_id") // Multi-tenant: which auction house hosts this
   sellerId      String        @map("seller_id")
   createdAt     DateTime      @default(now()) @map("created_at")
@@ -105,8 +105,6 @@ model Lot {
   startingBid       Float      @map("starting_bid")
   currentBid        Float      @default(0) @map("current_bid")
   bidIncrement      Float      @map("bid_increment")
-  imageUrl          String?    @map("image_url")
-  imageUrls         String?    @map("image_urls") // JSON array of multiple images
   status            LotStatus  @default(ACTIVE)
   endTime           DateTime?  @map("end_time")
   highestBidderId   String?    @map("highest_bidder_id")
@@ -115,14 +113,35 @@ model Lot {
   updatedAt         DateTime   @updatedAt @map("updated_at")
 
   // Relations
-  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  auction Auction     @relation(fields: [auctionId], references: [id], onDelete: Cascade)
   bids    Bid[]
+  images  LotImage[]  // Multiple images per lot
 
   @@unique([auctionId, lotNumber])
   @@index([auctionId])
   @@index([status])
   @@index([endTime])
   @@map("lots")
+}
+
+// LotImage model - represents images associated with a lot
+model LotImage {
+  id          String   @id @default(cuid())
+  lotId       String   @map("lot_id")
+  url         String   // Cloud storage URL
+  cloudKey    String?  @map("cloud_key") // Key/identifier in cloud storage
+  displayOrder Int     @default(0) @map("display_order") // Order for displaying images
+  isPrimary   Boolean  @default(false) @map("is_primary") // Primary/thumbnail image
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  lot Lot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+
+  @@index([lotId])
+  @@index([displayOrder])
+  @@index([isPrimary])
+  @@map("lot_images")
 }
 
 enum LotStatus {
