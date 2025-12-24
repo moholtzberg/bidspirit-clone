@@ -4,7 +4,12 @@
  * Configure via environment variables
  */
 
-const STORAGE_PROVIDER = process.env.STORAGE_PROVIDER || 'local'; // 'local', 's3', 'cloudinary'
+import { env } from '$env/dynamic/private';
+
+// Read storage provider dynamically to ensure env vars are loaded
+function getStorageProvider() {
+  return env.STORAGE_PROVIDER || process.env.STORAGE_PROVIDER || 'local'; // 'local', 's3', 'cloudinary'
+}
 
 /**
  * Upload a file buffer to cloud storage
@@ -14,7 +19,13 @@ const STORAGE_PROVIDER = process.env.STORAGE_PROVIDER || 'local'; // 'local', 's
  * @returns {Promise<{url: string, key: string}>} - Uploaded file URL and storage key
  */
 export async function uploadFile(buffer, filename, folder = 'lots') {
-  switch (STORAGE_PROVIDER) {
+  const provider = getStorageProvider();
+  console.log('Storage provider:', provider);
+  console.log('AWS_S3_BUCKET:', env.AWS_S3_BUCKET || process.env.AWS_S3_BUCKET);
+  console.log('AWS_ACCESS_KEY_ID:', (env.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID) ? '***SET***' : 'NOT SET');
+  console.log('AWS_REGION:', env.AWS_REGION || process.env.AWS_REGION || 'us-east-1 (default)');
+  
+  switch (provider) {
     case 's3':
       return await uploadToS3(buffer, filename, folder);
     case 'cloudinary':
@@ -32,7 +43,8 @@ export async function uploadFile(buffer, filename, folder = 'lots') {
  * @returns {Promise<void>}
  */
 export async function deleteFile(key, folder = 'lots') {
-  switch (STORAGE_PROVIDER) {
+  const provider = getStorageProvider();
+  switch (provider) {
     case 's3':
       return await deleteFromS3(key, folder);
     case 'cloudinary':
@@ -43,9 +55,40 @@ export async function deleteFile(key, folder = 'lots') {
   }
 }
 
+/**
+ * Get a presigned URL for accessing a private S3 object
+ * @param {string} key - Storage key/identifier
+ * @param {number} expiresIn - URL expiration time in seconds (default: 1 hour)
+ * @returns {Promise<string>} - Presigned URL
+ */
+export async function getPresignedUrl(key, expiresIn = 3600) {
+  const provider = getStorageProvider();
+  if (provider === 's3') {
+    return await getS3PresignedUrl(key, expiresIn);
+  }
+  // For local or cloudinary, return the URL as-is
+  return key.startsWith('http') ? key : `/uploads/${key}`;
+}
+
 // ===== S3 Implementation =====
 async function uploadToS3(buffer, filename, folder) {
   try {
+    // Validate required environment variables (try SvelteKit env first, then process.env)
+    const accessKeyId = env.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = env.AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+    const bucket = env.AWS_S3_BUCKET || process.env.AWS_S3_BUCKET;
+    const region = env.AWS_REGION || process.env.AWS_REGION || 'us-east-1';
+    
+    if (!accessKeyId || !secretAccessKey || !bucket) {
+      console.error('S3 Configuration Check:');
+      console.error('  STORAGE_PROVIDER:', env.STORAGE_PROVIDER || process.env.STORAGE_PROVIDER);
+      console.error('  AWS_ACCESS_KEY_ID:', accessKeyId ? '***SET***' : 'NOT SET');
+      console.error('  AWS_SECRET_ACCESS_KEY:', secretAccessKey ? '***SET***' : 'NOT SET');
+      console.error('  AWS_S3_BUCKET:', bucket || 'NOT SET');
+      console.error('  AWS_REGION:', region);
+      throw new Error('Missing required S3 configuration: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_S3_BUCKET must be set');
+    }
+    
     // Install: npm install @aws-sdk/client-s3
     // Lazy import to prevent Vite from analyzing at build time
     const s3Package = '@aws-sdk/client-s3';
@@ -55,36 +98,49 @@ async function uploadToS3(buffer, filename, folder) {
     const { S3Client, PutObjectCommand } = s3Module;
     
     const s3Client = new S3Client({
-      region: process.env.AWS_REGION || 'us-east-1',
+      region: region,
       credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+        accessKeyId: accessKeyId,
+        secretAccessKey: secretAccessKey
       }
     });
 
     const ext = filename.split('.').pop() || 'jpg';
     const key = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
-    const bucket = process.env.AWS_S3_BUCKET;
 
     await s3Client.send(new PutObjectCommand({
       Bucket: bucket,
       Key: key,
       Body: buffer,
       ContentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`
+      // Note: ACL is deprecated. Use bucket policy for public access or presigned URLs for private access
     }));
 
-    const url = `https://${bucket}.s3.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com/${key}`;
+    // Store the S3 key - we'll generate presigned URLs when serving images
+    // The URL will be generated on-demand via the presigned URL endpoint
+    const url = key; // Store just the key, will be converted to presigned URL when needed
     return { url, key };
   } catch (error) {
     if (error.message.includes('not installed')) {
       throw error;
     }
+    console.error('S3 upload error:', error);
     throw new Error(`S3 upload failed: ${error.message}`);
   }
 }
 
 async function deleteFromS3(key, folder) {
   try {
+    // Validate required environment variables (try SvelteKit env first, then process.env)
+    const accessKeyId = env.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = env.AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+    const bucket = env.AWS_S3_BUCKET || process.env.AWS_S3_BUCKET;
+    const region = env.AWS_REGION || process.env.AWS_REGION || 'us-east-1';
+    
+    if (!accessKeyId || !secretAccessKey || !bucket) {
+      throw new Error('Missing required S3 configuration: AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, and AWS_S3_BUCKET must be set');
+    }
+    
     // Lazy import to prevent Vite from analyzing at build time
     const s3Package = '@aws-sdk/client-s3';
     const s3Module = await import(/* @vite-ignore */ s3Package).catch(() => {
@@ -93,22 +149,78 @@ async function deleteFromS3(key, folder) {
     const { S3Client, DeleteObjectCommand } = s3Module;
     
     const s3Client = new S3Client({
-      region: process.env.AWS_REGION || 'us-east-1',
+      region: region,
       credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+        accessKeyId: accessKeyId,
+        secretAccessKey: secretAccessKey
       }
     });
 
     await s3Client.send(new DeleteObjectCommand({
-      Bucket: process.env.AWS_S3_BUCKET,
+      Bucket: bucket,
       Key: key
     }));
   } catch (error) {
     if (error.message.includes('not installed')) {
       throw error;
     }
+    console.error('S3 delete error:', error);
     throw new Error(`S3 delete failed: ${error.message}`);
+  }
+}
+
+async function getS3PresignedUrl(key, expiresIn = 3600) {
+  try {
+    // Validate required environment variables
+    const accessKeyId = env.AWS_ACCESS_KEY_ID || process.env.AWS_ACCESS_KEY_ID;
+    const secretAccessKey = env.AWS_SECRET_ACCESS_KEY || process.env.AWS_SECRET_ACCESS_KEY;
+    const bucket = env.AWS_S3_BUCKET || process.env.AWS_S3_BUCKET;
+    const region = env.AWS_REGION || process.env.AWS_REGION || 'us-east-1';
+    
+    if (!accessKeyId || !secretAccessKey || !bucket) {
+      throw new Error('Missing required S3 configuration');
+    }
+    
+    // Lazy import to prevent Vite from analyzing at build time
+    const s3Package = '@aws-sdk/client-s3';
+    const s3Module = await import(/* @vite-ignore */ s3Package).catch(() => {
+      throw new Error('@aws-sdk/client-s3 is not installed');
+    });
+    const { S3Client, GetObjectCommand } = s3Module;
+    
+    // Try to import presigner - it might be in a separate package or included
+    let getSignedUrl;
+    try {
+      const presignerModule = await import(/* @vite-ignore */ '@aws-sdk/s3-request-presigner');
+      getSignedUrl = presignerModule.getSignedUrl;
+    } catch {
+      // Try alternative import path (some SDK versions include it)
+      try {
+        const presignerModule = await import(/* @vite-ignore */ '@aws-sdk/s3-request-presigner/getSignedUrl');
+        getSignedUrl = presignerModule.getSignedUrl;
+      } catch {
+        throw new Error('@aws-sdk/s3-request-presigner is not installed. Run: npm install @aws-sdk/s3-request-presigner');
+      }
+    }
+    
+    const s3Client = new S3Client({
+      region: region,
+      credentials: {
+        accessKeyId: accessKeyId,
+        secretAccessKey: secretAccessKey
+      }
+    });
+
+    const command = new GetObjectCommand({
+      Bucket: bucket,
+      Key: key
+    });
+
+    const url = await getSignedUrl(s3Client, command, { expiresIn });
+    return url;
+  } catch (error) {
+    console.error('S3 presigned URL error:', error);
+    throw new Error(`Failed to generate presigned URL: ${error.message}`);
   }
 }
 

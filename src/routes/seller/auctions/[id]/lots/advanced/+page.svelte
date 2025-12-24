@@ -819,13 +819,13 @@
                           </div>
                         </div>
                       {/if}
-                      <!-- <button
+                      <button
                         onclick={() => toggleImageRow(lot.id)}
-                        class="mt-1 text-xs text-blue-600 hover:text-blue-800 underline"
+                        class="mt-1 text-xs text-gray-600 hover:text-gray-700"
                         title="Manage images"
                       >
-                        
-                      </button> -->
+                        {expandedImageRows.has(lot.id) ? 'Hide' : 'Manage'} images
+                      </button>
                     </div>
                   </td>
                   

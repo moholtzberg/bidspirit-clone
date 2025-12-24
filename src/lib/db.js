@@ -35,8 +35,11 @@ function mapAuction(prismaAuction) {
   };
 }
 
-function mapLot(prismaLot) {
+async function mapLot(prismaLot) {
   if (!prismaLot) return null;
+  
+  // Import presigned URL converter (dynamic import to avoid circular deps)
+  const { convertToPresignedUrl, convertImageObjects } = await import('$lib/utils/s3Presigned.js');
   
   // Get images from relation or fallback to legacy fields
   let imageUrl = null;
@@ -52,20 +55,34 @@ function mapLot(prismaLot) {
       isPrimary: img.isPrimary
     }));
     
+    // Convert image URLs to presigned URLs
+    images = await convertImageObjects(images);
+    
     // Set primary image as imageUrl for backward compatibility
     const primaryImage = images.find(img => img.isPrimary) || images[0];
     if (primaryImage) {
-      imageUrl = primaryImage.url;
+      imageUrl = await convertToPresignedUrl(primaryImage.url || primaryImage);
     }
     
     // Set all image URLs for backward compatibility
     if (images.length > 0) {
-      imageUrls = JSON.stringify(images.map(img => img.url));
+      const urls = images.map(img => img.url || img);
+      imageUrls = JSON.stringify(urls);
     }
   } else {
     // Fallback to legacy fields
-    imageUrl = prismaLot.imageUrl;
-    imageUrls = prismaLot.imageUrls ? (typeof prismaLot.imageUrls === 'string' ? JSON.parse(prismaLot.imageUrls) : prismaLot.imageUrls) : null;
+    imageUrl = await convertToPresignedUrl(prismaLot.imageUrl);
+    if (prismaLot.imageUrls) {
+      const parsed = typeof prismaLot.imageUrls === 'string' 
+        ? JSON.parse(prismaLot.imageUrls) 
+        : prismaLot.imageUrls;
+      if (Array.isArray(parsed)) {
+        const presignedUrls = await Promise.all(parsed.map(url => convertToPresignedUrl(url)));
+        imageUrls = JSON.stringify(presignedUrls);
+      } else {
+        imageUrls = prismaLot.imageUrls;
+      }
+    }
   }
   
   return {
@@ -219,7 +236,7 @@ export const db = {
             { lotNumber: 'asc' }
           ]
         });
-        return lots.map(mapLot);
+        return await Promise.all(lots.map(lot => mapLot(lot)));
       } catch (error) {
         // Fallback if images relation doesn't exist yet (before migration)
         if (error.message?.includes('Unknown field `images`')) {
@@ -230,7 +247,7 @@ export const db = {
               { lotNumber: 'asc' }
             ]
           });
-          return lots.map(mapLot);
+          return await Promise.all(lots.map(lot => mapLot(lot)));
         }
         throw error;
       }
@@ -246,7 +263,7 @@ export const db = {
             }
           }
         });
-        return mapLot(lot);
+        return await mapLot(lot);
       } catch (error) {
         // Fallback if images relation doesn't exist yet (before migration)
         if (error.message?.includes('Unknown field `images`')) {
@@ -256,7 +273,7 @@ export const db = {
               auction: true
             }
           });
-          return mapLot(lot);
+          return await mapLot(lot);
         }
         throw error;
       }
@@ -270,14 +287,14 @@ export const db = {
             images: true
           }
         });
-        return mapLot(created);
+        return await mapLot(created);
       } catch (error) {
         // Fallback if images relation doesn't exist yet (before migration)
         if (error.message?.includes('Unknown field `images`')) {
           const created = await prisma.lot.create({
             data: lotData
           });
-          return mapLot(created);
+          return await mapLot(created);
         }
         throw error;
       }
@@ -294,7 +311,7 @@ export const db = {
             }
           }
         });
-        return mapLot(updated);
+        return await mapLot(updated);
       } catch (error) {
         // Fallback if images relation doesn't exist yet (before migration)
         if (error.message?.includes('Unknown field `images`')) {
@@ -302,7 +319,7 @@ export const db = {
             where: { id },
             data: lotData
           });
-          return mapLot(updated);
+          return await mapLot(updated);
         }
         throw error;
       }
