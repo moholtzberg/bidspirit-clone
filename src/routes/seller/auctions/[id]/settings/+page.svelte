@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
+  import BannerGenerator from '$lib/components/BannerGenerator.svelte';
 
   let auction = $state(null);
   let loading = $state(true);
@@ -433,6 +434,35 @@
                     <option value="JPY">JPY - Japanese Yen</option>
                     <option value="CHF">CHF - Swiss Franc</option>
                   </select>
+                </div>
+              {/if}
+            </div>
+
+            <!-- Banner Generator -->
+            <div class="border border-gray-200 rounded-lg">
+              <button
+                type="button"
+                onclick={() => toggleSection('banner')}
+                class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <span class="font-medium text-gray-900">Banner Generator</span>
+                <svg class="w-5 h-5 text-gray-500 transform transition-transform {expandedSections.banner ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {#if expandedSections.banner}
+                <div class="p-4">
+                  <BannerGenerator 
+                    type="auction" 
+                    {auction}
+                    onSave={(bannerUrl) => {
+                      // Save banner URL to auction settings
+                      if (settings) {
+                        settings.bannerUrl = bannerUrl;
+                        saveSettings();
+                      }
+                    }}
+                  />
                 </div>
               {/if}
             </div>

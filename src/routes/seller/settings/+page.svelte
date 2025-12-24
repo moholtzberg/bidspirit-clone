@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import BannerGenerator from '$lib/components/BannerGenerator.svelte';
 
   let session = $state(null);
   let currentUser = $state(null);
@@ -355,6 +356,12 @@
               class="px-6 py-4 text-sm font-medium border-b-2 transition-colors {activeTab === 'advanced' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
             >
               Advanced
+            </button>
+            <button
+              onclick={() => activeTab = 'banner'}
+              class="px-6 py-4 text-sm font-medium border-b-2 transition-colors {activeTab === 'banner' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+            >
+              Banner
             </button>
           </nav>
         </div>
@@ -886,8 +893,23 @@
                 {/if}
               </div>
             {/if}
-          {/if}
-        </form>
+            
+            {#if activeTab === 'banner'}
+              <div class="p-6">
+                <BannerGenerator 
+                  type="auctionHouse" 
+                  {auctionHouse}
+                  onSave={(bannerUrl) => {
+                    // Save banner URL to auction house settings
+                    if (settings) {
+                      settings.bannerUrl = bannerUrl;
+                      saveSettings();
+                    }
+                  }}
+                />
+              </div>
+            {/if}
+          </form>
       </div>
     {/if}
   </div>

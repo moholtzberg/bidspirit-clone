@@ -2,6 +2,7 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
+  import BannerGenerator from '$lib/components/BannerGenerator.svelte';
   
   let auction = $state(null);
   let lots = $state([]);
@@ -299,12 +300,6 @@
         newLot.endTime = `${year}-${month}-${day}T${hours}:${minutes}`;
       }
       
-      // Initialize banner settings with auction defaults
-      if (auction) {
-        bannerSettings.title = auction.title || '';
-        bannerSettings.subtitle = auction.description ? auction.description.substring(0, 150) : '';
-        bannerSettings.primaryImageUrl = auction.imageUrl || '';
-      }
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -312,287 +307,6 @@
     }
   }
   
-  // Quick banner generation with Hebrew support
-  async function generateQuickBanner() {
-    generatingBanner = true;
-    generatedBannerUrl = null;
-    
-    try {
-      const canvas = document.createElement('canvas');
-      canvas.width = bannerSettings.width;
-      canvas.height = bannerSettings.height;
-      const ctx = canvas.getContext('2d');
-      
-      // Background color
-      ctx.fillStyle = '#F5F1E8'; // Antique paper color
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      
-      // Load and draw images (right side) - use selected images or fallback to primaryImageUrl
-      const imagesToUse = selectedBannerImages.length > 0 
-        ? selectedBannerImages.map(img => img.url)
-        : (bannerSettings.primaryImageUrl ? [bannerSettings.primaryImageUrl] : []);
-      
-      if (imagesToUse.length > 0) {
-        // Get presigned URLs for all images
-        const imageUrls = await Promise.all(
-          imagesToUse.map(async (imageUrl) => {
-            // If it's an S3 URL, try to get presigned URL
-            if (imageUrl.includes('.s3.') || imageUrl.includes('s3.amazonaws.com')) {
-              try {
-                const match = imageUrl.match(/s3[^/]*\.amazonaws\.com\/(.+?)(?:\?|$)/);
-                if (match) {
-                  const key = match[1];
-                  const response = await fetch('/api/images/presigned', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ keys: [key] })
-                  });
-                  if (response.ok) {
-                    const { urls } = await response.json();
-                    if (urls[key]) {
-                      return urls[key];
-                    }
-                  }
-                }
-              } catch (error) {
-                console.warn('Failed to get presigned URL, using original:', error);
-              }
-            }
-            return imageUrl;
-          })
-        );
-        
-        // Draw images - single image or collage
-        if (imageUrls.length === 1) {
-          // Single image - draw on right side (60% of width)
-          await new Promise((resolve) => {
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.onload = () => {
-              const imgWidth = canvas.width * 0.6;
-              const imgHeight = canvas.height;
-              const imgX = canvas.width * 0.4;
-              const imgY = 0;
-              
-              ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
-              resolve();
-            };
-            img.onerror = () => {
-              console.warn('Failed to load image:', imageUrls[0]);
-              // Draw placeholder
-              ctx.fillStyle = '#E5E5E5';
-              ctx.fillRect(canvas.width * 0.4, 0, canvas.width * 0.6, canvas.height);
-              ctx.fillStyle = '#999';
-              ctx.font = '24px Arial';
-              ctx.textAlign = 'center';
-              ctx.fillText('Image failed to load', canvas.width * 0.7, canvas.height / 2);
-              resolve();
-            };
-            img.src = imageUrls[0];
-          });
-        } else if (imageUrls.length > 1) {
-          // Multiple images - create collage
-          const imgAreaWidth = canvas.width * 0.6;
-          const imgAreaHeight = canvas.height;
-          const imgAreaX = canvas.width * 0.4;
-          const imgAreaY = 0;
-          
-          // Load all images first
-          const loadedImages = await Promise.all(
-            imageUrls.map((url) => {
-              return new Promise((resolve) => {
-                const img = new Image();
-                img.crossOrigin = 'anonymous';
-                img.onload = () => resolve(img);
-                img.onerror = () => resolve(null);
-                img.src = url;
-              });
-            })
-          );
-          
-          // Filter out failed loads
-          const validImages = loadedImages.filter(img => img !== null);
-          
-          if (validImages.length > 0) {
-            // Simple collage layout: first image larger in center, others around it
-            const centerSize = 0.6;
-            const otherSize = 0.35;
-            const spacing = 15;
-            
-            // Draw center image (first)
-            const centerImg = validImages[0];
-            const centerWidth = imgAreaWidth * centerSize;
-            const centerHeight = imgAreaHeight * centerSize;
-            const centerX = imgAreaX + (imgAreaWidth - centerWidth) / 2;
-            const centerY = imgAreaY + (imgAreaHeight - centerHeight) / 2;
-            ctx.drawImage(centerImg, centerX, centerY, centerWidth, centerHeight);
-            
-            // Draw other images around center
-            if (validImages.length > 1) {
-              const otherWidth = imgAreaWidth * otherSize;
-              const otherHeight = imgAreaHeight * otherSize;
-              const positions = [
-                { x: imgAreaX + spacing, y: imgAreaY + spacing }, // Top-left
-                { x: imgAreaX + imgAreaWidth - otherWidth - spacing, y: imgAreaY + spacing }, // Top-right
-                { x: imgAreaX + spacing, y: imgAreaY + imgAreaHeight - otherHeight - spacing }, // Bottom-left
-                { x: imgAreaX + imgAreaWidth - otherWidth - spacing, y: imgAreaY + imgAreaHeight - otherHeight - spacing } // Bottom-right
-              ];
-              
-              validImages.slice(1, 5).forEach((img, index) => {
-                if (positions[index]) {
-                  ctx.drawImage(img, positions[index].x, positions[index].y, otherWidth, otherHeight);
-                }
-              });
-            }
-          } else {
-            // All images failed - draw placeholder
-            ctx.fillStyle = '#E5E5E5';
-            ctx.fillRect(imgAreaX, imgAreaY, imgAreaWidth, imgAreaHeight);
-            ctx.fillStyle = '#999';
-            ctx.font = '24px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText('Images failed to load', imgAreaX + imgAreaWidth / 2, imgAreaY + imgAreaHeight / 2);
-          }
-        }
-      }
-      
-      // Draw text on left side (40% of width)
-      const textAreaWidth = canvas.width * 0.4;
-      const textAreaX = 0;
-      const textAreaY = 0;
-      
-      // Semi-transparent background for text
-      ctx.fillStyle = bannerSettings.backgroundColor || 'rgba(245, 241, 232, 0.95)';
-      ctx.fillRect(textAreaX, textAreaY, textAreaWidth, canvas.height);
-      
-      // Text settings
-      ctx.fillStyle = bannerSettings.textColor || '#2C1810';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'top';
-      
-      const centerX = textAreaWidth / 2;
-      const padding = 30;
-      let currentY = canvas.height * 0.2;
-      
-      // Title (English)
-      if (bannerSettings.title) {
-        ctx.font = `bold ${bannerSettings.fontSize * 1.2}px ${bannerSettings.fontFamily}`;
-        const titleLines = wrapText(ctx, bannerSettings.title, textAreaWidth - (padding * 2));
-        titleLines.forEach((line, index) => {
-          ctx.fillText(line, centerX, currentY + (index * bannerSettings.fontSize * 1.5));
-        });
-        currentY += titleLines.length * bannerSettings.fontSize * 1.5 + 20;
-      }
-      
-      // Decorative line between English and Hebrew (if both exist)
-      if (bannerSettings.title && bannerSettings.titleHebrew) {
-        const lineY = currentY - 10;
-        const lineWidth = (textAreaWidth - (padding * 2)) * 0.6;
-        const lineX = centerX - (lineWidth / 2);
-        
-        ctx.strokeStyle = bannerSettings.textColor || '#2C1810';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        // Left ornament
-        ctx.moveTo(lineX, lineY);
-        ctx.lineTo(lineX + 15, lineY);
-        ctx.moveTo(lineX + 5, lineY - 3);
-        ctx.lineTo(lineX + 5, lineY + 3);
-        // Center line
-        ctx.moveTo(lineX + 20, lineY);
-        ctx.lineTo(lineX + lineWidth - 20, lineY);
-        // Right ornament
-        ctx.moveTo(lineX + lineWidth - 15, lineY);
-        ctx.lineTo(lineX + lineWidth, lineY);
-        ctx.moveTo(lineX + lineWidth - 5, lineY - 3);
-        ctx.lineTo(lineX + lineWidth - 5, lineY + 3);
-        ctx.stroke();
-        currentY += 20;
-      }
-      
-      // Title (Hebrew)
-      if (bannerSettings.titleHebrew) {
-        ctx.font = `bold ${bannerSettings.fontSize * 1.2}px ${bannerSettings.hebrewFontFamily}`;
-        ctx.textAlign = 'center';
-        const titleHebrewLines = wrapText(ctx, bannerSettings.titleHebrew, textAreaWidth - (padding * 2));
-        titleHebrewLines.forEach((line, index) => {
-          ctx.fillText(line, centerX, currentY + (index * bannerSettings.fontSize * 1.5));
-        });
-        currentY += titleHebrewLines.length * bannerSettings.fontSize * 1.5 + 20;
-      }
-      
-      // Year (English and Hebrew)
-      if (bannerSettings.yearEnglish || bannerSettings.yearHebrew) {
-        ctx.font = `${bannerSettings.fontSize * 0.8}px ${bannerSettings.fontFamily}`;
-        let yearText = '';
-        if (bannerSettings.yearEnglish && bannerSettings.yearHebrew) {
-          yearText = `${bannerSettings.yearEnglish} / ${bannerSettings.yearHebrew}`;
-        } else if (bannerSettings.yearEnglish) {
-          yearText = bannerSettings.yearEnglish;
-        } else if (bannerSettings.yearHebrew) {
-          yearText = bannerSettings.yearHebrew;
-        }
-        ctx.fillText(yearText, centerX, currentY);
-        currentY += bannerSettings.fontSize * 0.8 + 20;
-      }
-      
-      // Subtitle (English)
-      if (bannerSettings.subtitle) {
-        ctx.font = `${bannerSettings.fontSize * 0.45}px ${bannerSettings.fontFamily}`;
-        const subtitleLines = wrapText(ctx, bannerSettings.subtitle, textAreaWidth - (padding * 2));
-        subtitleLines.forEach((line, index) => {
-          ctx.fillText(line, centerX, currentY + (index * bannerSettings.fontSize * 0.7));
-        });
-        currentY += subtitleLines.length * bannerSettings.fontSize * 0.7 + 15;
-      }
-      
-      // Subtitle (Hebrew)
-      if (bannerSettings.subtitleHebrew) {
-        ctx.font = `${bannerSettings.fontSize * 0.45}px ${bannerSettings.hebrewFontFamily}`;
-        ctx.textAlign = 'center';
-        const subtitleHebrewLines = wrapText(ctx, bannerSettings.subtitleHebrew, textAreaWidth - (padding * 2));
-        subtitleHebrewLines.forEach((line, index) => {
-          ctx.fillText(line, centerX, currentY + (index * bannerSettings.fontSize * 0.7));
-        });
-      }
-      
-      // Convert canvas to image
-      generatedBannerUrl = canvas.toDataURL('image/png');
-    } catch (error) {
-      console.error('Error generating banner:', error);
-      alert('Failed to generate banner. Please try again.');
-    } finally {
-      generatingBanner = false;
-    }
-  }
-  
-  function wrapText(ctx, text, maxWidth) {
-    const words = text.split(' ');
-    const lines = [];
-    let currentLine = words[0];
-    
-    for (let i = 1; i < words.length; i++) {
-      const word = words[i];
-      const width = ctx.measureText(currentLine + ' ' + word).width;
-      if (width < maxWidth) {
-        currentLine += ' ' + word;
-      } else {
-        lines.push(currentLine);
-        currentLine = word;
-      }
-    }
-    lines.push(currentLine);
-    return lines;
-  }
-  
-  function downloadBanner() {
-    if (!generatedBannerUrl) return;
-    
-    const link = document.createElement('a');
-    link.download = `banner-${Date.now()}.png`;
-    link.href = generatedBannerUrl;
-    link.click();
-  }
   
   async function handleImageUpload(event) {
     const files = Array.from(event.target.files || []);
@@ -804,6 +518,13 @@
 
       <!-- Banner Tool Section -->
       {#if showBannerTool}
+        <div class="mb-8">
+          <BannerGenerator {lots} {auction} />
+        </div>
+      {/if}
+      
+      {#if false}
+        <!-- Old banner code removed - now using BannerGenerator component -->
         <div class="mb-8 bg-white rounded-lg shadow-lg p-6 border-2 border-purple-200">
           <div class="flex items-center justify-between mb-4">
             <h2 class="text-2xl font-bold text-gray-900">Quick Banner Generator</h2>
