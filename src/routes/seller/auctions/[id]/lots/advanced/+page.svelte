@@ -154,32 +154,76 @@
       // Update local state immediately
       lot[field] = updateValue;
 
-      // Save to server
-      const response = await fetch(`/api/lots/${lotId}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          [field]: updateValue
-        })
-      });
+      // Check if this is a new lot that needs to be created
+      const isNewLot = lot._isNew || lotId.startsWith('new-');
+      
+      if (isNewLot) {
+        // Create new lot with POST
+        const lotData = {
+          auctionId: $page.params.id,
+          lotNumber: lot.lotNumber || 1,
+          title: lot.title || '',
+          description: lot.description || '',
+          category: lot.category || '',
+          startingBid: lot.startingBid || 0,
+          bidIncrement: lot.bidIncrement || 100,
+          currentBid: lot.currentBid || 0,
+          status: lot.status || 'ACTIVE',
+          endTime: lot.endTime || null,
+          imageUrl: lot.imageUrl || null,
+          imageUrls: lot.imageUrls || null
+        };
 
-      if (!response.ok) {
-        throw new Error('Failed to save');
+        const response = await fetch('/api/lots', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(lotData)
+        });
+
+        if (!response.ok) {
+          const error = await response.json();
+          throw new Error(error.error || 'Failed to create lot');
+        }
+
+        // Update local lot with server response (which has the real ID)
+        const created = await response.json();
+        const index = lots.findIndex(l => l.id === lotId);
+        if (index !== -1) {
+          // Replace the temporary lot with the created one
+          lots[index] = { ...created, _images: getLotImages(created) };
+        }
+
+        editingCell = null;
+      } else {
+        // Update existing lot with PATCH
+        const response = await fetch(`/api/lots/${lotId}`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            [field]: updateValue
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to save');
+        }
+
+        // Update local lot with server response
+        const updated = await response.json();
+        const index = lots.findIndex(l => l.id === lotId);
+        if (index !== -1) {
+          lots[index] = { ...updated, _images: getLotImages(updated) };
+        }
+
+        editingCell = null;
       }
-
-      // Update local lot with server response
-      const updated = await response.json();
-      const index = lots.findIndex(l => l.id === lotId);
-      if (index !== -1) {
-        lots[index] = { ...updated, _images: getLotImages(updated) };
-      }
-
-      editingCell = null;
     } catch (error) {
       console.error('Error saving cell:', error);
-      alert('Failed to save. Please try again.');
+      alert(`Failed to save: ${error.message || 'Please try again.'}`);
     } finally {
       saving[lotId] = false;
     }
