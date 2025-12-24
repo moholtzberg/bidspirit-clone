@@ -66,7 +66,7 @@ model Auction {
   endDate       DateTime      @map("end_date")
   status        AuctionStatus  @default(UPCOMING)
   imageUrl      String?       @map("image_url")
-  settings      String?       // JSON string for auction-specific settings
+  // settings      String?       // JSON string for auction-specific settings
   auctionHouseId String       @map("auction_house_id") // Multi-tenant: which auction house hosts this
   sellerId      String        @map("seller_id")
   createdAt     DateTime      @default(now()) @map("created_at")

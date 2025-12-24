@@ -78,24 +78,88 @@
   }
   
   async function loadAuctions() {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/3c92fc5f-a28e-4692-89ad-7cb9d7bd10c2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'seller/+page.svelte:80',message:'loadAuctions entry',data:{hasAuctionHouseId:!!currentUser?.auctionHouseId,auctionHouseId:currentUser?.auctionHouseId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
     try {
-      if (!currentUser?.auctionHouseId) return;
+      if (!currentUser?.auctionHouseId) {
+        console.log('No auctionHouseId for user:', currentUser);
+        myAuctions = [];
+        return;
+      }
       
+      console.log('Loading auctions for auctionHouseId:', currentUser.auctionHouseId);
       const response = await fetch(`/api/auctions?auctionHouseId=${currentUser.auctionHouseId}`);
-      const auctions = await response.json();
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/3c92fc5f-a28e-4692-89ad-7cb9d7bd10c2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'seller/+page.svelte:89',message:'After fetch',data:{ok:response.ok,status:response.status,statusText:response.statusText},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
       
-      // Also filter by sellerId to show only this user's auctions
-      myAuctions = auctions.filter(a => a.sellerId === currentUser.id);
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Failed to load auctions:', response.status, response.statusText, errorText);
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/3c92fc5f-a28e-4692-89ad-7cb9d7bd10c2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'seller/+page.svelte:92',message:'Response not ok',data:{status:response.status,errorText},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
+        myAuctions = [];
+        return;
+      }
+      
+      const auctions = await response.json();
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/3c92fc5f-a28e-4692-89ad-7cb9d7bd10c2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'seller/+page.svelte:98',message:'After JSON parse',data:{auctionsType:typeof auctions,isArray:Array.isArray(auctions),hasError:!!auctions.error,length:auctions?.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
+      console.log('Raw auctions response:', auctions);
+      
+      // Check if response is an error object
+      if (auctions.error) {
+        console.error('API error:', auctions.error);
+        myAuctions = [];
+        return;
+      }
+      
+      // Ensure auctions is an array
+      if (!Array.isArray(auctions)) {
+        console.error('Auctions is not an array:', auctions);
+        myAuctions = [];
+        return;
+      }
+      
+      console.log('Total auctions found:', auctions.length);
+      console.log('Current user ID:', currentUser.id);
+      console.log('Current user role:', currentUser.role);
+      
+      // Show all auctions for the auction house (not just this user's)
+      // This allows users to see all auctions in their auction house
+      myAuctions = auctions;
+      
+      console.log('Displaying auctions:', myAuctions.length);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/3c92fc5f-a28e-4692-89ad-7cb9d7bd10c2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'seller/+page.svelte:123',message:'Before setting myAuctions',data:{myAuctionsLength:myAuctions.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
       
       // Load lot counts for each auction
       for (const auction of myAuctions) {
-        const lotsResponse = await fetch(`/api/lots?auctionId=${auction.id}`);
-        const lots = await lotsResponse.json();
-        auction.totalLots = lots.length;
-        auction.currentBids = lots.reduce((sum, lot) => sum + (lot.bids?.length || 0), 0);
+        try {
+          const lotsResponse = await fetch(`/api/lots?auctionId=${auction.id}`);
+          if (lotsResponse.ok) {
+            const lots = await lotsResponse.json();
+            auction.totalLots = Array.isArray(lots) ? lots.length : 0;
+            auction.currentBids = Array.isArray(lots) ? lots.reduce((sum, lot) => sum + (lot.bids?.length || 0), 0) : 0;
+          }
+        } catch (error) {
+          console.error(`Error loading lots for auction ${auction.id}:`, error);
+          auction.totalLots = 0;
+          auction.currentBids = 0;
+        }
       }
+      
+      console.log('Final myAuctions:', myAuctions);
     } catch (error) {
       console.error('Error loading auctions:', error);
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/3c92fc5f-a28e-4692-89ad-7cb9d7bd10c2',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'seller/+page.svelte:127',message:'Error in loadAuctions',data:{errorMessage:error.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+      // #endregion
+      myAuctions = [];
     }
   }
   

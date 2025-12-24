@@ -173,7 +173,15 @@
 
       <div class="flex items-center justify-between mb-8">
         <div>
-          <h1 class="text-4xl font-bold text-gray-900 mb-2">Manage Lots</h1>
+          <div class="flex items-center justify-between mb-4">
+            <h1 class="text-4xl font-bold text-gray-900">Manage Lots</h1>
+            <a
+              href="/seller/auctions/{auction.id}/lots/advanced"
+              class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700"
+            >
+              Advanced View
+            </a>
+          </div>
           <p class="text-gray-600 text-lg">{auction.title}</p>
         </div>
         <div class="flex gap-3">
