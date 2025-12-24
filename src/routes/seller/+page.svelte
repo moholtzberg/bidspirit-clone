@@ -211,14 +211,22 @@
         <h1 class="text-4xl font-bold text-gray-900">Auction Management</h1>
         <p class="text-gray-600 mt-2">Create and manage your auctions</p>
       </div>
-      {#if currentUser?.auctionHouseId}
-        <button
-          onclick={() => showCreateModal = true}
-          class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
-        >
-          Create New Auction
-        </button>
-      {/if}
+      <div class="flex items-center gap-4">
+        {#if currentUser?.auctionHouseId}
+          <a
+            href="/seller/settings"
+            class="bg-gray-600 text-white px-6 py-3 rounded-lg hover:bg-gray-700 transition-colors font-semibold"
+          >
+            Settings
+          </a>
+          <button
+            onclick={() => showCreateModal = true}
+            class="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+          >
+            Create New Auction
+          </button>
+        {/if}
+      </div>
     </div>
 
     {#if loading}

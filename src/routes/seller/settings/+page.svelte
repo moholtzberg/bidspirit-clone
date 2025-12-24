@@ -1,0 +1,693 @@
+<script>
+  import { onMount } from 'svelte';
+  import { goto } from '$app/navigation';
+
+  let session = $state(null);
+  let currentUser = $state(null);
+  let auctionHouse = $state(null);
+  let loading = $state(true);
+  let saving = $state(false);
+  let errorMessage = $state('');
+  let successMessage = $state('');
+  let activeTab = $state('general');
+  let expandedSections = $state({});
+
+  // Default bid increments
+  const defaultBidIncrements = [
+    { from: 0, increment: 5 },
+    { from: 50, increment: 10 },
+    { from: 200, increment: 20 },
+    { from: 500, increment: 50 },
+    { from: 1000, increment: 100 },
+    { from: 2000, increment: 200 },
+    { from: 5000, increment: 500 },
+    { from: 10000, increment: 1000 },
+    { from: 20000, increment: 2000 },
+    { from: 50000, increment: 5000 },
+    { from: 100000, increment: 10000 },
+    { from: 200000, increment: 20000 },
+    { from: 500000, increment: 50000 },
+    { from: 1000000, increment: 100000 },
+    { from: 2000000, increment: 200000 },
+    { from: 5000000, increment: 500000 },
+    { from: 10000000, increment: 1000000 },
+    { from: 20000000, increment: 2000000 },
+    { from: 50000000, increment: 5000000 },
+    { from: 100000000, increment: 10000000 },
+  ];
+
+  let settings = $state({
+    // Basic Information
+    mainLanguage: '',
+    nameInEnglish: '',
+    addressInEnglish: '',
+    disclaimerInEnglish: '',
+    
+    // Contact Information
+    email: '',
+    phone: '',
+    phoneForWhatsapp: '',
+    
+    // Localization
+    secondLanguage: '',
+    defaultCurrency: 'USD',
+    secondCurrency: '',
+    
+    // Pricing
+    defaultItemStartPrice: null,
+    buyersPremium: 0,
+    addVat: false,
+    
+    // Email Notifications
+    emailOnAbsenteeBid: false,
+    emailOnAbsenteeBidCancel: false,
+    emailToNotifyBidsUpdate: '',
+    
+    // Bidding Rules
+    russianUsersRequireApproval: false,
+    
+    // Payment Methods
+    paymentMethods: [
+      { method: 'Credit card', percentage: 0, vat: false },
+      { method: 'PayPal', percentage: 0, vat: false },
+      { method: 'Bank transfer', percentage: 0, vat: false },
+    ],
+    addPaymentButtonToInvoices: false,
+    
+    // Legal Documents
+    termsOfSaleInEnglish: '',
+    privacyPolicyInEnglish: '',
+    disclaimerForSellersInEnglish: '',
+    
+    // Bid Increments
+    bidIncrements: defaultBidIncrements,
+    
+    // Email Templates
+    emailSignatureInEnglish: '',
+    photoIdRequestEmailTemplateInEnglish: '',
+    bidLimitEmailTemplateInEnglish: '',
+    
+    // Invoice Settings
+    additionalTextForInvoicesInEnglish: '',
+    additionalTextForConsignorStatementsInEnglish: '',
+    taxNumber: '',
+    invoiceProvider: 'None',
+  });
+
+  function toggleSection(section) {
+    expandedSections[section] = !expandedSections[section];
+  }
+
+  onMount(async () => {
+    await loadSession();
+    if (session?.user) {
+      await loadUserData();
+    } else {
+      goto('/auth/login');
+    }
+  });
+
+  async function loadSession() {
+    try {
+      const res = await fetch('/auth/session');
+      const data = await res.json();
+      session = data;
+    } catch (error) {
+      console.error('Error loading session:', error);
+    }
+  }
+
+  async function loadUserData() {
+    try {
+      loading = true;
+      errorMessage = '';
+
+      let userResponse = await fetch(`/api/users?email=${encodeURIComponent(session.user.email)}`);
+      if (!userResponse.ok) {
+        errorMessage = 'User account not found.';
+        loading = false;
+        return;
+      }
+      currentUser = await userResponse.json();
+
+      if (!currentUser.auctionHouseId) {
+        errorMessage = 'You need to register an auction house first.';
+        loading = false;
+        return;
+      }
+
+      const auctionHouseResponse = await fetch(`/api/auction-houses?id=${currentUser.auctionHouseId}`);
+      if (auctionHouseResponse.ok) {
+        auctionHouse = await auctionHouseResponse.json();
+        
+        // Load existing settings
+        const settingsResponse = await fetch(`/api/auction-houses/${auctionHouse.id}/settings`);
+        if (settingsResponse.ok) {
+          const existingSettings = await settingsResponse.json();
+          // Merge with defaults, preserving existing values
+          settings = { ...settings, ...existingSettings };
+          // Ensure bid increments array exists
+          if (!settings.bidIncrements || settings.bidIncrements.length === 0) {
+            settings.bidIncrements = defaultBidIncrements;
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+      errorMessage = 'Error loading your account data. Please try again.';
+    } finally {
+      loading = false;
+    }
+  }
+
+  function addBidIncrement() {
+    settings.bidIncrements = [...settings.bidIncrements, { from: 0, increment: 0 }];
+  }
+
+  function removeBidIncrement(index) {
+    settings.bidIncrements = settings.bidIncrements.filter((_, i) => i !== index);
+  }
+
+  function addPaymentMethod() {
+    settings.paymentMethods = [...settings.paymentMethods, { method: '', percentage: 0, vat: false }];
+  }
+
+  function removePaymentMethod(index) {
+    settings.paymentMethods = settings.paymentMethods.filter((_, i) => i !== index);
+  }
+
+  async function saveSettings() {
+    try {
+      saving = true;
+      errorMessage = '';
+      successMessage = '';
+
+      const response = await fetch(`/api/auction-houses/${auctionHouse.id}/settings`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(settings),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to save settings');
+      }
+
+      successMessage = 'Settings saved successfully!';
+      setTimeout(() => {
+        successMessage = '';
+      }, 3000);
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      errorMessage = error.message || 'Failed to save settings. Please try again.';
+    } finally {
+      saving = false;
+    }
+  }
+</script>
+
+<svelte:head>
+  <title>Auction House Settings</title>
+</svelte:head>
+
+<div class="min-h-screen bg-gray-50 py-6">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    {#if loading}
+      <div class="text-center py-12">
+        <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <p class="mt-4 text-gray-600">Loading settings...</p>
+      </div>
+    {:else if errorMessage && !auctionHouse}
+      <div class="bg-red-50 border border-red-200 rounded-lg p-6 text-center">
+        <p class="text-red-800">{errorMessage}</p>
+        <a href="/auction-houses/signup" class="text-blue-600 hover:underline mt-2 inline-block">
+          Register an auction house
+        </a>
+      </div>
+    {:else}
+      <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+        <!-- Header -->
+        <div class="bg-gradient-to-r from-blue-600 to-blue-700 px-6 py-4">
+          <div class="flex items-center justify-between">
+            <div>
+              <h1 class="text-2xl font-bold text-white">Auction House Settings</h1>
+              {#if auctionHouse}
+                <div class="mt-2 text-blue-100 text-sm">
+                  <span class="font-semibold">{auctionHouse.name}</span>
+                  <span class="mx-2">•</span>
+                  <span class="font-mono bg-blue-800 px-2 py-0.5 rounded">{auctionHouse.slug}</span>
+                </div>
+              {/if}
+            </div>
+            <button
+              onclick={saveSettings}
+              disabled={saving}
+              class="bg-white text-blue-600 px-6 py-2 rounded-lg hover:bg-blue-50 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {saving ? 'Saving...' : 'Save Settings'}
+            </button>
+          </div>
+        </div>
+
+        {#if errorMessage}
+          <div class="bg-red-50 border-l-4 border-red-400 p-4 mx-6 mt-4">
+            <p class="text-red-800 text-sm">{errorMessage}</p>
+          </div>
+        {/if}
+
+        {#if successMessage}
+          <div class="bg-green-50 border-l-4 border-green-400 p-4 mx-6 mt-4">
+            <p class="text-green-800 text-sm">{successMessage}</p>
+          </div>
+        {/if}
+
+        <!-- Tabs -->
+        <div class="border-b border-gray-200">
+          <nav class="flex -mb-px">
+            <button
+              onclick={() => activeTab = 'general'}
+              class="px-6 py-4 text-sm font-medium border-b-2 transition-colors {activeTab === 'general' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+            >
+              General
+            </button>
+            <button
+              onclick={() => activeTab = 'pricing'}
+              class="px-6 py-4 text-sm font-medium border-b-2 transition-colors {activeTab === 'pricing' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+            >
+              Pricing & Payments
+            </button>
+            <button
+              onclick={() => activeTab = 'legal'}
+              class="px-6 py-4 text-sm font-medium border-b-2 transition-colors {activeTab === 'legal' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+            >
+              Legal & Documents
+            </button>
+            <button
+              onclick={() => activeTab = 'email'}
+              class="px-6 py-4 text-sm font-medium border-b-2 transition-colors {activeTab === 'email' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+            >
+              Email & Notifications
+            </button>
+            <button
+              onclick={() => activeTab = 'advanced'}
+              class="px-6 py-4 text-sm font-medium border-b-2 transition-colors {activeTab === 'advanced' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+            >
+              Advanced
+            </button>
+          </nav>
+        </div>
+
+        <!-- Tab Content -->
+        <form onsubmit={(e) => { e.preventDefault(); saveSettings(); }} class="p-6">
+          <!-- General Tab -->
+          {#if activeTab === 'general'}
+            <div class="space-y-4">
+              <!-- Basic Information -->
+              <div class="border border-gray-200 rounded-lg">
+                <button
+                  type="button"
+                  onclick={() => toggleSection('basic')}
+                  class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <span class="font-medium text-gray-900">Basic Information</span>
+                  <svg class="w-5 h-5 text-gray-500 transform transition-transform {expandedSections.basic ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {#if expandedSections.basic}
+                  <div class="p-4 space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Main Language</label>
+                        <input type="text" bind:value={settings.mainLanguage} placeholder="e.g., English" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Name in English</label>
+                        <input type="text" bind:value={settings.nameInEnglish} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Address in English</label>
+                        <textarea bind:value={settings.addressInEnglish} rows="2" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Disclaimer in English</label>
+                        <textarea bind:value={settings.disclaimerInEnglish} rows="2" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                      </div>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Contact Information -->
+              <div class="border border-gray-200 rounded-lg">
+                <button
+                  type="button"
+                  onclick={() => toggleSection('contact')}
+                  class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <span class="font-medium text-gray-900">Contact Information</span>
+                  <svg class="w-5 h-5 text-gray-500 transform transition-transform {expandedSections.contact ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {#if expandedSections.contact}
+                  <div class="p-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <input type="email" bind:value={settings.email} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Phone</label>
+                        <input type="tel" bind:value={settings.phone} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Phone for WhatsApp</label>
+                        <input type="tel" bind:value={settings.phoneForWhatsapp} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                      </div>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Localization -->
+              <div class="border border-gray-200 rounded-lg">
+                <button
+                  type="button"
+                  onclick={() => toggleSection('localization')}
+                  class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <span class="font-medium text-gray-900">Localization</span>
+                  <svg class="w-5 h-5 text-gray-500 transform transition-transform {expandedSections.localization ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {#if expandedSections.localization}
+                  <div class="p-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Second Language</label>
+                        <input type="text" bind:value={settings.secondLanguage} placeholder="e.g., Hebrew" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Default Currency</label>
+                        <input type="text" bind:value={settings.defaultCurrency} placeholder="USD" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Second Currency</label>
+                        <input type="text" bind:value={settings.secondCurrency} placeholder="ILS" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                      </div>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+            </div>
+          {/if}
+
+          <!-- Pricing & Payments Tab -->
+          {#if activeTab === 'pricing'}
+            <div class="space-y-4">
+              <!-- Pricing -->
+              <div class="border border-gray-200 rounded-lg">
+                <button
+                  type="button"
+                  onclick={() => toggleSection('pricing')}
+                  class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <span class="font-medium text-gray-900">Pricing Settings</span>
+                  <svg class="w-5 h-5 text-gray-500 transform transition-transform {expandedSections.pricing ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {#if expandedSections.pricing}
+                  <div class="p-4 space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Default Item Start Price</label>
+                        <input type="number" bind:value={settings.defaultItemStartPrice} step="0.01" min="0" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Buyer's Premium (%)</label>
+                        <input type="number" bind:value={settings.buyersPremium} step="0.01" min="0" max="100" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                      </div>
+                      <div class="md:col-span-2">
+                        <label class="flex items-center">
+                          <input type="checkbox" bind:checked={settings.addVat} class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                          <span class="text-sm font-medium text-gray-700">Add VAT</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Payment Methods -->
+              <div class="border border-gray-200 rounded-lg">
+                <button
+                  type="button"
+                  onclick={() => toggleSection('paymentMethods')}
+                  class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <span class="font-medium text-gray-900">Payment Methods</span>
+                  <svg class="w-5 h-5 text-gray-500 transform transition-transform {expandedSections.paymentMethods ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {#if expandedSections.paymentMethods}
+                  <div class="p-4 space-y-3">
+                    <p class="text-xs text-gray-600 mb-3">Enter additional fees for each payment method. Use the Add button to include additional payment methods.</p>
+                    {#each settings.paymentMethods as paymentMethod, index}
+                      <div class="flex items-center gap-3 p-3 bg-gray-50 rounded-md">
+                        <input type="text" bind:value={paymentMethod.method} placeholder="Payment method name" class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                        <input type="number" bind:value={paymentMethod.percentage} step="0.01" min="0" max="100" placeholder="%" class="w-24 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                        <label class="flex items-center">
+                          <input type="checkbox" bind:checked={paymentMethod.vat} class="mr-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                          <span class="text-xs text-gray-700">VAT</span>
+                        </label>
+                        <button type="button" onclick={() => removePaymentMethod(index)} class="text-red-600 hover:text-red-800 text-sm px-2 py-1">Delete</button>
+                      </div>
+                    {/each}
+                    <button type="button" onclick={addPaymentMethod} class="text-blue-600 hover:text-blue-800 text-sm px-4 py-2 border border-blue-600 rounded-md">
+                      Add Payment Method
+                    </button>
+                    <div class="mt-3">
+                      <label class="flex items-center">
+                        <input type="checkbox" bind:checked={settings.addPaymentButtonToInvoices} class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                        <span class="text-sm font-medium text-gray-700">Add payment button to invoices</span>
+                      </label>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Bid Increments -->
+              <div class="border border-gray-200 rounded-lg">
+                <button
+                  type="button"
+                  onclick={() => toggleSection('bidIncrements')}
+                  class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <span class="font-medium text-gray-900">Bid Increments</span>
+                  <svg class="w-5 h-5 text-gray-500 transform transition-transform {expandedSections.bidIncrements ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {#if expandedSections.bidIncrements}
+                  <div class="p-4">
+                    <div class="overflow-x-auto">
+                      <table class="min-w-full divide-y divide-gray-200 text-sm">
+                        <thead class="bg-gray-50">
+                          <tr>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">From</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Increment</th>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Delete</th>
+                          </tr>
+                        </thead>
+                        <tbody class="bg-white divide-y divide-gray-200">
+                          {#each settings.bidIncrements as increment, index}
+                            <tr>
+                              <td class="px-3 py-2">
+                                <input type="number" bind:value={increment.from} step="0.01" min="0" class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                              </td>
+                              <td class="px-3 py-2">
+                                <input type="number" bind:value={increment.increment} step="0.01" min="0" class="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                              </td>
+                              <td class="px-3 py-2">
+                                <button type="button" onclick={() => removeBidIncrement(index)} class="text-red-600 hover:text-red-800 text-xs">Delete</button>
+                              </td>
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
+                    </div>
+                    <button type="button" onclick={addBidIncrement} class="mt-3 text-blue-600 hover:text-blue-800 text-sm px-4 py-2 border border-blue-600 rounded-md">
+                      Add Increment
+                    </button>
+                  </div>
+                {/if}
+              </div>
+            </div>
+          {/if}
+
+          <!-- Legal & Documents Tab -->
+          {#if activeTab === 'legal'}
+            <div class="space-y-4">
+              <div class="border border-gray-200 rounded-lg">
+                <div class="p-4 space-y-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Terms of Sale in English</label>
+                    <textarea bind:value={settings.termsOfSaleInEnglish} rows="6" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Privacy Policy in English</label>
+                    <textarea bind:value={settings.privacyPolicyInEnglish} rows="6" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                  </div>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Disclaimer for Sellers in English</label>
+                    <textarea bind:value={settings.disclaimerForSellersInEnglish} rows="6" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                  </div>
+                </div>
+              </div>
+            </div>
+          {/if}
+
+          <!-- Email & Notifications Tab -->
+          {#if activeTab === 'email'}
+            <div class="space-y-4">
+              <!-- Email Notifications -->
+              <div class="border border-gray-200 rounded-lg">
+                <button
+                  type="button"
+                  onclick={() => toggleSection('emailNotifications')}
+                  class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <span class="font-medium text-gray-900">Email Notifications</span>
+                  <svg class="w-5 h-5 text-gray-500 transform transition-transform {expandedSections.emailNotifications ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {#if expandedSections.emailNotifications}
+                  <div class="p-4 space-y-3">
+                    <label class="flex items-center">
+                      <input type="checkbox" bind:checked={settings.emailOnAbsenteeBid} class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                      <span class="text-sm text-gray-700">Send email when user places an absentee bid</span>
+                    </label>
+                    <label class="flex items-center">
+                      <input type="checkbox" bind:checked={settings.emailOnAbsenteeBidCancel} class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                      <span class="text-sm text-gray-700">Send email when user cancels absentee bid</span>
+                    </label>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Email to notify bids update</label>
+                      <input type="email" bind:value={settings.emailToNotifyBidsUpdate} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                    </div>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Email Templates -->
+              <div class="border border-gray-200 rounded-lg">
+                <button
+                  type="button"
+                  onclick={() => toggleSection('emailTemplates')}
+                  class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <span class="font-medium text-gray-900">Email Templates</span>
+                  <svg class="w-5 h-5 text-gray-500 transform transition-transform {expandedSections.emailTemplates ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {#if expandedSections.emailTemplates}
+                  <div class="p-4 space-y-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Email Signature in English</label>
+                      <textarea bind:value={settings.emailSignatureInEnglish} rows="4" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Photo ID Request Email Template</label>
+                      <textarea bind:value={settings.photoIdRequestEmailTemplateInEnglish} rows="6" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Bid Limit Email Template</label>
+                      <textarea bind:value={settings.bidLimitEmailTemplateInEnglish} rows="6" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+            </div>
+          {/if}
+
+          <!-- Advanced Tab -->
+          {#if activeTab === 'advanced'}
+            <div class="space-y-4">
+              <!-- Bidding Rules -->
+              <div class="border border-gray-200 rounded-lg">
+                <button
+                  type="button"
+                  onclick={() => toggleSection('biddingRules')}
+                  class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <span class="font-medium text-gray-900">Bidding Rules</span>
+                  <svg class="w-5 h-5 text-gray-500 transform transition-transform {expandedSections.biddingRules ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {#if expandedSections.biddingRules}
+                  <div class="p-4">
+                    <label class="flex items-center">
+                      <input type="checkbox" bind:checked={settings.russianUsersRequireApproval} class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded" />
+                      <span class="text-sm font-medium text-gray-700">Russian users require special bidding approval</span>
+                    </label>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Invoice Settings -->
+              <div class="border border-gray-200 rounded-lg">
+                <button
+                  type="button"
+                  onclick={() => toggleSection('invoiceSettings')}
+                  class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <span class="font-medium text-gray-900">Invoice Settings</span>
+                  <svg class="w-5 h-5 text-gray-500 transform transition-transform {expandedSections.invoiceSettings ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {#if expandedSections.invoiceSettings}
+                  <div class="p-4 space-y-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Additional Text for Invoices in English</label>
+                      <textarea bind:value={settings.additionalTextForInvoicesInEnglish} rows="4" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    </div>
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Additional Text for Consignor Statements in English</label>
+                      <textarea bind:value={settings.additionalTextForConsignorStatementsInEnglish} rows="4" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Tax Number</label>
+                        <input type="text" bind:value={settings.taxNumber} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                      </div>
+                      <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Invoice Provider</label>
+                        <select bind:value={settings.invoiceProvider} class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                          <option value="None">None</option>
+                          <option value="QuickBooks">QuickBooks</option>
+                          <option value="Xero">Xero</option>
+                          <option value="FreshBooks">FreshBooks</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                {/if}
+              </div>
+            </div>
+          {/if}
+        </form>
+      </div>
+    {/if}
+  </div>
+</div>

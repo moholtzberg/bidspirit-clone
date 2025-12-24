@@ -27,7 +27,7 @@
     <div class="container mx-auto px-4 py-4 flex items-center justify-between">
       
         <a href="/" class="flex items-center space-x-2">
-            <span class="text-2xl font-bold text-blue-600">BidSpirit</span>
+            <span class="text-2xl font-bold text-blue-600">Pumbi</span>
             <span class="text-sm text-gray-600 font-medium">Judaica Auctions</span>
         </a>
   
