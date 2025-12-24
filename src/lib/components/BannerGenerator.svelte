@@ -65,6 +65,7 @@
   let showAdvancedSettings = $state(false);
   let presetPreviews = $state({}); // Store preview URLs for each preset
   let generatingPreviews = $state(false);
+  let generatingPresetIds = $state(new Set()); // Track which presets are currently generating
 
   // Available fonts
   const fonts = [
@@ -266,13 +267,22 @@
     };
   }
 
-  // Generate preview for a specific preset
+  // Generate preview for a specific preset (fully async, yields to browser)
   async function generatePresetPreview(preset) {
     if (presetPreviews[preset.id]) {
       return presetPreviews[preset.id]; // Return cached preview
     }
 
+    if (generatingPresetIds.has(preset.id)) {
+      return null; // Already generating
+    }
+
+    generatingPresetIds.add(preset.id);
+
     try {
+      // Yield to browser to prevent blocking
+      await new Promise(resolve => setTimeout(resolve, 0));
+
       const canvas = document.createElement('canvas');
       // Use smaller size for previews
       canvas.width = 400;
@@ -301,8 +311,14 @@
       const originalBannerSettings = bannerSettings;
       bannerSettings = tempSettings;
       
+      // Yield to browser between operations
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      
       // Draw background
       await drawBackground(ctx, canvas.width, canvas.height);
+      
+      // Yield again
+      await new Promise(resolve => requestAnimationFrame(resolve));
       
       // Draw a simple placeholder image if no image is available
       if (!tempSettings.primaryImageUrl && tempSettings.backgroundType !== 'image') {
@@ -330,11 +346,17 @@
         await drawImages(ctx, canvas.width, canvas.height);
       }
       
+      // Yield again
+      await new Promise(resolve => requestAnimationFrame(resolve));
+      
       // Draw text
       drawText(ctx, canvas.width, canvas.height);
       
       // Restore original settings
       bannerSettings = originalBannerSettings;
+      
+      // Final yield before data URL conversion (can be expensive)
+      await new Promise(resolve => setTimeout(resolve, 0));
       
       const previewUrl = canvas.toDataURL('image/png');
       presetPreviews[preset.id] = previewUrl;
@@ -342,6 +364,8 @@
     } catch (error) {
       console.error('Error generating preset preview:', error);
       return null;
+    } finally {
+      generatingPresetIds.delete(preset.id);
     }
   }
 
@@ -366,11 +390,16 @@
     }
   }
 
-  // Generate preview for a single preset on demand
+  // Generate preview for a single preset on demand (non-blocking)
   async function ensurePresetPreview(preset) {
-    if (!presetPreviews[preset.id] && !generatingPreviews) {
-      await generatePresetPreview(preset);
+    if (presetPreviews[preset.id] || generatingPresetIds.has(preset.id)) {
+      return; // Already exists or generating
     }
+    
+    // Start generation asynchronously without blocking
+    generatePresetPreview(preset).catch(err => {
+      console.error('Error generating preview for preset:', preset.id, err);
+    });
   }
 
   // Download preset preview
@@ -388,18 +417,8 @@
     link.click();
   }
 
-  // Generate previews lazily when component is visible
-  let previewsGenerated = $state(false);
-  
-  onMount(() => {
-    // Delay preview generation to allow UI to render first
-    setTimeout(() => {
-      if (!previewsGenerated) {
-        previewsGenerated = true;
-        generateAllPresetPreviews();
-      }
-    }, 100);
-  });
+  // Don't generate all previews on mount - only generate on hover
+  // This prevents the page from hanging when the banner tool is opened
 
   const backgroundTypes = [
     { value: 'solid', label: 'Solid Color' },
@@ -1225,6 +1244,7 @@
               <!-- Preview Image -->
               <div 
                 class="relative w-full aspect-[400/210] bg-gray-100 rounded-t-lg overflow-hidden"
+                role="presentation"
                 onmouseenter={() => ensurePresetPreview(preset)}
               >
                 {#if presetPreviews[preset.id]}
@@ -1233,9 +1253,14 @@
                     alt="{preset.name} preview"
                     class="w-full h-full object-cover"
                   />
-                {:else if generatingPreviews}
-                  <div class="w-full h-full flex items-center justify-center">
-                    <div class="text-gray-400 text-sm">Generating...</div>
+                {:else if generatingPresetIds.has(preset.id)}
+                  <!-- Loading animation -->
+                  <div class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-blue-50">
+                    <div class="relative w-16 h-16 mb-2">
+                      <div class="absolute inset-0 border-4 border-purple-200 rounded-full"></div>
+                      <div class="absolute inset-0 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
+                    </div>
+                    <div class="text-purple-600 text-xs font-medium">Generating...</div>
                   </div>
                 {:else}
                   <div class="w-full h-full flex items-center justify-center bg-gray-100">
