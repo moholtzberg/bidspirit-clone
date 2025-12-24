@@ -19,6 +19,7 @@
   let tagInputs = $state({}); // { lotId: string }
   let draggedLot = $state(null);
   let reordering = $state(false);
+  let expandedImageRows = $state(new Set()); // Track which lots have expanded image management
 
   // Color coding rules for problematic lots
   function getLotStatus(lot) {
@@ -542,6 +543,15 @@
     if (!lot) return;
     showImageModal = { lotId, images: lot._images || [] };
   }
+  
+  function toggleImageRow(lotId) {
+    if (expandedImageRows.has(lotId)) {
+      expandedImageRows.delete(lotId);
+    } else {
+      expandedImageRows.add(lotId);
+    }
+    expandedImageRows = new Set(expandedImageRows); // Trigger reactivity
+  }
 
   async function loadCategoriesAndTags() {
     try {
@@ -697,13 +707,12 @@
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Pos</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Lot #</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Images</th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Title</th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[300px]">Description</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[300px]">Title & Description</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Category</th>
-                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Tags</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Start Bid</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Current Bid</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Increment</th>
+                <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Tags</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Status</th>
                 <th class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">End Time</th>
               </tr>
@@ -712,7 +721,6 @@
               {#each lots as lot, index (lot.id)}
                 <tr 
                   class="{getLotRowClass(lot)} hover:bg-gray-50 transition-colors cursor-move"
-                  role="row"
                   draggable="true"
                   ondragstart={() => handleDragStart(lot)}
                   ondragover={(e) => handleDragOver(e, lot)}
@@ -776,85 +784,104 @@
                   </td>
                   
                   <!-- Images -->
-                  <td class="px-4 py-2 whitespace-nowrap">
-                    <div class="flex items-center gap-1">
-                      {#each (lot._images || []).slice(0, 3) as image, i}
-                        <img
-                          src={image}
-                          alt="Lot image {i + 1}"
-                          class="w-8 h-8 object-cover rounded border border-gray-300 cursor-pointer"
-                          onclick={() => openImageModal(lot.id)}
-                        />
-                      {/each}
-                      {#if (lot._images || []).length > 3}
-                        <div
-                          class="w-8 h-8 bg-gray-200 rounded border border-gray-300 flex items-center justify-center text-xs cursor-pointer"
-                          onclick={() => openImageModal(lot.id)}
-                        >
-                          +{(lot._images || []).length - 3}
+                  <td class="px-4 py-2">
+                    <div class="relative">
+                      <div class="grid grid-cols-2 gap-1 w-20">
+                        {#each (lot._images || []).slice(0, 2) as image, i}
+                          <img
+                            src={image}
+                            alt="Lot image {i + 1}"
+                            class="w-10 h-10 object-cover rounded border border-gray-300 cursor-pointer hover:opacity-75"
+                            onclick={() => toggleImageRow(lot.id)}
+                          />
+                        {/each}
+                        {#if (lot._images || []).length === 0}
+                          <div class="w-10 h-10 bg-gray-100 rounded border border-gray-300 flex items-center justify-center text-xs text-gray-400">
+                            -
+                          </div>
+                        {/if}
+                      </div>
+                      {#if (lot._images || []).length > 4}
+                        <div class="absolute top-0 right-0 w-10 h-10 bg-gray-800 bg-opacity-75 rounded border border-gray-300 flex items-center justify-center text-xs text-white cursor-pointer hover:bg-opacity-90 group">
+                          +{(lot._images || []).length - 4}
+                          <!-- Hover tooltip showing additional images -->
+                          <div class="absolute bottom-full right-0 mb-2 hidden group-hover:block z-50">
+                            <div class="bg-white rounded-lg shadow-xl border border-gray-200 p-2 max-w-xs">
+                              <div class="grid grid-cols-4 gap-1">
+                                {#each (lot._images || []).slice(4) as image, i}
+                                  <img
+                                    src={image}
+                                    alt="Lot image {i + 5}"
+                                    class="w-12 h-12 object-cover rounded border border-gray-300"
+                                  />
+                                {/each}
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       {/if}
-                      <label class="ml-1 cursor-pointer">
-                        <input
-                          type="file"
-                          multiple
-                          accept="image/*"
-                          onchange={(e) => handleImageUpload(lot.id, e)}
-                          class="hidden"
-                        />
-                        <span class="text-blue-600 hover:text-blue-800 text-xs">+</span>
-                      </label>
+                      <button
+                        onclick={() => toggleImageRow(lot.id)}
+                        class="mt-1 text-xs text-blue-600 hover:text-blue-800 underline"
+                        title="Manage images"
+                      >
+                        
+                      </button>
                     </div>
                   </td>
                   
-                  <!-- Title -->
+                  <!-- Title & Description -->
                   <td class="px-4 py-2">
-                    {#if editingCell?.lotId === lot.id && editingCell?.field === 'title'}
-                      <input
-                        type="text"
-                        bind:value={editingCell.value}
-                        onblur={() => saveCell(lot.id, 'title', editingCell.value)}
-                        onkeydown={(e) => handleKeydown(e, lot.id, 'title', editingCell.value)}
-                        class="w-full px-2 py-1 text-sm border-2 border-blue-500 rounded focus:outline-none"
-                        autofocus
-                      />
-                    {:else}
-                      <span
-                        ondblclick={() => startEdit(lot.id, 'title', lot.title)}
-                        class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded block"
-                      >
-                        {#if lot.title}
-                          {lot.title}
+                    <div class="space-y-1">
+                      <!-- Title -->
+                      <div>
+                        {#if editingCell?.lotId === lot.id && editingCell?.field === 'title'}
+                          <input
+                            type="text"
+                            bind:value={editingCell.value}
+                            onblur={() => saveCell(lot.id, 'title', editingCell.value)}
+                            onkeydown={(e) => handleKeydown(e, lot.id, 'title', editingCell.value)}
+                            class="w-full px-2 py-1 text-sm border-2 border-blue-500 rounded focus:outline-none"
+                            autofocus
+                          />
                         {:else}
-                          <span class="text-gray-400 italic">Double-click to edit</span>
+                          <span
+                            ondblclick={() => startEdit(lot.id, 'title', lot.title)}
+                            class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded block font-medium"
+                          >
+                            {#if lot.title}
+                              {lot.title}
+                            {:else}
+                              <span class="text-gray-400 italic">Double-click to edit title</span>
+                            {/if}
+                          </span>
                         {/if}
-                      </span>
-                    {/if}
-                  </td>
-                  
-                  <!-- Description -->
-                  <td class="px-4 py-2">
-                    {#if editingCell?.lotId === lot.id && editingCell?.field === 'description'}
-                      <textarea
-                        bind:value={editingCell.value}
-                        onblur={() => saveCell(lot.id, 'description', editingCell.value)}
-                        onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
-                        class="w-full px-2 py-1 text-sm border-2 border-blue-500 rounded focus:outline-none"
-                        rows="2"
-                        autofocus
-                      ></textarea>
-                    {:else}
-                      <span
-                        ondblclick={() => startEdit(lot.id, 'description', lot.description)}
-                        class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded block text-sm"
-                      >
-                        {#if lot.description}
-                          {lot.description}
+                      </div>
+                      <!-- Description -->
+                      <div>
+                        {#if editingCell?.lotId === lot.id && editingCell?.field === 'description'}
+                          <textarea
+                            bind:value={editingCell.value}
+                            onblur={() => saveCell(lot.id, 'description', editingCell.value)}
+                            onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
+                            class="w-full px-2 py-1 text-xs border-2 border-blue-500 rounded focus:outline-none"
+                            rows="2"
+                            autofocus
+                          ></textarea>
                         {:else}
-                          <span class="text-gray-400 italic">Double-click to edit</span>
+                          <span
+                            ondblclick={() => startEdit(lot.id, 'description', lot.description)}
+                            class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded block text-xs text-gray-500"
+                          >
+                            {#if lot.description}
+                              {lot.description}
+                            {:else}
+                              <span class="text-gray-400 italic">Double-click to edit description</span>
+                            {/if}
+                          </span>
                         {/if}
-                      </span>
-                    {/if}
+                      </div>
+                    </div>
                   </td>
                   
                   <!-- Category -->
@@ -918,6 +945,57 @@
                         {:else}
                           <span class="text-gray-400 italic">-</span>
                         {/if}
+                      </span>
+                    {/if}
+                  </td>
+                  
+                  <!-- Starting Bid -->
+                  <td class="px-4 py-2 whitespace-nowrap">
+                    {#if editingCell?.lotId === lot.id && editingCell?.field === 'startingBid'}
+                      <input
+                        type="number"
+                        step="0.01"
+                        bind:value={editingCell.value}
+                        onblur={() => saveCell(lot.id, 'startingBid', editingCell.value)}
+                        onkeydown={(e) => handleKeydown(e, lot.id, 'startingBid', editingCell.value)}
+                        class="w-full px-2 py-1 text-sm border-2 border-blue-500 rounded focus:outline-none"
+                        autofocus
+                      />
+                    {:else}
+                      <span
+                        ondblclick={() => startEdit(lot.id, 'startingBid', lot.startingBid)}
+                        class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded"
+                      >
+                        ${lot.startingBid?.toFixed(2) || '0.00'}
+                      </span>
+                    {/if}
+                  </td>
+                  
+                  <!-- Current Bid -->
+                  <td class="px-4 py-2 whitespace-nowrap">
+                    <span class="px-2 py-1 rounded font-semibold">
+                      ${lot.currentBid?.toFixed(2) || '0.00'}
+                    </span>
+                  </td>
+                  
+                  <!-- Bid Increment -->
+                  <td class="px-4 py-2 whitespace-nowrap">
+                    {#if editingCell?.lotId === lot.id && editingCell?.field === 'bidIncrement'}
+                      <input
+                        type="number"
+                        step="0.01"
+                        bind:value={editingCell.value}
+                        onblur={() => saveCell(lot.id, 'bidIncrement', editingCell.value)}
+                        onkeydown={(e) => handleKeydown(e, lot.id, 'bidIncrement', editingCell.value)}
+                        class="w-full px-2 py-1 text-sm border-2 border-blue-500 rounded focus:outline-none"
+                        autofocus
+                      />
+                    {:else}
+                      <span
+                        ondblclick={() => startEdit(lot.id, 'bidIncrement', lot.bidIncrement)}
+                        class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded"
+                      >
+                        ${lot.bidIncrement?.toFixed(2) || '0.00'}
                       </span>
                     {/if}
                   </td>
@@ -1040,57 +1118,6 @@
                     {/if}
                   </td>
                   
-                  <!-- Starting Bid -->
-                  <td class="px-4 py-2 whitespace-nowrap">
-                    {#if editingCell?.lotId === lot.id && editingCell?.field === 'startingBid'}
-                      <input
-                        type="number"
-                        step="0.01"
-                        bind:value={editingCell.value}
-                        onblur={() => saveCell(lot.id, 'startingBid', editingCell.value)}
-                        onkeydown={(e) => handleKeydown(e, lot.id, 'startingBid', editingCell.value)}
-                        class="w-full px-2 py-1 text-sm border-2 border-blue-500 rounded focus:outline-none"
-                        autofocus
-                      />
-                    {:else}
-                      <span
-                        ondblclick={() => startEdit(lot.id, 'startingBid', lot.startingBid)}
-                        class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded"
-                      >
-                        ${lot.startingBid?.toFixed(2) || '0.00'}
-                      </span>
-                    {/if}
-                  </td>
-                  
-                  <!-- Current Bid -->
-                  <td class="px-4 py-2 whitespace-nowrap">
-                    <span class="px-2 py-1 rounded font-semibold">
-                      ${lot.currentBid?.toFixed(2) || '0.00'}
-                    </span>
-                  </td>
-                  
-                  <!-- Bid Increment -->
-                  <td class="px-4 py-2 whitespace-nowrap">
-                    {#if editingCell?.lotId === lot.id && editingCell?.field === 'bidIncrement'}
-                      <input
-                        type="number"
-                        step="0.01"
-                        bind:value={editingCell.value}
-                        onblur={() => saveCell(lot.id, 'bidIncrement', editingCell.value)}
-                        onkeydown={(e) => handleKeydown(e, lot.id, 'bidIncrement', editingCell.value)}
-                        class="w-full px-2 py-1 text-sm border-2 border-blue-500 rounded focus:outline-none"
-                        autofocus
-                      />
-                    {:else}
-                      <span
-                        ondblclick={() => startEdit(lot.id, 'bidIncrement', lot.bidIncrement)}
-                        class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded"
-                      >
-                        ${lot.bidIncrement?.toFixed(2) || '0.00'}
-                      </span>
-                    {/if}
-                  </td>
-                  
                   <!-- Status -->
                   <td class="px-4 py-2 whitespace-nowrap">
                     {#if editingCell?.lotId === lot.id && editingCell?.field === 'status'}
@@ -1144,6 +1171,73 @@
                     {/if}
                   </td>
                 </tr>
+                
+                <!-- Expandable Image Management Row -->
+                {#if expandedImageRows.has(lot.id)}
+                  <tr class="bg-gray-50">
+                    <td colspan="12" class="px-4 py-4">
+                      <div class="bg-white rounded-lg border border-gray-200 p-4">
+                        <div class="flex items-center justify-between mb-4">
+                          <h3 class="text-lg font-semibold text-gray-900">Image Management - Lot #{lot.lotNumber}</h3>
+                          <button
+                            onclick={() => toggleImageRow(lot.id)}
+                            class="text-gray-500 hover:text-gray-700 text-sm"
+                          >
+                            Collapse
+                          </button>
+                        </div>
+                        
+                        <!-- Current Images Grid -->
+                        {#if (lot._images || []).length > 0}
+                          <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 mb-4">
+                            {#each (lot._images || []) as image, index}
+                              {@const imageObj = lot.images?.[index] || (typeof image === 'string' ? { url: image } : image)}
+                              {@const imageId = imageObj.id || null}
+                              <div class="relative group">
+                                <img 
+                                  src={imageObj.url || image} 
+                                  alt="Image {index + 1}" 
+                                  class="w-full h-24 object-cover rounded border border-gray-300"
+                                />
+                                {#if imageId}
+                                  <button
+                                    onclick={() => removeImage(lot.id, imageId)}
+                                    class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Delete image"
+                                  >
+                                    ×
+                                  </button>
+                                {/if}
+                                <div class="absolute bottom-1 left-1 bg-black bg-opacity-50 text-white text-xs px-1 rounded">
+                                  {index + 1}
+                                </div>
+                              </div>
+                            {/each}
+                          </div>
+                        {:else}
+                          <div class="text-center py-8 text-gray-400">
+                            <p>No images uploaded yet</p>
+                          </div>
+                        {/if}
+                        
+                        <!-- Upload New Images -->
+                        <div class="border-t border-gray-200 pt-4">
+                          <label class="block mb-2">
+                            <span class="text-sm font-medium text-gray-700">Add Images</span>
+                            <input
+                              type="file"
+                              multiple
+                              accept="image/*"
+                              onchange={(e) => handleImageUpload(lot.id, e)}
+                              class="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                            />
+                          </label>
+                          <p class="text-xs text-gray-500 mt-1">Select multiple images to upload</p>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                {/if}
               {/each}
             </tbody>
           </table>
