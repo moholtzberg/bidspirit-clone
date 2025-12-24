@@ -15,6 +15,7 @@
     description: '',
     category: '',
     tags: [],
+    metaFields: {},
     startingBid: 0,
     bidIncrement: 100,
     imageUrl: '',
@@ -23,6 +24,9 @@
     endTime: ''
   });
   
+  let categoryMetaFieldsConfig = $state({});
+  let auctionHouseId = $state(null);
+  
   let availableCategories = $state([]);
   let availableTags = $state([]);
   let categoryInput = $state('');
@@ -30,10 +34,20 @@
   let showCategoryDropdown = $state(false);
   let showTagDropdown = $state(false);
   
-  $effect(() => {
+  let currentAuctionId = $state(null);
+  
+  onMount(() => {
     if ($page.params.id) {
+      currentAuctionId = $page.params.id;
       loadData();
-      loadCategoriesAndTags();
+    }
+  });
+  
+  // Only reload if the auction ID actually changes
+  $effect(() => {
+    if ($page.params.id && $page.params.id !== currentAuctionId) {
+      currentAuctionId = $page.params.id;
+      loadData();
     }
   });
   
@@ -57,6 +71,26 @@
     }
   }
   
+  async function loadCategoryMetaFieldsConfig() {
+    try {
+      if (!auctionHouseId) return;
+      const res = await fetch(`/api/auction-houses/${auctionHouseId}/settings`);
+      if (res.ok) {
+        const settings = await res.json();
+        categoryMetaFieldsConfig = settings.categoryMetaFields || {};
+      }
+    } catch (error) {
+      console.error('Error loading category meta fields config:', error);
+    }
+  }
+  
+  function getMetaFieldsForCategory(category) {
+    if (!category || !categoryMetaFieldsConfig[category]) {
+      return [];
+    }
+    return categoryMetaFieldsConfig[category];
+  }
+  
   async function loadData() {
     try {
       loading = true;
@@ -67,6 +101,7 @@
       
       auction = await auctionRes.json();
       lots = await lotsRes.json();
+      auctionHouseId = auction?.auctionHouseId;
       
       // Set default lot number
       if (lots.length > 0) {
@@ -75,6 +110,9 @@
       
       // Load categories and tags after auction is loaded
       await loadCategoriesAndTags();
+      
+      // Load category meta fields configuration
+      await loadCategoryMetaFieldsConfig();
       
       // Set default end time to auction end time
       if (auction && !newLot.endTime) {
@@ -159,7 +197,8 @@
           currentBid: newLot.startingBid,
           highestBidderId: null,
           highestBidderName: null,
-          tags: newLot.tags.length > 0 ? JSON.stringify(newLot.tags) : null,
+          tags: newLot.tags.length > 0 ? newLot.tags : null,
+          metaFields: Object.keys(newLot.metaFields || {}).length > 0 ? newLot.metaFields : null,
           images
         })
       });
@@ -183,6 +222,7 @@
           description: '',
           category: '',
           tags: [],
+          metaFields: {},
           startingBid: 0,
           bidIncrement: 100,
           imageUrl: '',
@@ -569,6 +609,77 @@
                 {/if}
               </div>
             </div>
+            
+            <!-- Category Meta Fields -->
+            {#if newLot.category && getMetaFieldsForCategory(newLot.category).length > 0}
+              <div class="border-t border-gray-200 pt-4 mt-4">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Category-Specific Fields</h3>
+                <div class="space-y-4">
+                  {#each getMetaFieldsForCategory(newLot.category) as field}
+                    <div>
+                      <label for="meta_{field.key}" class="block text-sm font-medium text-gray-700 mb-2">
+                        {field.label}
+                        {#if field.required}
+                          <span class="text-red-500">*</span>
+                        {/if}
+                      </label>
+                      {#if field.type === 'text'}
+                        <input
+                          id="meta_{field.key}"
+                          type="text"
+                          bind:value={newLot.metaFields[field.key]}
+                          required={field.required}
+                          placeholder={field.placeholder || ''}
+                          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      {:else if field.type === 'number'}
+                        <input
+                          id="meta_{field.key}"
+                          type="number"
+                          bind:value={newLot.metaFields[field.key]}
+                          required={field.required}
+                          placeholder={field.placeholder || ''}
+                          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      {:else if field.type === 'date'}
+                        <input
+                          id="meta_{field.key}"
+                          type="date"
+                          bind:value={newLot.metaFields[field.key]}
+                          required={field.required}
+                          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      {:else if field.type === 'boolean'}
+                        <label class="flex items-center">
+                          <input
+                            id="meta_{field.key}"
+                            type="checkbox"
+                            bind:checked={newLot.metaFields[field.key]}
+                            class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                          />
+                          <span class="text-sm text-gray-700">Yes</span>
+                        </label>
+                      {:else if field.type === 'select'}
+                        <select
+                          id="meta_{field.key}"
+                          bind:value={newLot.metaFields[field.key]}
+                          required={field.required}
+                          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="">Select {field.label}</option>
+                          {#each field.options || [] as option}
+                            <option value={option}>{option}</option>
+                          {/each}
+                        </select>
+                      {/if}
+                      {#if field.helpText}
+                        <p class="mt-1 text-xs text-gray-500">{field.helpText}</p>
+                      {/if}
+                    </div>
+                  {/each}
+                </div>
+              </div>
+            {/if}
 
             <div class="grid grid-cols-2 gap-4">
               <div>

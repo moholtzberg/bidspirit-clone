@@ -11,6 +11,14 @@ const lotSchema = z.object({
   description: z.string().nullable().optional(),
   hebrewDescription: z.string().nullable().optional(),
   category: z.string().nullable().optional(),
+  tags: z.union([
+    z.string().nullable(),
+    z.array(z.string()).nullable()
+  ]).optional(),
+  metaFields: z.union([
+    z.string().nullable(),
+    z.record(z.any()).nullable()
+  ]).optional(),
   startingBid: z.number().nonnegative('Starting bid must be non-negative'),
   currentBid: z.number().nonnegative('Current bid must be non-negative').default(0),
   bidIncrement: z.number().positive('Bid increment must be positive'),
@@ -99,13 +107,44 @@ export class Lot extends BaseModel {
     }
   }
 
-  // Override prepareDataForSave to handle imageUrls
+  // Override prepareDataForSave to handle imageUrls and tags
   prepareDataForSave(isCreate = false) {
     const data = super.prepareDataForSave(isCreate);
     
     // Convert imageUrls array to JSON string if it's an array
     if (data.imageUrls && Array.isArray(data.imageUrls)) {
       data.imageUrls = JSON.stringify(data.imageUrls);
+    }
+    
+    // Convert tags array to JSON string if it's an array
+    if (data.tags !== undefined) {
+      if (Array.isArray(data.tags)) {
+        data.tags = data.tags.length > 0 ? JSON.stringify(data.tags) : null;
+      } else if (typeof data.tags === 'string') {
+        // If it's already a JSON string, try to parse and re-stringify to validate
+        // Or just keep it as is if it's already valid JSON
+        if (data.tags.trim() === '' || data.tags === 'null') {
+          data.tags = null;
+        }
+        // Otherwise keep the string as is (it's already JSON stringified)
+      } else if (data.tags === '' || data.tags === null) {
+        data.tags = null;
+      }
+    }
+    
+    // Convert metaFields object to JSON string if it's an object
+    if (data.metaFields !== undefined) {
+      if (typeof data.metaFields === 'object' && data.metaFields !== null) {
+        data.metaFields = JSON.stringify(data.metaFields);
+      } else if (typeof data.metaFields === 'string') {
+        // If it's already a JSON string, validate it
+        if (data.metaFields.trim() === '' || data.metaFields === 'null') {
+          data.metaFields = null;
+        }
+        // Otherwise keep the string as is
+      } else if (data.metaFields === '' || data.metaFields === null) {
+        data.metaFields = null;
+      }
     }
     
     return data;
@@ -116,7 +155,7 @@ export class Lot extends BaseModel {
     // Skip number generation - Lot uses lotNumber field
   }
 
-  // Override serializeForJson to parse imageUrls back to array
+  // Override serializeForJson to parse imageUrls and tags back to array
   serializeForJson() {
     const serialized = super.serializeForJson();
     
@@ -124,6 +163,24 @@ export class Lot extends BaseModel {
     if (serialized.imageUrls && typeof serialized.imageUrls === 'string') {
       try {
         serialized.imageUrls = JSON.parse(serialized.imageUrls);
+      } catch (e) {
+        // If parsing fails, keep as string
+      }
+    }
+    
+    // Parse tags JSON string back to array if it exists
+    if (serialized.tags && typeof serialized.tags === 'string') {
+      try {
+        serialized.tags = JSON.parse(serialized.tags);
+      } catch (e) {
+        // If parsing fails, keep as string
+      }
+    }
+    
+    // Parse metaFields JSON string back to object if it exists
+    if (serialized.metaFields && typeof serialized.metaFields === 'string') {
+      try {
+        serialized.metaFields = JSON.parse(serialized.metaFields);
       } catch (e) {
         // If parsing fails, keep as string
       }

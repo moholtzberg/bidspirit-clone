@@ -93,6 +93,17 @@ export const auctionHouseSettingsSchema = z.object({
   
   // Email Templates
   emailSignatureInEnglish: z.string().optional().nullable(),
+  
+  // Category Meta Fields Configuration
+  categoryMetaFields: z.record(z.array(z.object({
+    key: z.string(),
+    label: z.string(),
+    type: z.enum(['text', 'number', 'date', 'boolean', 'select']),
+    required: z.boolean().default(false),
+    options: z.array(z.string()).optional(), // For select type
+    placeholder: z.string().optional(),
+    helpText: z.string().optional()
+  }))).optional().default({}),
   photoIdRequestEmailTemplateInEnglish: z.string().optional().nullable(),
   bidLimitEmailTemplateInEnglish: z.string().optional().nullable(),
   

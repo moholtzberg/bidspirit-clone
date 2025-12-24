@@ -39,7 +39,9 @@ export async function POST({ request }) {
       // (empty strings will be converted to null by the schema)
       endTime: lotData.endTime && lotData.endTime.trim() !== '' ? lotData.endTime : null,
       // Ensure currentBid is set if not provided
-      currentBid: lotData.currentBid !== undefined ? lotData.currentBid : (lotData.startingBid || 0)
+      currentBid: lotData.currentBid !== undefined ? lotData.currentBid : (lotData.startingBid || 0),
+      // Handle tags - if it's already a JSON string, keep it; if array, pass it through (model will stringify)
+      tags: lotData.tags !== undefined ? lotData.tags : null
     };
     
     // Use Lot model for validation and creation

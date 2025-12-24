@@ -80,6 +80,7 @@ function mapLot(prismaLot) {
     hebrewDescription: prismaLot.hebrewDescription,
     category: prismaLot.category,
     tags: prismaLot.tags,
+    metaFields: prismaLot.metaFields,
     startingBid: prismaLot.startingBid,
     currentBid: prismaLot.currentBid,
     bidIncrement: prismaLot.bidIncrement,

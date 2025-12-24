@@ -94,8 +94,19 @@
     }
   }
 
-  $effect(() => {
+  let currentAuctionId = $state(null);
+  
+  onMount(() => {
     if ($page.params.id) {
+      currentAuctionId = $page.params.id;
+      loadData();
+    }
+  });
+  
+  // Only reload if the auction ID actually changes
+  $effect(() => {
+    if ($page.params.id && $page.params.id !== currentAuctionId) {
+      currentAuctionId = $page.params.id;
       loadData();
     }
   });
@@ -166,10 +177,30 @@
         updateValue = parseInt(value) || 1;
       } else if (field === 'endTime') {
         updateValue = value || null;
+      } else if (field === 'tags') {
+        // Tags come as JSON string from editingCell, parse to array for API
+        if (typeof value === 'string') {
+          try {
+            updateValue = JSON.parse(value);
+            // Also update the local _tags array
+            lot._tags = updateValue || [];
+          } catch {
+            updateValue = null;
+            lot._tags = [];
+          }
+        } else if (Array.isArray(value)) {
+          updateValue = value;
+          lot._tags = value;
+        } else {
+          updateValue = null;
+          lot._tags = [];
+        }
       }
 
       // Update local state immediately
-      lot[field] = updateValue;
+      if (field !== 'tags') {
+        lot[field] = updateValue;
+      }
 
       // Check if this is a new lot that needs to be created
       const isNewLot = lot._isNew || lotId.startsWith('new-');
@@ -182,7 +213,7 @@
           title: lot.title || '',
           description: lot.description || '',
           category: lot.category || '',
-          tags: lot._tags && lot._tags.length > 0 ? JSON.stringify(lot._tags) : null,
+          tags: lot._tags && lot._tags.length > 0 ? lot._tags : null,
           startingBid: lot.startingBid || 0,
           bidIncrement: lot.bidIncrement || 100,
           currentBid: lot.currentBid || 0,
@@ -282,10 +313,55 @@
     if (!lot) return;
 
     try {
+      // Check if this is a new lot that needs to be created first
+      const isNewLot = lot._isNew || lotId.startsWith('new-');
+      let actualLotId = lotId;
+      
+      if (isNewLot) {
+        // Create the lot first
+        const lotData = {
+          auctionId: $page.params.id,
+          lotNumber: lot.lotNumber || 1,
+          title: lot.title || '',
+          description: lot.description || '',
+          category: lot.category || '',
+          tags: lot._tags && lot._tags.length > 0 ? lot._tags : null,
+          startingBid: lot.startingBid || 0,
+          bidIncrement: lot.bidIncrement || 100,
+          currentBid: lot.currentBid || 0,
+          status: lot.status || 'ACTIVE',
+          endTime: lot.endTime || null,
+          imageUrl: lot.imageUrl || null,
+          imageUrls: lot.imageUrls || null
+        };
+
+        const createResponse = await fetch('/api/lots', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(lotData)
+        });
+
+        if (!createResponse.ok) {
+          const error = await createResponse.json();
+          throw new Error(error.error || 'Failed to create lot');
+        }
+
+        const created = await createResponse.json();
+        actualLotId = created.id;
+        
+        // Update local lot with server response
+        const index = lots.findIndex(l => l.id === lotId);
+        if (index !== -1) {
+          lots[index] = { ...created, _images: getLotImages(created), _tags: created.tags ? (typeof created.tags === 'string' ? JSON.parse(created.tags) : created.tags) : [] };
+        }
+      }
+
       // Upload files to cloud storage
       const formData = new FormData();
       files.forEach(file => formData.append('files', file));
-      formData.append('lotId', lotId);
+      formData.append('lotId', actualLotId);
 
       const uploadResponse = await fetch('/api/upload/image', {
         method: 'POST',
@@ -299,7 +375,7 @@
       const { images: uploadedImages } = await uploadResponse.json();
       
       // Create image records in database
-      const imageResponse = await fetch(`/api/lots/${lotId}/images`, {
+      const imageResponse = await fetch(`/api/lots/${actualLotId}/images`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'

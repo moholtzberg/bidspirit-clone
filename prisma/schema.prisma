@@ -103,6 +103,7 @@ model Lot {
   hebrewDescription String?   @map("hebrew_description")
   category          String?
   tags              String?    // JSON array of tags
+  metaFields        String?    @map("meta_fields") // JSON object for category-specific metadata
   startingBid       Float      @map("starting_bid")
   currentBid        Float      @default(0) @map("current_bid")
   bidIncrement      Float      @map("bid_increment")

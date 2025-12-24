@@ -92,10 +92,60 @@
     additionalTextForConsignorStatementsInEnglish: '',
     taxNumber: '',
     invoiceProvider: 'None',
+    categoryMetaFields: {}
   });
+  
+  let editingCategory = $state(null);
+  let newCategoryName = $state('');
+  let availableCategories = $state([]);
 
   function toggleSection(section) {
     expandedSections[section] = !expandedSections[section];
+  }
+  
+  async function loadAvailableCategories() {
+    try {
+      if (!auctionHouse?.id) return;
+      const res = await fetch(`/api/categories?auctionHouseId=${auctionHouse.id}`);
+      if (res.ok) {
+        availableCategories = await res.json();
+      }
+    } catch (error) {
+      console.error('Error loading categories:', error);
+    }
+  }
+  
+  function addMetaField(category) {
+    if (!settings.categoryMetaFields[category]) {
+      settings.categoryMetaFields[category] = [];
+    }
+    settings.categoryMetaFields[category].push({
+      key: `field_${Date.now()}`,
+      label: '',
+      type: 'text',
+      required: false,
+      options: [],
+      placeholder: '',
+      helpText: ''
+    });
+  }
+  
+  function removeMetaField(category, index) {
+    settings.categoryMetaFields[category].splice(index, 1);
+    if (settings.categoryMetaFields[category].length === 0) {
+      delete settings.categoryMetaFields[category];
+    }
+  }
+  
+  function addCategory() {
+    if (newCategoryName.trim() && !settings.categoryMetaFields[newCategoryName.trim()]) {
+      settings.categoryMetaFields[newCategoryName.trim()] = [];
+      newCategoryName = '';
+    }
+  }
+  
+  function removeCategory(category) {
+    delete settings.categoryMetaFields[category];
   }
 
   onMount(async () => {
@@ -146,6 +196,10 @@
           const existingSettings = await settingsResponse.json();
           // Merge with defaults, preserving existing values
           settings = { ...settings, ...existingSettings };
+          if (!settings.categoryMetaFields) {
+            settings.categoryMetaFields = {};
+          }
+          await loadAvailableCategories();
           // Ensure bid increments array exists
           if (!settings.bidIncrements || settings.bidIncrements.length === 0) {
             settings.bidIncrements = defaultBidIncrements;
@@ -266,11 +320,17 @@
         <!-- Tabs -->
         <div class="border-b border-gray-200">
           <nav class="flex -mb-px">
-            <button
+              <button
               onclick={() => activeTab = 'general'}
               class="px-6 py-4 text-sm font-medium border-b-2 transition-colors {activeTab === 'general' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
             >
               General
+            </button>
+            <button
+              onclick={() => activeTab = 'metaFields'}
+              class="px-6 py-4 text-sm font-medium border-b-2 transition-colors {activeTab === 'metaFields' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+            >
+              Category Meta Fields
             </button>
             <button
               onclick={() => activeTab = 'pricing'}
@@ -685,6 +745,147 @@
                 {/if}
               </div>
             </div>
+            
+            <!-- Category Meta Fields Tab -->
+            {#if activeTab === 'metaFields'}
+              <div class="p-6 space-y-6">
+                <div class="mb-6">
+                  <h2 class="text-xl font-bold text-gray-900 mb-2">Category Meta Fields Configuration</h2>
+                  <p class="text-sm text-gray-600">Define custom fields for different categories. These fields will appear when creating or editing lots in the specified category.</p>
+                </div>
+                
+                <!-- Add New Category -->
+                <div class="bg-gray-50 p-4 rounded-lg mb-6">
+                  <div class="flex gap-2">
+                    <input
+                      type="text"
+                      bind:value={newCategoryName}
+                      placeholder="Enter category name (e.g., Books, Art, Jewelry)"
+                      class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      onkeydown={(e) => { if (e.key === 'Enter') addCategory(); }}
+                    />
+                    <button
+                      onclick={addCategory}
+                      class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+                    >
+                      Add Category
+                    </button>
+                  </div>
+                </div>
+                
+                <!-- Configured Categories -->
+                {#each Object.entries(settings.categoryMetaFields || {}) as [category, fields]}
+                  <div class="border border-gray-200 rounded-lg p-4 mb-4">
+                    <div class="flex items-center justify-between mb-4">
+                      <h3 class="text-lg font-semibold text-gray-900">{category}</h3>
+                      <button
+                        onclick={() => removeCategory(category)}
+                        class="text-red-600 hover:text-red-800 text-sm font-medium"
+                      >
+                        Remove Category
+                      </button>
+                    </div>
+                    
+                    {#each fields as field, index}
+                      <div class="bg-white border border-gray-200 rounded-lg p-4 mb-3">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                          <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Field Label</label>
+                            <input
+                              type="text"
+                              bind:value={field.label}
+                              placeholder="e.g., Author, Year Printed"
+                              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                          </div>
+                          <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Field Type</label>
+                            <select
+                              bind:value={field.type}
+                              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            >
+                              <option value="text">Text</option>
+                              <option value="number">Number</option>
+                              <option value="date">Date</option>
+                              <option value="boolean">Yes/No</option>
+                              <option value="select">Dropdown</option>
+                            </select>
+                          </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+                          <div>
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Placeholder</label>
+                            <input
+                              type="text"
+                              bind:value={field.placeholder}
+                              placeholder="Optional placeholder text"
+                              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                          </div>
+                          <div class="flex items-center">
+                            <label class="flex items-center">
+                              <input
+                                type="checkbox"
+                                bind:checked={field.required}
+                                class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                              />
+                              <span class="text-xs font-medium text-gray-700">Required field</span>
+                            </label>
+                          </div>
+                        </div>
+                        
+                        {#if field.type === 'select'}
+                          <div class="mb-3">
+                            <label class="block text-xs font-medium text-gray-700 mb-1">Options (one per line)</label>
+                            <textarea
+                              value={field.options?.join('\n') || ''}
+                              oninput={(e) => {
+                                field.options = e.target.value.split('\n').filter(o => o.trim());
+                              }}
+                              placeholder="Option 1&#10;Option 2&#10;Option 3"
+                              rows="3"
+                              class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            ></textarea>
+                          </div>
+                        {/if}
+                        
+                        <div class="mb-3">
+                          <label class="block text-xs font-medium text-gray-700 mb-1">Help Text (optional)</label>
+                          <input
+                            type="text"
+                            bind:value={field.helpText}
+                            placeholder="Additional information for users"
+                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          />
+                        </div>
+                        
+                        <button
+                          onclick={() => removeMetaField(category, index)}
+                          class="text-red-600 hover:text-red-800 text-xs font-medium"
+                        >
+                          Remove Field
+                        </button>
+                      </div>
+                    {/each}
+                    
+                    <button
+                      onclick={() => addMetaField(category)}
+                      class="w-full mt-2 px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200 transition-colors"
+                    >
+                      + Add Field
+                    </button>
+                  </div>
+                {/each}
+                
+                {#if Object.keys(settings.categoryMetaFields || {}).length === 0}
+                  <div class="text-center py-12 text-gray-500">
+                    <p>No category meta fields configured yet.</p>
+                    <p class="text-sm mt-2">Add a category above to get started.</p>
+                  </div>
+                {/if}
+              </div>
+            {/if}
           {/if}
         </form>
       </div>
