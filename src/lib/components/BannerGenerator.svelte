@@ -1935,33 +1935,37 @@
         categoryText += bannerSettings.categoryHebrew;
       }
       
-      ctx.font = `bold ${bannerSettings.fontSize * 0.55}px ${bannerSettings.fontFamily}`;
+      ctx.font = `bold ${bannerSettings.fontSize * 0.7}px ${bannerSettings.fontFamily}`;
       const textMetrics = ctx.measureText(categoryText);
       const textWidth = textMetrics.width;
       
-      // Ribbon dimensions based on text width
-      const ribbonPadding = 30;
+      // Ribbon dimensions - bigger with negative margin for overflow effect
+      const negativeMargin = 40; // How much ribbon extends beyond canvas
+      const ribbonPadding = negativeMargin + 40; // Padding equal to negative margin plus extra
       const ribbonWidth = textWidth + ribbonPadding * 2;
-      const ribbonHeight = 45;
+      const ribbonHeight = 60; // Increased height
       const angle = Math.PI / 4; // 45 degrees for diagonal ribbon (top-right to bottom-left)
       
-      // Position ribbon so its top-right corner aligns with canvas top-right corner
-      // After rotation, the ribbon extends from top-right to bottom-left
-      // We need to position the center so that after rotation, the top-right corner of the ribbon
-      // aligns with the top-right corner of the canvas
+      // Position ribbon so it extends beyond the top-right corner
+      // The ribbon should overflow the canvas edges to look like it's cut off
       const ribbonHalfWidth = ribbonWidth / 2;
       const ribbonHalfHeight = ribbonHeight / 2;
       
-      // Calculate where the ribbon center should be so its corner aligns with canvas corner
+      // Calculate where the ribbon center should be so it extends beyond the corner
       // When rotated 45 degrees, the corner offset from center is:
       const cos45 = Math.cos(angle);
       const sin45 = Math.sin(angle);
       const cornerOffsetX = ribbonHalfWidth * cos45 - ribbonHalfHeight * sin45;
       const cornerOffsetY = ribbonHalfWidth * sin45 + ribbonHalfHeight * cos45;
       
-      // Position center so top-right corner of ribbon aligns with top-right of canvas
-      const ribbonCenterX = width - cornerOffsetX;
-      const ribbonCenterY = cornerOffsetY;
+      // Position center so ribbon extends beyond top-right of canvas by negativeMargin
+      const ribbonCenterX = width + negativeMargin - cornerOffsetX;
+      const ribbonCenterY = -negativeMargin + cornerOffsetY;
+      
+      // Clip to canvas bounds for overflow cutoff effect
+      ctx.beginPath();
+      ctx.rect(0, 0, width, height);
+      ctx.clip();
       
       // Create ribbon path (diagonal ribbon shape)
       ctx.translate(ribbonCenterX, ribbonCenterY);
