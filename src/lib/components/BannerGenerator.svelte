@@ -33,6 +33,9 @@
     imageLayout: 'right', // 'right', 'left', 'center', 'full', 'collage', 'split'
     imagePosition: 'cover', // 'cover', 'contain', 'repeat'
     imageOpacity: 1.0,
+    imageRotation: 0, // Rotation angle in degrees
+    imageFlipHorizontal: false, // Flip horizontally
+    imageFlipVertical: false, // Flip vertically
     
     // Background
     backgroundType: 'solid', // 'solid', 'gradient', 'image', 'pattern'
@@ -612,10 +615,15 @@
     
     selectedLotImages = imagesWithPresigned;
     
-    // Auto-select first image (or primary image)
+    // Auto-select first image (or primary image) with default orientation
     const primaryImage = imagesWithPresigned.find(img => img.isPrimary) || imagesWithPresigned[0];
     if (primaryImage) {
-      selectedBannerImages = [primaryImage];
+      selectedBannerImages = [{
+        ...primaryImage,
+        rotation: bannerSettings.imageRotation ?? 0,
+        flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
+        flipVertical: bannerSettings.imageFlipVertical ?? false
+      }];
       bannerSettings.primaryImageUrl = primaryImage.url;
       bannerSettings.backgroundImageUrl = primaryImage.url;
     }
@@ -752,29 +760,53 @@
     console.log('drawImages called, selectedBannerImages:', selectedBannerImages);
     console.log('bannerSettings.primaryImageUrl:', bannerSettings.primaryImageUrl);
     
-    const imagesToUse = selectedBannerImages.length > 0 
-      ? selectedBannerImages.map(img => img.url || img.displayUrl || img)
-      : (bannerSettings.primaryImageUrl ? [bannerSettings.primaryImageUrl] : []);
+    // Use selectedBannerImages with their orientation, or fallback to primaryImageUrl
+    const imagesWithOrientation = selectedBannerImages.length > 0 
+      ? selectedBannerImages.map(img => ({
+          url: img.url || img.displayUrl || img,
+          orientation: {
+            rotation: img.rotation ?? bannerSettings.imageRotation ?? 0,
+            flipHorizontal: img.flipHorizontal ?? bannerSettings.imageFlipHorizontal ?? false,
+            flipVertical: img.flipVertical ?? bannerSettings.imageFlipVertical ?? false
+          }
+        }))
+      : (bannerSettings.primaryImageUrl ? [{
+          url: bannerSettings.primaryImageUrl,
+          orientation: {
+            rotation: bannerSettings.imageRotation ?? 0,
+            flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
+            flipVertical: bannerSettings.imageFlipVertical ?? false
+          }
+        }] : []);
     
-    if (imagesToUse.length === 0 && bannerSettings.backgroundImageUrl && bannerSettings.backgroundType === 'image') {
-      imagesToUse.push(bannerSettings.backgroundImageUrl);
+    if (imagesWithOrientation.length === 0 && bannerSettings.backgroundImageUrl && bannerSettings.backgroundType === 'image') {
+      imagesWithOrientation.push({
+        url: bannerSettings.backgroundImageUrl,
+        orientation: {
+          rotation: bannerSettings.imageRotation ?? 0,
+          flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
+          flipVertical: bannerSettings.imageFlipVertical ?? false
+        }
+      });
     }
     
-    console.log('imagesToUse:', imagesToUse);
+    console.log('imagesWithOrientation:', imagesWithOrientation);
     
-    if (imagesToUse.length === 0) {
+    if (imagesWithOrientation.length === 0) {
       console.warn('No images to draw');
       return;
     }
     
     // Get presigned URLs (images from mapLot are already presigned, but check anyway)
-    const imageUrls = await Promise.all(
-      imagesToUse.map(async (imageUrl) => {
+    const imagesWithUrls = await Promise.all(
+      imagesWithOrientation.map(async (imgData) => {
+        const imageUrl = imgData.url;
         if (!imageUrl) return null;
         
         // Check if already presigned (has query params)
         const isPresigned = imageUrl.includes('?X-Amz-') || imageUrl.includes('?');
         
+        let finalUrl = imageUrl;
         if (!isPresigned && (imageUrl.includes('.s3.') || imageUrl.includes('s3.amazonaws.com'))) {
           try {
             const match = imageUrl.match(/s3[^/]*\.amazonaws\.com\/(.+?)(?:\?|$)/);
@@ -789,7 +821,7 @@
                 const { urls } = await response.json();
                 if (urls[key]) {
                   console.log('Got presigned URL for key:', key);
-                  return urls[key];
+                  finalUrl = urls[key];
                 }
               }
             }
@@ -797,16 +829,19 @@
             console.warn('Failed to get presigned URL:', error);
           }
         }
-        console.log('Using image URL (already presigned or not S3):', imageUrl);
-        return imageUrl;
+        console.log('Using image URL (already presigned or not S3):', finalUrl);
+        return {
+          url: finalUrl,
+          orientation: imgData.orientation
+        };
       })
     );
     
     // Filter out null values
-    const validImageUrls = imageUrls.filter(url => url !== null);
-    console.log('Valid image URLs:', validImageUrls);
+    const validImages = imagesWithUrls.filter(img => img !== null);
+    console.log('Valid images:', validImages);
     
-    if (validImageUrls.length === 0) {
+    if (validImages.length === 0) {
       console.warn('No valid image URLs after processing');
       return;
     }
@@ -815,22 +850,22 @@
     
     switch (bannerSettings.imageLayout) {
       case 'full':
-        await drawFullBackgroundImage(ctx, width, height, validImageUrls[0]);
+        await drawFullBackgroundImage(ctx, width, height, validImages[0]?.url, validImages[0]?.orientation);
         break;
       case 'center':
-        await drawCenterImage(ctx, width, height, validImageUrls);
+        await drawCenterImage(ctx, width, height, validImages);
         break;
       case 'collage':
-        await drawCollage(ctx, width, height, validImageUrls);
+        await drawCollage(ctx, width, height, validImages);
         break;
       case 'split':
-        await drawSplitImage(ctx, width, height, validImageUrls[0]);
+        await drawSplitImage(ctx, width, height, validImages[0]?.url, validImages[0]?.orientation);
         break;
       case 'right':
-        await drawRightImage(ctx, width, height, validImageUrls);
+        await drawRightImage(ctx, width, height, validImages);
         break;
       case 'left':
-        await drawLeftImage(ctx, width, height, validImageUrls);
+        await drawLeftImage(ctx, width, height, validImages);
         break;
     }
     
@@ -862,7 +897,41 @@
     return imageUrl;
   }
 
-  async function drawFullBackgroundImage(ctx, width, height, imageUrl) {
+  // Helper function to apply image transformations (rotation, flip)
+  // Accepts optional per-image orientation, falls back to global settings
+  function applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, imageOrientation = null) {
+    ctx.save();
+    
+    // Move to center of image
+    const centerX = x + drawWidth / 2;
+    const centerY = y + drawHeight / 2;
+    ctx.translate(centerX, centerY);
+    
+    // Use per-image orientation if provided, otherwise use global settings
+    const rotation = imageOrientation?.rotation ?? bannerSettings.imageRotation ?? 0;
+    const flipHorizontal = imageOrientation?.flipHorizontal ?? bannerSettings.imageFlipHorizontal ?? false;
+    const flipVertical = imageOrientation?.flipVertical ?? bannerSettings.imageFlipVertical ?? false;
+    
+    // Apply rotation
+    if (rotation !== 0) {
+      const rotationRad = (rotation * Math.PI) / 180;
+      ctx.rotate(rotationRad);
+    }
+    
+    // Apply flips
+    let scaleX = 1;
+    let scaleY = 1;
+    if (flipHorizontal) scaleX = -1;
+    if (flipVertical) scaleY = -1;
+    ctx.scale(scaleX, scaleY);
+    
+    // Draw image centered
+    ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+    
+    ctx.restore();
+  }
+
+  async function drawFullBackgroundImage(ctx, width, height, imageUrl, orientation = null) {
     if (!imageUrl) {
       console.warn('No image URL provided for drawFullBackgroundImage');
       return;
@@ -873,17 +942,22 @@
       const srcUrl = await loadImageForCanvas(imageUrl);
       img.onload = () => {
         console.log('Image loaded successfully');
+        let scale, x, y;
         if (bannerSettings.imagePosition === 'cover') {
-          const scale = Math.max(width / img.width, height / img.height);
-          const x = (width - img.width * scale) / 2;
-          const y = (height - img.height * scale) / 2;
-          ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+          scale = Math.max(width / img.width, height / img.height);
+          x = (width - img.width * scale) / 2;
+          y = (height - img.height * scale) / 2;
         } else {
-          const scale = Math.min(width / img.width, height / img.height);
-          const x = (width - img.width * scale) / 2;
-          const y = (height - img.height * scale) / 2;
-          ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
+          scale = Math.min(width / img.width, height / img.height);
+          x = (width - img.width * scale) / 2;
+          y = (height - img.height * scale) / 2;
         }
+        const drawWidth = img.width * scale;
+        const drawHeight = img.height * scale;
+        
+        // Apply transformations with per-image orientation
+        applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, orientation);
+        
         // Clean up blob URL if it was created
         if (srcUrl.startsWith('blob:')) {
           URL.revokeObjectURL(srcUrl);
@@ -902,129 +976,141 @@
     });
   }
 
-  async function drawCenterImage(ctx, width, height, imageUrls) {
-    if (imageUrls.length === 0 || !imageUrls[0]) {
+  async function drawCenterImage(ctx, width, height, images) {
+    if (images.length === 0 || !images[0]?.url) {
       console.warn('No image URL for drawCenterImage');
       return;
     }
+    const imageData = images[0];
     return new Promise(async (resolve) => {
       const img = new Image();
-      const srcUrl = await loadImageForCanvas(imageUrls[0]);
+      const srcUrl = await loadImageForCanvas(imageData.url);
       img.onload = () => {
         console.log('Center image loaded successfully');
         const imgSize = Math.min(width, height) * 0.6;
         const x = (width - imgSize) / 2;
         const y = (height - imgSize) / 2;
-        ctx.drawImage(img, x, y, imgSize, imgSize);
+        
+        // Apply transformations with per-image orientation
+        applyImageTransform(ctx, img, x, y, imgSize, imgSize, imageData.orientation);
+        
         if (srcUrl.startsWith('blob:')) {
           URL.revokeObjectURL(srcUrl);
         }
         resolve();
       };
       img.onerror = (error) => {
-        console.error('Failed to load center image:', imageUrls[0], error);
+        console.error('Failed to load center image:', imageData.url, error);
         if (srcUrl.startsWith('blob:')) {
           URL.revokeObjectURL(srcUrl);
         }
         resolve();
       };
-      console.log('Loading center image:', imageUrls[0]);
+      console.log('Loading center image:', imageData.url);
       img.src = srcUrl;
     });
   }
 
-  async function drawRightImage(ctx, width, height, imageUrls) {
-    if (imageUrls.length === 0 || !imageUrls[0]) {
+  async function drawRightImage(ctx, width, height, images) {
+    if (images.length === 0 || !images[0]?.url) {
       console.warn('No image URL for drawRightImage');
       return;
     }
+    const imageData = images[0];
     const textAreaWidth = width * bannerSettings.textImageRatio;
     const imgAreaWidth = width - textAreaWidth;
     const imgAreaX = textAreaWidth;
     
     return new Promise(async (resolve) => {
       const img = new Image();
-      const srcUrl = await loadImageForCanvas(imageUrls[0]);
+      const srcUrl = await loadImageForCanvas(imageData.url);
       img.onload = () => {
         console.log('Right image loaded successfully');
+        let scale, drawWidth, drawHeight, x, y;
         if (bannerSettings.imagePosition === 'cover') {
-          const scale = Math.max(imgAreaWidth / img.width, height / img.height);
-          const drawWidth = img.width * scale;
-          const drawHeight = img.height * scale;
-          const x = imgAreaX + (imgAreaWidth - drawWidth) / 2;
-          const y = (height - drawHeight) / 2;
-          ctx.drawImage(img, x, y, drawWidth, drawHeight);
+          scale = Math.max(imgAreaWidth / img.width, height / img.height);
+          drawWidth = img.width * scale;
+          drawHeight = img.height * scale;
+          x = imgAreaX + (imgAreaWidth - drawWidth) / 2;
+          y = (height - drawHeight) / 2;
         } else {
-          const scale = Math.min(imgAreaWidth / img.width, height / img.height);
-          const drawWidth = img.width * scale;
-          const drawHeight = img.height * scale;
-          const x = imgAreaX + (imgAreaWidth - drawWidth) / 2;
-          const y = (height - drawHeight) / 2;
-          ctx.drawImage(img, x, y, drawWidth, drawHeight);
+          scale = Math.min(imgAreaWidth / img.width, height / img.height);
+          drawWidth = img.width * scale;
+          drawHeight = img.height * scale;
+          x = imgAreaX + (imgAreaWidth - drawWidth) / 2;
+          y = (height - drawHeight) / 2;
         }
+        
+        // Apply transformations with per-image orientation
+        applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, imageData.orientation);
+        
         if (srcUrl.startsWith('blob:')) {
           URL.revokeObjectURL(srcUrl);
         }
         resolve();
       };
       img.onerror = (error) => {
-        console.error('Failed to load right image:', imageUrls[0], error);
+        console.error('Failed to load right image:', imageData.url, error);
         if (srcUrl.startsWith('blob:')) {
           URL.revokeObjectURL(srcUrl);
         }
         resolve();
       };
-      console.log('Loading right image:', imageUrls[0]);
+      console.log('Loading right image:', imageData.url);
       img.src = srcUrl;
     });
   }
 
-  async function drawLeftImage(ctx, width, height, imageUrls) {
-    if (imageUrls.length === 0 || !imageUrls[0]) {
+  async function drawLeftImage(ctx, width, height, images) {
+    if (images.length === 0 || !images[0]?.url) {
       console.warn('No image URL for drawLeftImage');
       return;
     }
+    const imageData = images[0];
     const textAreaWidth = width * bannerSettings.textImageRatio;
     const imgAreaWidth = width - textAreaWidth;
     
     return new Promise(async (resolve) => {
       const img = new Image();
-      const srcUrl = await loadImageForCanvas(imageUrls[0]);
+      const srcUrl = await loadImageForCanvas(imageData.url);
       img.onload = () => {
         console.log('Left image loaded successfully');
+        let scale, drawWidth, drawHeight, x, y;
         if (bannerSettings.imagePosition === 'cover') {
-          const scale = Math.max(imgAreaWidth / img.width, height / img.height);
-          const drawWidth = img.width * scale;
-          const drawHeight = img.height * scale;
-          const x = (imgAreaWidth - drawWidth) / 2;
-          const y = (height - drawHeight) / 2;
-          ctx.drawImage(img, x, y, drawWidth, drawHeight);
+          scale = Math.max(imgAreaWidth / img.width, height / img.height);
+          drawWidth = img.width * scale;
+          drawHeight = img.height * scale;
+          x = (imgAreaWidth - drawWidth) / 2;
+          y = (height - drawHeight) / 2;
         } else {
-          const scale = Math.min(imgAreaWidth / img.width, height / img.height);
-          const drawWidth = img.width * scale;
-          const drawHeight = img.height * scale;
-          const x = (imgAreaWidth - drawWidth) / 2;
-          const y = (height - drawHeight) / 2;
-          ctx.drawImage(img, x, y, drawWidth, drawHeight);
+          scale = Math.min(imgAreaWidth / img.width, height / img.height);
+          drawWidth = img.width * scale;
+          drawHeight = img.height * scale;
+          x = (imgAreaWidth - drawWidth) / 2;
+          y = (height - drawHeight) / 2;
         }
+        
+        // Apply transformations with per-image orientation
+        applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, imageData.orientation);
+        
         if (srcUrl.startsWith('blob:')) {
           URL.revokeObjectURL(srcUrl);
         }
         resolve();
       };
       img.onerror = (error) => {
-        console.error('Failed to load left image:', imageUrls[0], error);
+        console.error('Failed to load left image:', imageData.url, error);
         if (srcUrl.startsWith('blob:')) {
           URL.revokeObjectURL(srcUrl);
         }
         resolve();
       };
-      console.log('Loading left image:', imageUrls[0]);
+      console.log('Loading left image:', imageData.url);
       img.src = srcUrl;
     });
   }
 
-  async function drawSplitImage(ctx, width, height, imageUrl) {
+  async function drawSplitImage(ctx, width, height, imageUrl, orientation = null) {
     if (!imageUrl) {
       console.warn('No image URL for drawSplitImage');
       return;
@@ -1036,7 +1122,15 @@
         console.log('Split image loaded successfully');
         // Split screen: image on one side, text on other
         const splitPoint = width / 2;
-        ctx.drawImage(img, splitPoint, 0, splitPoint, height);
+        const scale = Math.max(splitPoint / img.width, height / img.height);
+        const drawWidth = img.width * scale;
+        const drawHeight = img.height * scale;
+        const x = splitPoint + (splitPoint - drawWidth) / 2;
+        const y = (height - drawHeight) / 2;
+        
+        // Apply transformations with per-image orientation
+        applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, orientation);
+        
         if (srcUrl.startsWith('blob:')) {
           URL.revokeObjectURL(srcUrl);
         }
@@ -1054,26 +1148,29 @@
     });
   }
 
-  async function drawCollage(ctx, width, height, imageUrls) {
-    if (imageUrls.length === 0) {
-      console.warn('No image URLs for drawCollage');
+  async function drawCollage(ctx, width, height, images) {
+    if (images.length === 0) {
+      console.warn('No images for drawCollage');
       return;
     }
     
-    console.log('Loading collage images:', imageUrls);
+    console.log('Loading collage images:', images);
     
     const loadedImages = await Promise.all(
-      imageUrls.map(async (url) => {
-        if (!url) return null;
-        const srcUrl = await loadImageForCanvas(url);
+      images.map(async (imageData) => {
+        if (!imageData?.url) return null;
+        const srcUrl = await loadImageForCanvas(imageData.url);
         return new Promise((resolve) => {
           const img = new Image();
           img.onload = () => {
-            console.log('Collage image loaded:', url);
-            resolve(img);
+            console.log('Collage image loaded:', imageData.url);
+            resolve({
+              img,
+              orientation: imageData.orientation
+            });
           };
           img.onerror = (error) => {
-            console.error('Failed to load collage image:', url, error);
+            console.error('Failed to load collage image:', imageData.url, error);
             if (srcUrl.startsWith('blob:')) {
               URL.revokeObjectURL(srcUrl);
             }
@@ -1093,22 +1190,22 @@
     const imgAreaHeight = height;
     
     if (validImages.length === 1) {
-      const img = validImages[0];
+      const { img, orientation } = validImages[0];
       const scale = Math.min(imgAreaWidth / img.width, imgAreaHeight / img.height);
       const drawWidth = img.width * scale;
       const drawHeight = img.height * scale;
       const x = imgAreaX + (imgAreaWidth - drawWidth) / 2;
       const y = (imgAreaHeight - drawHeight) / 2;
-      ctx.drawImage(img, x, y, drawWidth, drawHeight);
+      applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, orientation);
     } else if (validImages.length === 2) {
       // 2 images: first image bottom left, second slightly behind it on top right
-      const img1 = validImages[0];
-      const img2 = validImages[1];
+      const { img: img1, orientation: orientation1 } = validImages[0];
+      const { img: img2, orientation: orientation2 } = validImages[1];
       
-      // Calculate sizes - make images about 60% of available space
-      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * 0.6;
+      // Calculate sizes - make images larger for better visual impact
+      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * 0.65;
       
-      // Scale each image to fit
+      // Scale each image to fit, maintaining aspect ratio
       const scale1 = Math.min(baseSize / img1.width, baseSize / img1.height);
       const scale2 = Math.min(baseSize / img2.width, baseSize / img2.height);
       
@@ -1117,64 +1214,88 @@
       const drawWidth2 = img2.width * scale2;
       const drawHeight2 = img2.height * scale2;
       
-      // First image: bottom left
-      const x1 = imgAreaX + imgAreaWidth * 0.1; // 10% from left
-      const y1 = imgAreaHeight - drawHeight1 - imgAreaHeight * 0.1; // 10% from bottom
+      // First image: bottom left with better positioning
+      const x1 = imgAreaX + imgAreaWidth * 0.08; // 8% from left
+      const y1 = imgAreaHeight - drawHeight1 - imgAreaHeight * 0.08; // 8% from bottom
       
-      // Second image: top right, slightly behind (offset and rotated slightly)
-      const offsetX = 30; // Offset to create "behind" effect
-      const offsetY = -30;
-      const x2 = imgAreaX + imgAreaWidth * 0.5 - offsetX; // Center-right with offset
-      const y2 = imgAreaHeight * 0.1 - offsetY; // 10% from top with offset
+      // Second image: top right, slightly behind (offset and rotated)
+      const offsetX = 40; // Larger offset for more dramatic effect
+      const offsetY = -40;
+      const x2 = imgAreaX + imgAreaWidth * 0.55 - offsetX; // More to the right
+      const y2 = imgAreaHeight * 0.08 - offsetY; // 8% from top
+      
+      // Add subtle shadow to second image for depth
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+      ctx.shadowBlur = 15;
+      ctx.shadowOffsetX = 5;
+      ctx.shadowOffsetY = 5;
       
       // Draw second image first (behind), with slight rotation
-      ctx.save();
       ctx.translate(x2 + drawWidth2 / 2, y2 + drawHeight2 / 2);
-      ctx.rotate(-0.05); // Slight rotation (about 3 degrees)
+      ctx.rotate(-0.08); // Slightly more rotation (about 4.5 degrees)
+      
+      // Apply per-image transformations
+      const rotationRad = ((orientation2?.rotation ?? 0) * Math.PI) / 180;
+      ctx.rotate(rotationRad);
+      let scaleX = orientation2?.flipHorizontal ? -1 : 1;
+      let scaleY = orientation2?.flipVertical ? -1 : 1;
+      ctx.scale(scaleX, scaleY);
+      
       ctx.drawImage(img2, -drawWidth2 / 2, -drawHeight2 / 2, drawWidth2, drawHeight2);
       ctx.restore();
       
-      // Draw first image on top (foreground)
-      ctx.drawImage(img1, x1, y1, drawWidth1, drawHeight1);
+      // Add shadow to first image
+      ctx.save();
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
+      ctx.shadowBlur = 12;
+      ctx.shadowOffsetX = 4;
+      ctx.shadowOffsetY = 4;
+      
+      // Draw first image on top (foreground) with per-image transformations
+      applyImageTransform(ctx, img1, x1, y1, drawWidth1, drawHeight1, orientation1);
+      ctx.restore();
       
     } else if (validImages.length === 3) {
       // 3 images: circular arrangement with each slightly behind the next
       // Layering: 2 behind 1, 3 behind 2, 1 behind 3 (circular)
       const centerX = imgAreaX + imgAreaWidth / 2;
       const centerY = imgAreaHeight / 2;
-      const radius = Math.min(imgAreaWidth, imgAreaHeight) * 0.25; // Distance from center
+      const radius = Math.min(imgAreaWidth, imgAreaHeight) * 0.28; // Slightly larger radius
       
-      // Calculate sizes
-      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * 0.5;
+      // Calculate sizes - make images larger
+      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * 0.55;
       
       // Prepare image data with positions
-      const imageData = validImages.map((img, index) => {
+      const imageData = validImages.map((imageData, index) => {
+        const { img, orientation } = imageData;
         const scale = Math.min(baseSize / img.width, baseSize / img.height);
         const drawWidth = img.width * scale;
         const drawHeight = img.height * scale;
         
         // Position in circle: 120 degrees apart (360/3)
         const angle = (index * 2 * Math.PI / 3) - Math.PI / 2; // Start from top
-        const x = centerX + Math.cos(angle) * radius;
-        const y = centerY + Math.sin(angle) * radius;
+        const baseX = centerX + Math.cos(angle) * radius;
+        const baseY = centerY + Math.sin(angle) * radius;
         
-        // Rotation for each image (slight tilt)
-        const rotation = angle + Math.PI / 2; // Perpendicular to radius
+        // Rotation for each image (more dynamic tilt)
+        const rotation = angle + Math.PI / 2 + (index % 2 === 0 ? 0.1 : -0.1); // Alternating slight tilt
         
         // Offset to create "behind" effect - each image is slightly offset inward
         // Image 1 is behind 3, Image 2 is behind 1, Image 3 is behind 2
         const behindIndex = (index + 2) % 3; // Which image this one is behind
         const behindAngle = (behindIndex * 2 * Math.PI / 3) - Math.PI / 2;
-        const offsetX = Math.cos(behindAngle) * 25; // Offset toward the image it's behind
-        const offsetY = Math.sin(behindAngle) * 25;
+        const offsetX = Math.cos(behindAngle) * 30; // Larger offset for more overlap
+        const offsetY = Math.sin(behindAngle) * 30;
         
         return {
           img,
           drawWidth,
           drawHeight,
-          x: x + offsetX,
-          y: y + offsetY,
-          rotation
+          x: baseX + offsetX,
+          y: baseY + offsetY,
+          rotation,
+          index
         };
       });
       
@@ -1184,32 +1305,71 @@
       drawOrder.forEach((orderIndex) => {
         const data = imageData[orderIndex];
         ctx.save();
+        
+        // Add shadow for depth (stronger for images further back)
+        const shadowIntensity = orderIndex === 2 ? 0.4 : (orderIndex === 1 ? 0.3 : 0.2);
+        ctx.shadowColor = `rgba(0, 0, 0, ${shadowIntensity})`;
+        ctx.shadowBlur = 15;
+        ctx.shadowOffsetX = 6;
+        ctx.shadowOffsetY = 6;
+        
         ctx.translate(data.x, data.y);
         ctx.rotate(data.rotation);
+        
+        // Apply per-image transformations on top of existing rotation
+        const imageOrientation = validImages[orderIndex]?.orientation;
+        if (imageOrientation) {
+          const rotationRad = (imageOrientation.rotation * Math.PI) / 180;
+          ctx.rotate(rotationRad);
+          let scaleX = imageOrientation.flipHorizontal ? -1 : 1;
+          let scaleY = imageOrientation.flipVertical ? -1 : 1;
+          ctx.scale(scaleX, scaleY);
+        }
+        
         ctx.drawImage(data.img, -data.drawWidth / 2, -data.drawHeight / 2, data.drawWidth, data.drawHeight);
         ctx.restore();
       });
       
     } else {
-      // 4+ images: Grid layout
+      // 4+ images: Improved grid layout with spacing and shadows
       const cols = Math.ceil(Math.sqrt(validImages.length));
       const rows = Math.ceil(validImages.length / cols);
-      const cellWidth = imgAreaWidth / cols;
-      const cellHeight = imgAreaHeight / rows;
       
-      validImages.forEach((img, index) => {
+      // Add padding between images
+      const padding = 8;
+      const totalPadding = padding * (cols - 1);
+      const totalPaddingV = padding * (rows - 1);
+      const cellWidth = (imgAreaWidth - totalPadding) / cols;
+      const cellHeight = (imgAreaHeight - totalPaddingV) / rows;
+      
+      validImages.forEach((imageData, index) => {
+        const { img, orientation } = imageData;
         const col = index % cols;
         const row = Math.floor(index / cols);
-        const x = imgAreaX + col * cellWidth;
-        const y = row * cellHeight;
+        const x = imgAreaX + col * (cellWidth + padding);
+        const y = row * (cellHeight + padding);
         
-        const scale = Math.min(cellWidth / img.width, cellHeight / img.height);
+        // Scale to fit with some margin
+        const margin = 4;
+        const scale = Math.min(
+          (cellWidth - margin * 2) / img.width,
+          (cellHeight - margin * 2) / img.height
+        );
         const drawWidth = img.width * scale;
         const drawHeight = img.height * scale;
         const drawX = x + (cellWidth - drawWidth) / 2;
         const drawY = y + (cellHeight - drawHeight) / 2;
         
-        ctx.drawImage(img, drawX, drawY, drawWidth, drawHeight);
+        // Add subtle shadow for depth
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+        
+        // Apply per-image transformations
+        applyImageTransform(ctx, img, drawX, drawY, drawWidth, drawHeight, orientation);
+        ctx.restore();
       });
     }
   }
@@ -1404,7 +1564,13 @@
                   if (isSelected) {
                     selectedBannerImages = selectedBannerImages.filter(sel => sel.id !== image.id && sel.url !== image.url);
                   } else {
-                    selectedBannerImages = [...selectedBannerImages, image];
+                    // Add image with default orientation from global settings
+                    selectedBannerImages = [...selectedBannerImages, {
+                      ...image,
+                      rotation: bannerSettings.imageRotation ?? 0,
+                      flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
+                      flipVertical: bannerSettings.imageFlipVertical ?? false
+                    }];
                   }
                   if (selectedBannerImages.length > 0) {
                     bannerSettings.primaryImageUrl = selectedBannerImages[0].url;
@@ -1417,7 +1583,13 @@
                     if (isSelected) {
                       selectedBannerImages = selectedBannerImages.filter(sel => sel.id !== image.id && sel.url !== image.url);
                     } else {
-                      selectedBannerImages = [...selectedBannerImages, image];
+                      // Add image with default orientation from global settings
+                      selectedBannerImages = [...selectedBannerImages, {
+                        ...image,
+                        rotation: bannerSettings.imageRotation ?? 0,
+                        flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
+                        flipVertical: bannerSettings.imageFlipVertical ?? false
+                      }];
                     }
                   }
                 }}
@@ -1435,6 +1607,101 @@
                     ✓
                   </div>
                 {/if}
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+      
+      <!-- Per-Image Orientation Controls -->
+      {#if selectedBannerImages.length > 0}
+        <div class="p-4 bg-green-50 rounded-lg border border-green-200">
+          <h4 class="text-lg font-semibold text-gray-900 mb-4">Image Orientation (Per Image)</h4>
+          <div class="space-y-4 max-h-96 overflow-y-auto">
+            {#each selectedBannerImages as image, index}
+              <div class="p-3 bg-white rounded border border-gray-200">
+                <div class="flex items-center gap-2 mb-2">
+                  <img
+                    src={image.displayUrl || image.url}
+                    alt="Image {index + 1}"
+                    class="w-12 h-12 object-cover rounded"
+                    onerror={(e) => {
+                      e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ddd" width="100" height="100"/%3E%3Ctext x="50" y="50" text-anchor="middle" dy=".3em" fill="%23999"%3E{index + 1}%3C/text%3E%3C/svg%3E';
+                    }}
+                  />
+                  <span class="text-sm font-medium text-gray-700">Image {index + 1}</span>
+                </div>
+                
+                <div class="mb-2">
+                  <label for="rotation-{index}" class="block text-xs text-gray-600 mb-1">
+                    Rotation: {image.rotation ?? 0}°
+                  </label>
+                  <div class="flex items-center gap-2">
+                    <input
+                      id="rotation-{index}"
+                      type="range"
+                      min="-180"
+                      max="180"
+                      step="1"
+                      value={image.rotation ?? 0}
+                      oninput={(e) => {
+                        selectedBannerImages[index] = {
+                          ...selectedBannerImages[index],
+                          rotation: parseInt(e.target.value)
+                        };
+                        selectedBannerImages = [...selectedBannerImages]; // Trigger reactivity
+                      }}
+                      class="flex-1"
+                    />
+                    <button
+                      type="button"
+                      onclick={() => {
+                        selectedBannerImages[index] = {
+                          ...selectedBannerImages[index],
+                          rotation: 0
+                        };
+                        selectedBannerImages = [...selectedBannerImages];
+                      }}
+                      class="px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="flex gap-4">
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={image.flipHorizontal ?? false}
+                      onchange={(e) => {
+                        selectedBannerImages[index] = {
+                          ...selectedBannerImages[index],
+                          flipHorizontal: e.target.checked
+                        };
+                        selectedBannerImages = [...selectedBannerImages];
+                      }}
+                      class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                    />
+                    <span class="text-xs text-gray-700">Flip H</span>
+                  </label>
+                  
+                  <label class="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={image.flipVertical ?? false}
+                      onchange={(e) => {
+                        selectedBannerImages[index] = {
+                          ...selectedBannerImages[index],
+                          flipVertical: e.target.checked
+                        };
+                        selectedBannerImages = [...selectedBannerImages];
+                      }}
+                      class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                    />
+                    <span class="text-xs text-gray-700">Flip V</span>
+                  </label>
+                </div>
               </div>
             {/each}
           </div>
@@ -1512,6 +1779,57 @@
             bind:value={bannerSettings.imageOpacity}
             class="w-full"
           />
+        </div>
+        
+        <!-- Image Orientation Controls -->
+        <div class="mb-4">
+          <h4 class="block text-sm font-medium text-gray-700 mb-2">
+            Image Orientation
+          </h4>
+          
+          <div class="mb-3">
+            <label for="image-rotation" class="block text-xs text-gray-600 mb-1">
+              Rotation: {bannerSettings.imageRotation}°
+            </label>
+            <div class="flex items-center gap-2">
+              <input
+                id="image-rotation"
+                type="range"
+                min="-180"
+                max="180"
+                step="1"
+                bind:value={bannerSettings.imageRotation}
+                class="flex-1"
+              />
+              <button
+                type="button"
+                onclick={() => bannerSettings.imageRotation = 0}
+                class="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
+              >
+                Reset
+              </button>
+            </div>
+          </div>
+          
+          <div class="flex gap-4">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                bind:checked={bannerSettings.imageFlipHorizontal}
+                class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+              />
+              <span class="text-sm text-gray-700">Flip Horizontal</span>
+            </label>
+            
+            <label class="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                bind:checked={bannerSettings.imageFlipVertical}
+                class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+              />
+              <span class="text-sm text-gray-700">Flip Vertical</span>
+            </label>
+          </div>
         </div>
       </div>
       
