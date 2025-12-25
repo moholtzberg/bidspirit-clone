@@ -44,7 +44,7 @@
     currency: 'USD',
     
     // Gallery Template Settings
-    galleryTemplate: 'card-grid', // 'card-grid', 'image-slider', 'overlay-text', 'minimal-grid', 'masonry'
+    galleryTemplate: 'card-grid', // 'card-grid', 'image-slider', 'overlay-text', 'minimal-grid', 'masonry', 'carousel-hover'
     galleryTemplateSettings: {
       // Card Grid settings
       cardGridColumns: 3, // 1-5 columns
@@ -459,6 +459,7 @@
                       <option value="overlay-text">Overlay Text - Full image with text overlay</option>
                       <option value="minimal-grid">Minimal Grid - Clean minimal design</option>
                       <option value="masonry">Masonry - Pinterest-style layout</option>
+                      <option value="carousel-hover">Carousel Hover - Natural aspect ratio with content on hover</option>
                     </select>
                     <p class="text-xs text-gray-500 mt-1">Choose how lots are displayed in the gallery</p>
                   </div>

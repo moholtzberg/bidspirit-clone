@@ -149,7 +149,7 @@ export const auctionSettingsSchema = z.object({
   currency: z.string().optional().nullable(),
   
   // Gallery Template Settings
-  galleryTemplate: z.enum(['card-grid', 'image-slider', 'overlay-text', 'minimal-grid', 'masonry']).optional().default('card-grid'),
+  galleryTemplate: z.enum(['card-grid', 'image-slider', 'overlay-text', 'minimal-grid', 'masonry', 'carousel-hover']).optional().default('card-grid'),
   galleryTemplateSettings: z.object({
     // Card Grid settings
     cardGridColumns: z.coerce.number().min(1).max(5).optional().default(3),
