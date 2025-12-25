@@ -147,4 +147,32 @@ export const auctionSettingsSchema = z.object({
   
   // Currency
   currency: z.string().optional().nullable(),
+  
+  // Gallery Template Settings
+  galleryTemplate: z.enum(['card-grid', 'image-slider', 'overlay-text', 'minimal-grid', 'masonry']).optional().default('card-grid'),
+  galleryTemplateSettings: z.object({
+    // Card Grid settings
+    cardGridColumns: z.coerce.number().min(1).max(5).optional().default(3),
+    cardGridShowDescription: z.boolean().optional().default(true),
+    cardGridShowStartingBid: z.boolean().optional().default(true),
+    
+    // Image Slider settings
+    sliderAutoPlay: z.boolean().optional().default(false),
+    sliderAutoPlayInterval: z.coerce.number().min(1000).optional().default(3000),
+    sliderShowDots: z.boolean().optional().default(true),
+    sliderShowArrows: z.boolean().optional().default(true),
+    
+    // Overlay Text settings
+    overlayTextPosition: z.enum(['top', 'center', 'bottom']).optional().default('bottom'),
+    overlayTextOpacity: z.coerce.number().min(0).max(1).optional().default(0.8),
+    overlayButtonStyle: z.enum(['white', 'colored', 'outline']).optional().default('white'),
+    
+    // Minimal Grid settings
+    minimalGridColumns: z.coerce.number().min(2).max(6).optional().default(5),
+    minimalGridShowDescription: z.boolean().optional().default(false),
+    
+    // Masonry settings
+    masonryColumns: z.coerce.number().min(2).max(5).optional().default(4),
+    masonryVaryHeights: z.boolean().optional().default(true),
+  }).optional().default({}),
 })

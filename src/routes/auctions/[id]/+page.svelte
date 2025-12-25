@@ -2,10 +2,13 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
+  import LotGalleryTemplate from '$lib/components/LotGalleryTemplate.svelte';
   
   let auction = $state(null);
   let lots = $state([]);
   let loading = $state(true);
+  let galleryTemplate = $state('card-grid');
+  let galleryTemplateSettings = $state({});
   
   $effect(() => {
     if ($page.params.id) {
@@ -16,13 +19,21 @@
   async function loadAuction() {
     try {
       loading = true;
-      const [auctionRes, lotsRes] = await Promise.all([
+      const [auctionRes, lotsRes, settingsRes] = await Promise.all([
         fetch(`/api/auctions/${$page.params.id}`),
-        fetch(`/api/lots?auctionId=${$page.params.id}`)
+        fetch(`/api/lots?auctionId=${$page.params.id}`),
+        fetch(`/api/auctions/${$page.params.id}/settings`)
       ]);
       
       auction = await auctionRes.json();
       lots = await lotsRes.json();
+      
+      // Load gallery template settings
+      if (settingsRes.ok) {
+        const settings = await settingsRes.json();
+        galleryTemplate = settings.galleryTemplate || 'card-grid';
+        galleryTemplateSettings = settings.galleryTemplateSettings || {};
+      }
     } catch (error) {
       console.error('Error loading auction:', error);
     } finally {
@@ -114,45 +125,12 @@
           <p class="text-gray-600">No lots available for this auction yet.</p>
         </div>
       {:else}
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {#each lots as lot}
-            <div
-              onclick={() => goto(`/lots/${lot.id}`)}
-              class="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-xl transition-shadow"
-            >
-              <div class="relative">
-                <img
-                  src={lot.imageUrl}
-                  alt={lot.title}
-                  class="w-full h-48 object-cover"
-                />
-                <div class="absolute top-4 left-4 bg-white px-3 py-1 rounded-full text-sm font-bold">
-                  Lot #{lot.lotNumber}
-                </div>
-              </div>
-              <div class="p-6">
-                <h3 class="text-lg font-bold text-gray-900 mb-2">{lot.title}</h3>
-                <p class="text-gray-600 text-sm mb-4 line-clamp-2">{lot.description}</p>
-                <div class="flex items-center justify-between mb-4">
-                  <div>
-                    <p class="text-xs text-gray-500">Current Bid</p>
-                    <p class="text-xl font-bold text-blue-600">{formatCurrency(lot.currentBid)}</p>
-                  </div>
-                  <div class="text-right">
-                    <p class="text-xs text-gray-500">Starting Bid</p>
-                    <p class="text-lg font-semibold">{formatCurrency(lot.startingBid)}</p>
-                  </div>
-                </div>
-                {#if lot.highestBidderName}
-                  <p class="text-sm text-gray-600 mb-2">Highest bidder: {lot.highestBidderName}</p>
-                {/if}
-                <button class="w-full bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold">
-                  View & Bid
-                </button>
-              </div>
-            </div>
-          {/each}
-        </div>
+        <LotGalleryTemplate 
+          {lots} 
+          template={galleryTemplate}
+          templateSettings={galleryTemplateSettings}
+          {formatCurrency}
+        />
       {/if}
     </div>
   </div>
