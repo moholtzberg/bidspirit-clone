@@ -627,7 +627,7 @@
     
     selectedLotImages = imagesWithPresigned;
     
-    // Auto-select first image (or primary image) with default orientation
+    // Auto-select first image (or primary image) with default orientation, zoom, and z-index
     const primaryImage = imagesWithPresigned.find(img => img.isPrimary) || imagesWithPresigned[0];
     if (primaryImage) {
       selectedBannerImages = [{
@@ -635,6 +635,8 @@
         rotation: bannerSettings.imageRotation ?? 0,
         flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
         flipVertical: bannerSettings.imageFlipVertical ?? false,
+        zoom: bannerSettings.imageSize ?? 1.0, // Per-image zoom
+        zIndex: 0, // Default z-index
         isFeatured: true // First/primary image is featured by default
       }];
       // Initialize custom positions if using custom layout
@@ -780,15 +782,17 @@
     console.log('drawImages called, selectedBannerImages:', selectedBannerImages);
     console.log('bannerSettings.primaryImageUrl:', bannerSettings.primaryImageUrl);
     
-    // Use selectedBannerImages with their orientation, or fallback to primaryImageUrl
+    // Use selectedBannerImages with their orientation, zoom, and z-index, or fallback to primaryImageUrl
     const imagesWithOrientation = selectedBannerImages.length > 0 
-      ? selectedBannerImages.map(img => ({
+      ? selectedBannerImages.map((img, idx) => ({
           url: img.url || img.displayUrl || img,
           orientation: {
             rotation: img.rotation ?? bannerSettings.imageRotation ?? 0,
             flipHorizontal: img.flipHorizontal ?? bannerSettings.imageFlipHorizontal ?? false,
             flipVertical: img.flipVertical ?? bannerSettings.imageFlipVertical ?? false
-          }
+          },
+          zoom: img.zoom ?? bannerSettings.imageSize ?? 1.0, // Per-image zoom, fallback to global
+          zIndex: img.zIndex ?? idx // Per-image z-index, fallback to index
         }))
       : (bannerSettings.primaryImageUrl ? [{
           url: bannerSettings.primaryImageUrl,
@@ -796,7 +800,9 @@
             rotation: bannerSettings.imageRotation ?? 0,
             flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
             flipVertical: bannerSettings.imageFlipVertical ?? false
-          }
+          },
+          zoom: bannerSettings.imageSize ?? 1.0,
+          zIndex: 0
         }] : []);
     
     if (imagesWithOrientation.length === 0 && bannerSettings.backgroundImageUrl && bannerSettings.backgroundType === 'image') {
@@ -852,7 +858,9 @@
         console.log('Using image URL (already presigned or not S3):', finalUrl);
         return {
           url: finalUrl,
-          orientation: imgData.orientation
+          orientation: imgData.orientation,
+          zoom: imgData.zoom ?? bannerSettings.imageSize ?? 1.0, // Include per-image zoom
+          zIndex: imgData.zIndex ?? 0 // Include per-image z-index
         };
       })
     );
@@ -870,7 +878,7 @@
     
     switch (bannerSettings.imageLayout) {
       case 'full':
-        await drawFullBackgroundImage(ctx, width, height, validImages[0]?.url, validImages[0]?.orientation);
+        await drawFullBackgroundImage(ctx, width, height, validImages[0]?.url, validImages[0]?.orientation, validImages[0]?.zoom);
         break;
       case 'center':
         await drawCenterImage(ctx, width, height, validImages);
@@ -879,7 +887,7 @@
         await drawCollage(ctx, width, height, validImages);
         break;
       case 'split':
-        await drawSplitImage(ctx, width, height, validImages[0]?.url, validImages[0]?.orientation);
+        await drawSplitImage(ctx, width, height, validImages[0]?.url, validImages[0]?.orientation, validImages[0]?.zoom);
         break;
       case 'right':
         await drawRightImage(ctx, width, height, validImages);
@@ -951,7 +959,7 @@
     ctx.restore();
   }
 
-  async function drawFullBackgroundImage(ctx, width, height, imageUrl, orientation = null) {
+  async function drawFullBackgroundImage(ctx, width, height, imageUrl, orientation = null, zoom = null) {
     if (!imageUrl) {
       console.warn('No image URL provided for drawFullBackgroundImage');
       return;
@@ -1017,8 +1025,9 @@
         console.log('Center image loaded successfully');
         let imgSize = Math.min(width, height) * 0.6;
         
-        // Apply image size/zoom multiplier
-        imgSize *= bannerSettings.imageSize;
+        // Apply image size/zoom multiplier (use per-image zoom if available)
+        const imageZoom = imageData.zoom ?? bannerSettings.imageSize ?? 1.0;
+        imgSize *= imageZoom;
         
         const x = (width - imgSize) / 2;
         const y = (height - imgSize) / 2;
@@ -1073,9 +1082,10 @@
           y = (height - drawHeight) / 2;
         }
         
-        // Apply image size/zoom multiplier
-        drawWidth *= bannerSettings.imageSize;
-        drawHeight *= bannerSettings.imageSize;
+        // Apply image size/zoom multiplier (use per-image zoom if available)
+        const imageZoom = imageData.zoom ?? bannerSettings.imageSize ?? 1.0;
+        drawWidth *= imageZoom;
+        drawHeight *= imageZoom;
         
         // Recalculate position to keep image centered after size change
         x = imgAreaX + (imgAreaWidth - drawWidth) / 2;
@@ -1130,9 +1140,10 @@
           y = (height - drawHeight) / 2;
         }
         
-        // Apply image size/zoom multiplier
-        drawWidth *= bannerSettings.imageSize;
-        drawHeight *= bannerSettings.imageSize;
+        // Apply image size/zoom multiplier (use per-image zoom if available)
+        const imageZoom = imageData.zoom ?? bannerSettings.imageSize ?? 1.0;
+        drawWidth *= imageZoom;
+        drawHeight *= imageZoom;
         
         // Recalculate position to keep image centered after size change
         x = (imgAreaWidth - drawWidth) / 2;
@@ -1158,7 +1169,7 @@
     });
   }
 
-  async function drawSplitImage(ctx, width, height, imageUrl, orientation = null) {
+  async function drawSplitImage(ctx, width, height, imageUrl, orientation = null, zoom = null) {
     if (!imageUrl) {
       console.warn('No image URL for drawSplitImage');
       return;
@@ -1170,7 +1181,9 @@
         console.log('Split image loaded successfully');
         // Split screen: image on one side, text on other
         const splitPoint = width / 2;
-        const scale = Math.max(splitPoint / img.width, height / img.height);
+        const baseScale = Math.max(splitPoint / img.width, height / img.height);
+        const imageZoom = zoom ?? bannerSettings.imageSize ?? 1.0;
+        const scale = baseScale * imageZoom;
         const drawWidth = img.width * scale;
         const drawHeight = img.height * scale;
         const x = splitPoint + (splitPoint - drawWidth) / 2;
@@ -1205,7 +1218,7 @@
     console.log('Loading collage images:', images);
     
     const loadedImages = await Promise.all(
-      images.map(async (imageData) => {
+      images.map(async (imageData, originalIndex) => {
         if (!imageData?.url) return null;
         const srcUrl = await loadImageForCanvas(imageData.url);
         return new Promise((resolve) => {
@@ -1214,7 +1227,10 @@
             console.log('Collage image loaded:', imageData.url);
             resolve({
               img,
-              orientation: imageData.orientation
+              orientation: imageData.orientation,
+              zoom: imageData.zoom ?? bannerSettings.imageSize ?? 1.0,
+              zIndex: imageData.zIndex ?? originalIndex,
+              originalIndex // Keep original index for reference
             });
           };
           img.onerror = (error) => {
@@ -1231,6 +1247,9 @@
     
     const validImages = loadedImages.filter(img => img !== null);
     if (validImages.length === 0) return;
+    
+    // Sort images by z-index (lower z-index drawn first, so higher z-index appears on top)
+    validImages.sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
     
     const textAreaWidth = width * bannerSettings.textImageRatio;
     const imgAreaWidth = width - textAreaWidth;
@@ -1264,11 +1283,11 @@
     // Custom layout: use user-defined positions
     if (bannerSettings.collageLayout === 'custom' && bannerSettings.collageImagePositions.length > 0) {
       validImages.forEach((imageData, index) => {
-        const { img, orientation } = imageData;
-        const customPos = bannerSettings.collageImagePositions[index];
+        const { img, orientation, zoom } = imageData;
+        const customPos = bannerSettings.collageImagePositions[imageData.originalIndex ?? index];
         if (!customPos) return;
         
-        const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.imageSize;
+        const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * zoom;
         const scale = Math.min(baseSize / img.width, baseSize / img.height);
         const drawWidth = img.width * scale;
         const drawHeight = img.height * scale;
@@ -1308,13 +1327,14 @@
       const cellHeight = (imgAreaHeight - totalSpacingV) / rows;
       
       validImages.forEach((imageData, index) => {
-        const { img, orientation } = imageData;
-        const col = index % cols;
-        const row = Math.floor(index / cols);
+        const { img, orientation, zoom } = imageData;
+        const originalIndex = imageData.originalIndex ?? index;
+        const col = originalIndex % cols;
+        const row = Math.floor(originalIndex / cols);
         const baseX = imgAreaX + col * (cellWidth + spacing);
         const baseY = row * (cellHeight + spacing);
         
-        const scale = Math.min(cellWidth / img.width, cellHeight / img.height) * bannerSettings.imageSize;
+        const scale = Math.min(cellWidth / img.width, cellHeight / img.height) * zoom;
         const drawWidth = img.width * scale;
         const drawHeight = img.height * scale;
         
@@ -1339,33 +1359,33 @@
       const centerX = imgAreaX + imgAreaWidth / 2;
       const centerY = imgAreaHeight / 2;
       const radius = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.collageRadius;
-      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.imageSize;
       
-      const imageData = validImages.map((imageData, index) => {
-        const { img, orientation } = imageData;
+      const imageData = validImages.map((imageData, sortedIndex) => {
+        const { img, orientation, zoom, originalIndex } = imageData;
+        const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * zoom;
         const scale = Math.min(baseSize / img.width, baseSize / img.height);
         const drawWidth = img.width * scale;
         const drawHeight = img.height * scale;
         
-        const angle = (index * 2 * Math.PI / validImages.length) - Math.PI / 2;
+        // Use original index for positioning to maintain layout
+        const positionIndex = originalIndex ?? sortedIndex;
+        const angle = (positionIndex * 2 * Math.PI / validImages.length) - Math.PI / 2;
         const baseX = centerX + Math.cos(angle) * radius;
         const baseY = centerY + Math.sin(angle) * radius;
         const rotation = angle + Math.PI / 2;
         
-        const behindIndex = (index + validImages.length - 1) % validImages.length;
+        const behindIndex = (positionIndex + validImages.length - 1) % validImages.length;
         const behindAngle = (behindIndex * 2 * Math.PI / validImages.length) - Math.PI / 2;
         const offsetX = Math.cos(behindAngle) * bannerSettings.collageSpacing;
         const offsetY = Math.sin(behindAngle) * bannerSettings.collageSpacing;
         
-        return { img, drawWidth, drawHeight, x: baseX + offsetX, y: baseY + offsetY, rotation, index, orientation };
+        return { img, drawWidth, drawHeight, x: baseX + offsetX, y: baseY + offsetY, rotation, sortedIndex, orientation, zIndex: imageData.zIndex };
       });
       
-      // Draw in reverse order for layering
-      const drawOrder = Array.from({ length: validImages.length }, (_, i) => validImages.length - 1 - i);
-      drawOrder.forEach((orderIndex) => {
-        const data = imageData[orderIndex];
+      // Draw in z-index order (already sorted, but maintain for clarity)
+      imageData.forEach((data) => {
         ctx.save();
-        ctx.shadowColor = `rgba(0, 0, 0, ${0.2 + orderIndex * 0.1})`;
+        ctx.shadowColor = `rgba(0, 0, 0, ${0.2 + (data.zIndex ?? data.sortedIndex) * 0.1})`;
         ctx.shadowBlur = 15;
         ctx.shadowOffsetX = 6;
         ctx.shadowOffsetY = 6;
@@ -1388,26 +1408,28 @@
     
     // Stacked layout
     if (bannerSettings.collageLayout === 'stacked') {
-      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.imageSize;
       const spacing = bannerSettings.collageSpacing;
       
-      validImages.forEach((imageData, index) => {
-        const { img, orientation } = imageData;
+      validImages.forEach((imageData, sortedIndex) => {
+        const { img, orientation, zoom, originalIndex } = imageData;
+        const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * zoom;
         const scale = Math.min(baseSize / img.width, baseSize / img.height);
         const drawWidth = img.width * scale;
         const drawHeight = img.height * scale;
         
-        const offsetX = index * spacing * 0.3;
-        const offsetY = index * spacing * 0.3;
+        // Use original index for offset to maintain visual stacking
+        const positionIndex = originalIndex ?? sortedIndex;
+        const offsetX = positionIndex * spacing * 0.3;
+        const offsetY = positionIndex * spacing * 0.3;
         const align = getAlignmentOffset(bannerSettings.collageAlignment, imgAreaWidth, imgAreaHeight, drawWidth, drawHeight);
         const x = imgAreaX + align.offsetX + offsetX;
         const y = align.offsetY + offsetY;
         
         ctx.save();
-        ctx.shadowColor = `rgba(0, 0, 0, ${0.1 + index * 0.05})`;
-        ctx.shadowBlur = 10 + index * 2;
-        ctx.shadowOffsetX = 3 + index;
-        ctx.shadowOffsetY = 3 + index;
+        ctx.shadowColor = `rgba(0, 0, 0, ${0.1 + (imageData.zIndex ?? sortedIndex) * 0.05})`;
+        ctx.shadowBlur = 10 + (imageData.zIndex ?? sortedIndex) * 2;
+        ctx.shadowOffsetX = 3 + (imageData.zIndex ?? sortedIndex);
+        ctx.shadowOffsetY = 3 + (imageData.zIndex ?? sortedIndex);
         applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, orientation);
         ctx.restore();
       });
@@ -1416,16 +1438,18 @@
     
     // Diagonal layout
     if (bannerSettings.collageLayout === 'diagonal') {
-      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.imageSize;
       const spacing = bannerSettings.collageSpacing;
       
-      validImages.forEach((imageData, index) => {
-        const { img, orientation } = imageData;
+      validImages.forEach((imageData, sortedIndex) => {
+        const { img, orientation, zoom, originalIndex } = imageData;
+        const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * zoom;
         const scale = Math.min(baseSize / img.width, baseSize / img.height);
         const drawWidth = img.width * scale;
         const drawHeight = img.height * scale;
         
-        const progress = validImages.length > 1 ? index / (validImages.length - 1) : 0.5;
+        // Use original index for positioning to maintain layout
+        const positionIndex = originalIndex ?? sortedIndex;
+        const progress = validImages.length > 1 ? positionIndex / (validImages.length - 1) : 0.5;
         const x = imgAreaX + (imgAreaWidth - drawWidth) * progress;
         const y = (imgAreaHeight - drawHeight) * (1 - progress);
         
@@ -1442,18 +1466,19 @@
     
     // Scattered layout
     if (bannerSettings.collageLayout === 'scattered') {
-      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.imageSize;
-      
-      validImages.forEach((imageData, index) => {
-        const { img, orientation } = imageData;
+      validImages.forEach((imageData, sortedIndex) => {
+        const { img, orientation, zoom, originalIndex } = imageData;
+        const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * zoom;
         const scale = Math.min(baseSize / img.width, baseSize / img.height);
         const drawWidth = img.width * scale;
         const drawHeight = img.height * scale;
         
-        // Random-ish but deterministic positions based on index
-        const seed = index * 137.508; // Golden angle approximation
+        // Use original index for positioning to maintain layout
+        const positionIndex = originalIndex ?? sortedIndex;
+        // Random-ish but deterministic positions based on original index
+        const seed = positionIndex * 137.508; // Golden angle approximation
         const angle = seed % (Math.PI * 2);
-        const distance = (imgAreaWidth * 0.3) * (0.3 + (index % 3) * 0.2);
+        const distance = (imgAreaWidth * 0.3) * (0.3 + (positionIndex % 3) * 0.2);
         const centerX = imgAreaX + imgAreaWidth / 2;
         const centerY = imgAreaHeight / 2;
         const x = centerX + Math.cos(angle) * distance - drawWidth / 2;
@@ -1474,8 +1499,9 @@
     
     // Auto layout (original logic for 1, 2, 3, 4+ images)
     if (validImages.length === 1) {
-      const { img, orientation } = validImages[0];
-      const scale = Math.min(imgAreaWidth / img.width, imgAreaHeight / img.height);
+      const { img, orientation, zoom } = validImages[0];
+      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * zoom;
+      const scale = Math.min(baseSize / img.width, baseSize / img.height);
       const drawWidth = img.width * scale;
       const drawHeight = img.height * scale;
       const x = imgAreaX + (imgAreaWidth - drawWidth) / 2;
@@ -1483,15 +1509,16 @@
       applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, orientation);
     } else if (validImages.length === 2) {
       // 2 images: first image bottom left, second slightly behind it on top right
-      const { img: img1, orientation: orientation1 } = validImages[0];
-      const { img: img2, orientation: orientation2 } = validImages[1];
+      const { img: img1, orientation: orientation1, zoom: zoom1 } = validImages[0];
+      const { img: img2, orientation: orientation2, zoom: zoom2 } = validImages[1];
       
-      // Calculate sizes - use configurable size multiplier
-      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.imageSize;
+      // Calculate sizes - use per-image zoom
+      const baseSize1 = Math.min(imgAreaWidth, imgAreaHeight) * zoom1;
+      const baseSize2 = Math.min(imgAreaWidth, imgAreaHeight) * zoom2;
       
       // Scale each image to fit, maintaining aspect ratio
-      const scale1 = Math.min(baseSize / img1.width, baseSize / img1.height);
-      const scale2 = Math.min(baseSize / img2.width, baseSize / img2.height);
+      const scale1 = Math.min(baseSize1 / img1.width, baseSize1 / img1.height);
+      const scale2 = Math.min(baseSize2 / img2.width, baseSize2 / img2.height);
       
       const drawWidth1 = img1.width * scale1;
       const drawHeight1 = img1.height * scale1;
@@ -1547,27 +1574,27 @@
       const centerY = imgAreaHeight / 2;
       const radius = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.collageRadius; // Configurable radius
       
-      // Calculate sizes - use configurable size multiplier
-      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.imageSize;
-      
       // Prepare image data with positions
-      const imageData = validImages.map((imageData, index) => {
-        const { img, orientation } = imageData;
+      const imageData = validImages.map((imageData, sortedIndex) => {
+        const { img, orientation, zoom, originalIndex } = imageData;
+        const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * zoom;
         const scale = Math.min(baseSize / img.width, baseSize / img.height);
         const drawWidth = img.width * scale;
         const drawHeight = img.height * scale;
         
+        // Use original index for positioning to maintain layout
+        const positionIndex = originalIndex ?? sortedIndex;
         // Position in circle: 120 degrees apart (360/3)
-        const angle = (index * 2 * Math.PI / 3) - Math.PI / 2; // Start from top
+        const angle = (positionIndex * 2 * Math.PI / 3) - Math.PI / 2; // Start from top
         const baseX = centerX + Math.cos(angle) * radius;
         const baseY = centerY + Math.sin(angle) * radius;
         
         // Rotation for each image (more dynamic tilt)
-        const rotation = angle + Math.PI / 2 + (index % 2 === 0 ? 0.1 : -0.1); // Alternating slight tilt
+        const rotation = angle + Math.PI / 2 + (positionIndex % 2 === 0 ? 0.1 : -0.1); // Alternating slight tilt
         
         // Offset to create "behind" effect - each image is slightly offset inward
         // Image 1 is behind 3, Image 2 is behind 1, Image 3 is behind 2
-        const behindIndex = (index + 2) % 3; // Which image this one is behind
+        const behindIndex = (positionIndex + 2) % 3; // Which image this one is behind
         const behindAngle = (behindIndex * 2 * Math.PI / 3) - Math.PI / 2;
         const offsetX = Math.cos(behindAngle) * bannerSettings.collageSpacing; // Configurable spacing
         const offsetY = Math.sin(behindAngle) * bannerSettings.collageSpacing;
@@ -1579,20 +1606,19 @@
           x: baseX + offsetX,
           y: baseY + offsetY,
           rotation,
-          index
+          sortedIndex,
+          zIndex: imageData.zIndex ?? sortedIndex,
+          orientation
         };
       });
       
-      // Draw in order: 3, 2, 1 (so 1 is on top, 2 is in middle, 3 is behind)
-      // This creates: 2 behind 1, 3 behind 2, 1 behind 3
-      const drawOrder = [2, 1, 0]; // Draw 3rd, then 2nd, then 1st
-      drawOrder.forEach((orderIndex) => {
-        const data = imageData[orderIndex];
+      // Draw in z-index order (already sorted, but maintain for clarity)
+      imageData.forEach((data) => {
         ctx.save();
         
-        // Add shadow for depth (stronger for images further back)
-        const shadowIntensity = orderIndex === 2 ? 0.4 : (orderIndex === 1 ? 0.3 : 0.2);
-        ctx.shadowColor = `rgba(0, 0, 0, ${shadowIntensity})`;
+        // Add shadow for depth (stronger for images with lower z-index)
+        const shadowIntensity = 0.2 + (data.zIndex * 0.1);
+        ctx.shadowColor = `rgba(0, 0, 0, ${Math.min(shadowIntensity, 0.4)})`;
         ctx.shadowBlur = 15;
         ctx.shadowOffsetX = 6;
         ctx.shadowOffsetY = 6;
@@ -1601,12 +1627,11 @@
         ctx.rotate(data.rotation);
         
         // Apply per-image transformations on top of existing rotation
-        const imageOrientation = validImages[orderIndex]?.orientation;
-        if (imageOrientation) {
-          const rotationRad = (imageOrientation.rotation * Math.PI) / 180;
+        if (data.orientation) {
+          const rotationRad = (data.orientation.rotation * Math.PI) / 180;
           ctx.rotate(rotationRad);
-          let scaleX = imageOrientation.flipHorizontal ? -1 : 1;
-          let scaleY = imageOrientation.flipVertical ? -1 : 1;
+          let scaleX = data.orientation.flipHorizontal ? -1 : 1;
+          let scaleY = data.orientation.flipVertical ? -1 : 1;
           ctx.scale(scaleX, scaleY);
         }
         
@@ -1626,19 +1651,22 @@
       const cellWidth = (imgAreaWidth - totalPadding) / cols;
       const cellHeight = (imgAreaHeight - totalPaddingV) / rows;
       
-      validImages.forEach((imageData, index) => {
-        const { img, orientation } = imageData;
-        const col = index % cols;
-        const row = Math.floor(index / cols);
+      validImages.forEach((imageData, sortedIndex) => {
+        const { img, orientation, zoom, originalIndex } = imageData;
+        // Use original index for positioning to maintain layout
+        const positionIndex = originalIndex ?? sortedIndex;
+        const col = positionIndex % cols;
+        const row = Math.floor(positionIndex / cols);
         const x = imgAreaX + col * (cellWidth + padding);
         const y = row * (cellHeight + padding);
         
-        // Scale to fit with some margin
+        // Scale to fit with some margin, using per-image zoom
         const margin = 4;
-        const scale = Math.min(
+        const baseScale = Math.min(
           (cellWidth - margin * 2) / img.width,
           (cellHeight - margin * 2) / img.height
         );
+        const scale = baseScale * zoom;
         const drawWidth = img.width * scale;
         const drawHeight = img.height * scale;
         const drawX = x + (cellWidth - drawWidth) / 2;
@@ -1880,12 +1908,14 @@
                   if (isSelected) {
                     selectedBannerImages = selectedBannerImages.filter(sel => sel.id !== image.id && sel.url !== image.url);
                   } else {
-                    // Add image with default orientation from global settings
+                    // Add image with default orientation, zoom, and z-index from global settings
                     selectedBannerImages = [...selectedBannerImages, {
                       ...image,
                       rotation: bannerSettings.imageRotation ?? 0,
                       flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
                       flipVertical: bannerSettings.imageFlipVertical ?? false,
+                      zoom: bannerSettings.imageSize ?? 1.0, // Per-image zoom
+                      zIndex: selectedBannerImages.length, // Default z-index based on order
                       isFeatured: selectedBannerImages.length === 0 // First image is featured by default
                     }];
                   }
@@ -2040,6 +2070,44 @@
                 </div>
                 
                 <div class="mb-2">
+                  <label for="zoom-{index}" class="block text-xs text-gray-600 mb-1">
+                    Zoom: {Math.round((image.zoom ?? bannerSettings.imageSize ?? 1.0) * 100)}%
+                  </label>
+                  <div class="flex items-center gap-2">
+                    <input
+                      id="zoom-{index}"
+                      type="range"
+                      min="0.1"
+                      max="2.0"
+                      step="0.1"
+                      value={image.zoom ?? bannerSettings.imageSize ?? 1.0}
+                      oninput={(e) => {
+                        selectedBannerImages[index] = {
+                          ...selectedBannerImages[index],
+                          zoom: parseFloat(e.target.value)
+                        };
+                        selectedBannerImages = [...selectedBannerImages]; // Trigger reactivity
+                      }}
+                      class="flex-1"
+                    />
+                    <button
+                      type="button"
+                      onclick={() => {
+                        selectedBannerImages[index] = {
+                          ...selectedBannerImages[index],
+                          zoom: bannerSettings.imageSize ?? 1.0
+                        };
+                        selectedBannerImages = [...selectedBannerImages];
+                      }}
+                      class="px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
+                      title="Reset to global zoom"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="mb-2">
                   <label for="rotation-{index}" class="block text-xs text-gray-600 mb-1">
                     Rotation: {image.rotation ?? 0}°
                   </label>
@@ -2076,7 +2144,7 @@
                   </div>
                 </div>
                 
-                <div class="flex gap-4">
+                <div class="flex gap-4 mb-2">
                   <label class="flex items-center gap-2 cursor-pointer">
                     <input
                       type="checkbox"
@@ -2109,6 +2177,48 @@
                     <span class="text-xs text-gray-700">Flip V</span>
                   </label>
                 </div>
+                
+                <!-- Z-Index Control (for collage layouts) -->
+                {#if bannerSettings.imageLayout === 'collage'}
+                  <div class="mb-2">
+                    <label for="zindex-{index}" class="block text-xs text-gray-600 mb-1">
+                      Stack Order (Z-Index): {image.zIndex ?? index}
+                      <span class="text-gray-400 ml-1">(Higher = on top)</span>
+                    </label>
+                    <div class="flex items-center gap-2">
+                      <input
+                        id="zindex-{index}"
+                        type="range"
+                        min="0"
+                        max={selectedBannerImages.length - 1}
+                        step="1"
+                        value={image.zIndex ?? index}
+                        oninput={(e) => {
+                          selectedBannerImages[index] = {
+                            ...selectedBannerImages[index],
+                            zIndex: parseInt(e.target.value)
+                          };
+                          selectedBannerImages = [...selectedBannerImages]; // Trigger reactivity
+                        }}
+                        class="flex-1"
+                      />
+                      <button
+                        type="button"
+                        onclick={() => {
+                          selectedBannerImages[index] = {
+                            ...selectedBannerImages[index],
+                            zIndex: index
+                          };
+                          selectedBannerImages = [...selectedBannerImages];
+                        }}
+                        class="px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
+                        title="Reset to default order"
+                      >
+                        Reset
+                      </button>
+                    </div>
+                  </div>
+                {/if}
               </div>
             {/each}
           </div>
