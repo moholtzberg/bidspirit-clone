@@ -1772,6 +1772,19 @@
       ctx.globalAlpha = 1.0;
     }
     
+    // Draw background pattern on text area if pattern is enabled
+    if (bannerSettings.backgroundType === 'pattern' && bannerSettings.backgroundPattern !== 'none') {
+      ctx.save();
+      // Clip to text area
+      ctx.beginPath();
+      ctx.rect(textAreaX, textAreaY, textAreaWidth, height);
+      ctx.clip();
+      // Translate to text area origin and draw pattern
+      ctx.translate(textAreaX, textAreaY);
+      drawBackgroundPattern(ctx, textAreaWidth, height, bannerSettings.backgroundPattern);
+      ctx.restore();
+    }
+    
     // Text settings
     ctx.fillStyle = bannerSettings.textColor;
     ctx.textAlign = bannerSettings.textAlign;
@@ -1821,19 +1834,73 @@
       currentY += titleHebrewLines.length * bannerSettings.fontSize * 1.5 + 20;
     }
     
-    // Year (English)
-    if (bannerSettings.yearEnglish) {
-      ctx.font = `${bannerSettings.fontSize * 0.6}px ${bannerSettings.fontFamily}`;
-      ctx.fillText(bannerSettings.yearEnglish, textX, currentY);
-      currentY += bannerSettings.fontSize * 0.8;
+    // Year (English and Hebrew) - Larger and more prominent, on same line with separator
+    if (bannerSettings.yearEnglish || bannerSettings.yearHebrew) {
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      
+      let yearText = '';
+      let separator = '';
+      
+      if (bannerSettings.yearEnglish && bannerSettings.yearHebrew) {
+        // Both years - use bullet separator
+        yearText = `${bannerSettings.yearEnglish} • ${bannerSettings.yearHebrew}`;
+        separator = ' • ';
+      } else if (bannerSettings.yearEnglish) {
+        yearText = bannerSettings.yearEnglish;
+      } else if (bannerSettings.yearHebrew) {
+        yearText = bannerSettings.yearHebrew;
+      }
+      
+      if (yearText) {
+        // Draw year text
+        ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.fontFamily}`;
+        const yearY = currentY + (bannerSettings.fontSize * 1.8) / 2;
+        
+        // If both years exist, draw them separately with a decorative separator
+        if (bannerSettings.yearEnglish && bannerSettings.yearHebrew) {
+          // Measure text widths
+          ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.fontFamily}`;
+          const englishWidth = ctx.measureText(bannerSettings.yearEnglish).width;
+          
+          ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.hebrewFontFamily}`;
+          const hebrewWidth = ctx.measureText(bannerSettings.yearHebrew).width;
+          
+          const separatorWidth = bannerSettings.fontSize * 0.4;
+          const totalWidth = englishWidth + separatorWidth + hebrewWidth;
+          const startX = centerX - totalWidth / 2;
+          
+          // Draw English year
+          ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.fontFamily}`;
+          ctx.fillText(bannerSettings.yearEnglish, startX + englishWidth / 2, yearY);
+          
+          // Draw decorative separator (bullet or diamond)
+          const separatorX = startX + englishWidth + separatorWidth / 2;
+          ctx.fillStyle = bannerSettings.textColor;
+          ctx.beginPath();
+          // Draw a diamond/bullet shape
+          ctx.save();
+          ctx.translate(separatorX, yearY);
+          ctx.rotate(Math.PI / 4); // Rotate 45 degrees for diamond
+          ctx.fillRect(-bannerSettings.fontSize * 0.15, -bannerSettings.fontSize * 0.15, 
+                       bannerSettings.fontSize * 0.3, bannerSettings.fontSize * 0.3);
+          ctx.restore();
+          
+          // Draw Hebrew year
+          ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.hebrewFontFamily}`;
+          ctx.fillText(bannerSettings.yearHebrew, startX + englishWidth + separatorWidth + hebrewWidth / 2, yearY);
+        } else {
+          // Single year
+          ctx.fillText(yearText, centerX, yearY);
+        }
+        
+        currentY += bannerSettings.fontSize * 2.2;
+      }
     }
     
-    // Year (Hebrew)
-    if (bannerSettings.yearHebrew) {
-      ctx.font = `${bannerSettings.fontSize * 0.6}px ${bannerSettings.hebrewFontFamily}`;
-      ctx.fillText(bannerSettings.yearHebrew, textX, currentY);
-      currentY += bannerSettings.fontSize * 0.8;
-    }
+    // Reset text alignment and baseline
+    ctx.textAlign = bannerSettings.textAlign;
+    ctx.textBaseline = 'top';
     
     // Subtitle (English)
     if (bannerSettings.subtitle) {
@@ -1852,6 +1919,113 @@
       subtitleHebrewLines.forEach((line, index) => {
         ctx.fillText(line, textX, currentY + (index * bannerSettings.fontSize * 0.7));
       });
+    }
+    
+    // Category Ribbon in top right corner
+    if (bannerSettings.category || bannerSettings.categoryHebrew) {
+      ctx.save();
+      
+      // Measure text first to determine ribbon size
+      let categoryText = '';
+      if (bannerSettings.category) {
+        categoryText = bannerSettings.category.toUpperCase();
+      }
+      if (bannerSettings.categoryHebrew) {
+        if (categoryText) categoryText += ' / ';
+        categoryText += bannerSettings.categoryHebrew;
+      }
+      
+      ctx.font = `bold ${bannerSettings.fontSize * 0.55}px ${bannerSettings.fontFamily}`;
+      const textMetrics = ctx.measureText(categoryText);
+      const textWidth = textMetrics.width;
+      
+      // Ribbon dimensions based on text width
+      const ribbonPadding = 30;
+      const ribbonWidth = textWidth + ribbonPadding * 2;
+      const ribbonHeight = 45;
+      const angle = Math.PI / 4; // 45 degrees for diagonal ribbon (top-right to bottom-left)
+      
+      // Position ribbon so its top-right corner aligns with canvas top-right corner
+      // After rotation, the ribbon extends from top-right to bottom-left
+      // We need to position the center so that after rotation, the top-right corner of the ribbon
+      // aligns with the top-right corner of the canvas
+      const ribbonHalfWidth = ribbonWidth / 2;
+      const ribbonHalfHeight = ribbonHeight / 2;
+      
+      // Calculate where the ribbon center should be so its corner aligns with canvas corner
+      // When rotated 45 degrees, the corner offset from center is:
+      const cos45 = Math.cos(angle);
+      const sin45 = Math.sin(angle);
+      const cornerOffsetX = ribbonHalfWidth * cos45 - ribbonHalfHeight * sin45;
+      const cornerOffsetY = ribbonHalfWidth * sin45 + ribbonHalfHeight * cos45;
+      
+      // Position center so top-right corner of ribbon aligns with top-right of canvas
+      const ribbonCenterX = width - cornerOffsetX;
+      const ribbonCenterY = cornerOffsetY;
+      
+      // Create ribbon path (diagonal ribbon shape)
+      ctx.translate(ribbonCenterX, ribbonCenterY);
+      ctx.rotate(angle);
+      
+      // Draw ribbon background with shadow
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.4)';
+      ctx.shadowBlur = 10;
+      ctx.shadowOffsetX = 3;
+      ctx.shadowOffsetY = 3;
+      
+      // Ribbon shape (folded ribbon effect)
+      ctx.fillStyle = bannerSettings.textColor || '#2C1810';
+      ctx.beginPath();
+      
+      // Main ribbon body (rounded rectangle)
+      const cornerRadius = 5;
+      const halfWidth = ribbonWidth / 2;
+      const halfHeight = ribbonHeight / 2;
+      
+      // Draw rounded rectangle
+      ctx.moveTo(-halfWidth + cornerRadius, -halfHeight);
+      ctx.lineTo(halfWidth - cornerRadius, -halfHeight);
+      ctx.quadraticCurveTo(halfWidth, -halfHeight, halfWidth, -halfHeight + cornerRadius);
+      ctx.lineTo(halfWidth, halfHeight - cornerRadius);
+      ctx.quadraticCurveTo(halfWidth, halfHeight, halfWidth - cornerRadius, halfHeight);
+      ctx.lineTo(-halfWidth + cornerRadius, halfHeight);
+      ctx.quadraticCurveTo(-halfWidth, halfHeight, -halfWidth, halfHeight - cornerRadius);
+      ctx.lineTo(-halfWidth, -halfHeight + cornerRadius);
+      ctx.quadraticCurveTo(-halfWidth, -halfHeight, -halfWidth + cornerRadius, -halfHeight);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Add fold effect on top left
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+      ctx.beginPath();
+      ctx.moveTo(-halfWidth, -halfHeight);
+      ctx.lineTo(-halfWidth + 20, -halfHeight - 5);
+      ctx.lineTo(-halfWidth + 40, -halfHeight);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Add fold effect on bottom right
+      ctx.beginPath();
+      ctx.moveTo(halfWidth, halfHeight);
+      ctx.lineTo(halfWidth - 20, halfHeight + 5);
+      ctx.lineTo(halfWidth - 40, halfHeight);
+      ctx.closePath();
+      ctx.fill();
+      
+      // Reset shadow
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+      
+      // Draw text on ribbon
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `bold ${bannerSettings.fontSize * 0.55}px ${bannerSettings.fontFamily}`;
+      ctx.fillText(categoryText, 0, 0);
+      
+      ctx.restore();
     }
   }
 
@@ -2676,6 +2850,20 @@
         </div>
         
         <div class="mb-4">
+          <label for="subtitle-he" class="block text-sm font-medium text-gray-700 mb-2">
+            Subtitle (Hebrew)
+          </label>
+          <textarea
+            id="subtitle-he"
+            bind:value={bannerSettings.subtitleHebrew}
+            placeholder="תת-כותרת בעברית"
+            rows="2"
+            dir="rtl"
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          ></textarea>
+        </div>
+        
+        <div class="mb-4">
           <label for="year-en" class="block text-sm font-medium text-gray-700 mb-2">
             Year (English)
           </label>
@@ -2688,8 +2876,52 @@
               bannerSettings.yearEnglish = e.target.value;
               if (bannerSettings.yearEnglish) {
                 bannerSettings.yearHebrew = convertToHebrewYear(bannerSettings.yearEnglish);
+              } else {
+                bannerSettings.yearHebrew = '';
               }
             }}
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          />
+        </div>
+        
+        <div class="mb-4">
+          <label for="year-he" class="block text-sm font-medium text-gray-700 mb-2">
+            Year (Hebrew)
+          </label>
+          <input
+            id="year-he"
+            type="text"
+            bind:value={bannerSettings.yearHebrew}
+            placeholder="Auto-filled from English year, or enter manually"
+            dir="rtl"
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          />
+          <p class="text-xs text-gray-500 mt-1">Auto-converts from English year, or enter manually</p>
+        </div>
+        
+        <div class="mb-4">
+          <label for="category-en" class="block text-sm font-medium text-gray-700 mb-2">
+            Category (English)
+          </label>
+          <input
+            id="category-en"
+            type="text"
+            bind:value={bannerSettings.category}
+            placeholder="e.g., Paintings, Sculpture, etc."
+            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          />
+        </div>
+        
+        <div class="mb-4">
+          <label for="category-he" class="block text-sm font-medium text-gray-700 mb-2">
+            Category (Hebrew)
+          </label>
+          <input
+            id="category-he"
+            type="text"
+            bind:value={bannerSettings.categoryHebrew}
+            placeholder="קטגוריה בעברית"
+            dir="rtl"
             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
         </div>
