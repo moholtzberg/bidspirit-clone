@@ -78,4 +78,3 @@ npx prisma migrate dev --name add_lot_images
 - One image can be marked as primary
 - Images have a display order for sorting
 - Cloud storage keys are stored for deletion purposes
-

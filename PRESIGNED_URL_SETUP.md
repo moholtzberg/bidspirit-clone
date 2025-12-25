@@ -59,3 +59,4 @@ If images still don't load:
 - Existing S3 URLs in your database will be automatically converted
 - New uploads will store the S3 key, which gets converted to presigned URLs when served
 
+
