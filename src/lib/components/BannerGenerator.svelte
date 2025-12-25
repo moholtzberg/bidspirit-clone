@@ -2048,20 +2048,20 @@
     if (bannerSettings.showBottomBorder && (auction || auctionHouse)) {
       ctx.save();
       
-      const borderHeight = 40;
+      const borderHeight = 70; // Increased height
       const borderY = height - borderHeight;
       
       // Draw border background
       ctx.fillStyle = bannerSettings.bottomBorderColor || '#2563EB';
       ctx.fillRect(0, borderY, width, borderHeight);
       
-      // Draw text (white for contrast)
+      // Draw text (white for contrast) - increased font size
       ctx.fillStyle = '#FFFFFF';
       ctx.textAlign = 'left';
       ctx.textBaseline = 'middle';
-      ctx.font = `${bannerSettings.fontSize * 0.25}px ${bannerSettings.fontFamily}`;
+      ctx.font = `bold ${bannerSettings.fontSize * 0.5}px ${bannerSettings.fontFamily}`;
       
-      // Build text content
+      // Build text content - ensure auction house name is included
       let borderText = '';
       if (auctionHouse && auctionHouse.name) {
         borderText += auctionHouse.name;
@@ -2082,8 +2082,8 @@
       }
       
       if (borderText) {
-        // Add padding
-        const padding = 15;
+        // Add padding - increased for larger text
+        const padding = 20;
         ctx.fillText(borderText, padding, borderY + borderHeight / 2);
       }
       
