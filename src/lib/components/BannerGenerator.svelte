@@ -37,8 +37,10 @@
     imageFlipHorizontal: false, // Flip horizontally
     imageFlipVertical: false, // Flip vertically
     
-    // Collage settings
-    collageImageSize: 0.65, // Size multiplier for collage images (0.1 to 1.0)
+    // Image size/zoom settings (applies to all layouts)
+    imageSize: 1.0, // Size multiplier for images (0.1 to 2.0)
+    
+    // Collage-specific settings
     collageSpacing: 40, // Spacing/offset between images in pixels
     collageRadius: 0.28, // Radius multiplier for 3-image circular layout (0.1 to 0.5)
     
@@ -957,8 +959,16 @@
           x = (width - img.width * scale) / 2;
           y = (height - img.height * scale) / 2;
         }
-        const drawWidth = img.width * scale;
-        const drawHeight = img.height * scale;
+        let drawWidth = img.width * scale;
+        let drawHeight = img.height * scale;
+        
+        // Apply image size/zoom multiplier
+        drawWidth *= bannerSettings.imageSize;
+        drawHeight *= bannerSettings.imageSize;
+        
+        // Recalculate position to keep image centered after size change
+        x = (width - drawWidth) / 2;
+        y = (height - drawHeight) / 2;
         
         // Apply transformations with per-image orientation
         applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, orientation);
@@ -992,7 +1002,11 @@
       const srcUrl = await loadImageForCanvas(imageData.url);
       img.onload = () => {
         console.log('Center image loaded successfully');
-        const imgSize = Math.min(width, height) * 0.6;
+        let imgSize = Math.min(width, height) * 0.6;
+        
+        // Apply image size/zoom multiplier
+        imgSize *= bannerSettings.imageSize;
+        
         const x = (width - imgSize) / 2;
         const y = (height - imgSize) / 2;
         
@@ -1046,6 +1060,14 @@
           y = (height - drawHeight) / 2;
         }
         
+        // Apply image size/zoom multiplier
+        drawWidth *= bannerSettings.imageSize;
+        drawHeight *= bannerSettings.imageSize;
+        
+        // Recalculate position to keep image centered after size change
+        x = imgAreaX + (imgAreaWidth - drawWidth) / 2;
+        y = (height - drawHeight) / 2;
+        
         // Apply transformations with per-image orientation
         applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, imageData.orientation);
         
@@ -1094,6 +1116,14 @@
           x = (imgAreaWidth - drawWidth) / 2;
           y = (height - drawHeight) / 2;
         }
+        
+        // Apply image size/zoom multiplier
+        drawWidth *= bannerSettings.imageSize;
+        drawHeight *= bannerSettings.imageSize;
+        
+        // Recalculate position to keep image centered after size change
+        x = (imgAreaWidth - drawWidth) / 2;
+        y = (height - drawHeight) / 2;
         
         // Apply transformations with per-image orientation
         applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, imageData.orientation);
@@ -1208,7 +1238,7 @@
       const { img: img2, orientation: orientation2 } = validImages[1];
       
       // Calculate sizes - use configurable size multiplier
-      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.collageImageSize;
+      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.imageSize;
       
       // Scale each image to fit, maintaining aspect ratio
       const scale1 = Math.min(baseSize / img1.width, baseSize / img1.height);
@@ -1269,7 +1299,7 @@
       const radius = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.collageRadius; // Configurable radius
       
       // Calculate sizes - use configurable size multiplier
-      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.collageImageSize;
+      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.imageSize;
       
       // Prepare image data with positions
       const imageData = validImages.map((imageData, index) => {
@@ -1837,25 +1867,38 @@
           </div>
         </div>
         
+        <!-- Image Size/Zoom Control (applies to all layouts) -->
+        <div class="mb-4">
+          <label for="image-size" class="block text-sm font-medium text-gray-700 mb-2">
+            Image Size/Zoom: {Math.round(bannerSettings.imageSize * 100)}%
+          </label>
+          <div class="flex items-center gap-2">
+            <input
+              id="image-size"
+              type="range"
+              min="0.1"
+              max="2.0"
+              step="0.05"
+              bind:value={bannerSettings.imageSize}
+              class="flex-1"
+            />
+            <button
+              type="button"
+              onclick={() => bannerSettings.imageSize = 1.0}
+              class="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
+            >
+              Reset
+            </button>
+          </div>
+          <p class="text-xs text-gray-500 mt-1">
+            Adjusts the size of images in all layouts (100% = default size)
+          </p>
+        </div>
+        
         <!-- Collage Settings (only show when collage layout is selected) -->
         {#if bannerSettings.imageLayout === 'collage'}
           <div class="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
-            <h4 class="text-sm font-semibold text-gray-900 mb-3">Collage Settings</h4>
-            
-            <div class="mb-3">
-              <label for="collage-image-size" class="block text-xs text-gray-600 mb-1">
-                Image Size: {Math.round(bannerSettings.collageImageSize * 100)}%
-              </label>
-              <input
-                id="collage-image-size"
-                type="range"
-                min="0.2"
-                max="1.0"
-                step="0.05"
-                bind:value={bannerSettings.collageImageSize}
-                class="w-full"
-              />
-            </div>
+            <h4 class="text-sm font-semibold text-gray-900 mb-3">Collage-Specific Settings</h4>
             
             <div class="mb-3">
               <label for="collage-spacing" class="block text-xs text-gray-600 mb-1">
