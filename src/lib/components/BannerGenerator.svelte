@@ -30,7 +30,7 @@
     // Layout
     width: 1200,
     height: 630,
-    imageLayout: 'right', // 'right', 'left', 'center', 'full', 'collage', 'split'
+    imageLayout: 'collage', // 'right', 'left', 'center', 'full', 'collage', 'split'
     imagePosition: 'cover', // 'cover', 'contain', 'repeat'
     imageOpacity: 1.0,
     imageRotation: 0, // Rotation angle in degrees
@@ -41,13 +41,8 @@
     imageSize: 1.0, // Size multiplier for images (0.1 to 2.0)
     
     // Collage-specific settings
-    collageLayout: 'auto', // 'auto', 'grid', 'circle', 'stacked', 'diagonal', 'scattered', 'custom'
-    collageSpacing: 40, // Spacing/offset between images in pixels
-    collageRadius: 0.28, // Radius multiplier for 3-image circular layout (0.1 to 0.5)
-    collageGridColumns: 2, // Number of columns for grid layout
+    collageLayout: 'custom', // Use custom positions by default
     collageImagePositions: [], // Custom positions for each image [{x: 0-100%, y: 0-100%, rotation: 0-360}]
-    collageAllowOverlap: true, // Allow images to overlap
-    collageAlignment: 'center', // 'center', 'top', 'bottom', 'left', 'right', 'top-left', etc.
     
     // Background
     backgroundType: 'solid', // 'solid', 'gradient', 'image', 'pattern'
@@ -97,6 +92,51 @@
     { name: 'Noto Sans Hebrew', value: 'Noto Sans Hebrew, sans-serif' },
     { name: 'Rubik', value: 'Rubik, sans-serif' }
   ];
+
+  // Apply preset positions for 3 images in collage layout
+  function applyPresetCollagePositions() {
+    if (selectedBannerImages.length === 0) return;
+    
+    // Preset positions for 3 images
+    const presets = [
+      { x: 50, y: 60, zoom: 0.8, zIndex: 3, opacity: 1.0 }, // Center image
+      { x: 20, y: 40, zoom: 0.6, zIndex: 1, opacity: 1.0 }, // Image 2
+      { x: 80, y: 40, zoom: 0.6, zIndex: 2, opacity: 1.0 }  // Image 3
+    ];
+    
+    // Apply presets to first 3 images
+    selectedBannerImages = selectedBannerImages.map((img, idx) => {
+      if (idx < 3 && presets[idx]) {
+        return {
+          ...img,
+          zoom: presets[idx].zoom,
+          zIndex: presets[idx].zIndex,
+          opacity: presets[idx].opacity ?? img.opacity ?? 1.0
+        };
+      }
+      return {
+        ...img,
+        opacity: img.opacity ?? 1.0 // Ensure opacity is set
+      };
+    });
+    
+    // Initialize custom positions
+    bannerSettings.collageImagePositions = selectedBannerImages.map((_, idx) => {
+      if (idx < 3 && presets[idx]) {
+        return {
+          x: presets[idx].x,
+          y: presets[idx].y,
+          rotation: 0
+        };
+      }
+      // Default positions for additional images
+      return {
+        x: 20 + (idx * 30) % 60,
+        y: 20 + Math.floor(idx / 2) * 30,
+        rotation: 0
+      };
+    });
+  }
 
   // Convert Gregorian year to Hebrew year format
   function convertToHebrewYear(year) {
@@ -635,18 +675,17 @@
         rotation: bannerSettings.imageRotation ?? 0,
         flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
         flipVertical: bannerSettings.imageFlipVertical ?? false,
-        zoom: bannerSettings.imageSize ?? 1.0, // Per-image zoom
-        zIndex: 0, // Default z-index
+        zoom: 0.8, // Preset zoom for first image
+        zIndex: 3, // Preset z-index for first image
+        opacity: 1.0, // Default opacity
         isFeatured: true // First/primary image is featured by default
       }];
-      // Initialize custom positions if using custom layout
-      if (bannerSettings.collageLayout === 'custom') {
-        bannerSettings.collageImagePositions = selectedBannerImages.map((_, idx) => ({
-          x: 20 + (idx * 30) % 60,
-          y: 20 + Math.floor(idx / 2) * 30,
-          rotation: 0
-        }));
-      }
+      // Initialize custom positions with preset
+      bannerSettings.collageImagePositions = [{
+        x: 50,
+        y: 60,
+        rotation: 0
+      }];
       updatePrimaryImage();
     }
   }
@@ -782,7 +821,7 @@
     console.log('drawImages called, selectedBannerImages:', selectedBannerImages);
     console.log('bannerSettings.primaryImageUrl:', bannerSettings.primaryImageUrl);
     
-    // Use selectedBannerImages with their orientation, zoom, and z-index, or fallback to primaryImageUrl
+    // Use selectedBannerImages with their orientation, zoom, opacity, and z-index, or fallback to primaryImageUrl
     const imagesWithOrientation = selectedBannerImages.length > 0 
       ? selectedBannerImages.map((img, idx) => ({
           url: img.url || img.displayUrl || img,
@@ -792,7 +831,9 @@
             flipVertical: img.flipVertical ?? bannerSettings.imageFlipVertical ?? false
           },
           zoom: img.zoom ?? bannerSettings.imageSize ?? 1.0, // Per-image zoom, fallback to global
-          zIndex: img.zIndex ?? idx // Per-image z-index, fallback to index
+          opacity: img.opacity ?? bannerSettings.imageOpacity ?? 1.0, // Per-image opacity, fallback to global
+          zIndex: img.zIndex ?? idx, // Per-image z-index, fallback to index
+          originalIndex: idx
         }))
       : (bannerSettings.primaryImageUrl ? [{
           url: bannerSettings.primaryImageUrl,
@@ -802,7 +843,9 @@
             flipVertical: bannerSettings.imageFlipVertical ?? false
           },
           zoom: bannerSettings.imageSize ?? 1.0,
-          zIndex: 0
+          opacity: bannerSettings.imageOpacity ?? 1.0,
+          zIndex: 0,
+          originalIndex: 0
         }] : []);
     
     if (imagesWithOrientation.length === 0 && bannerSettings.backgroundImageUrl && bannerSettings.backgroundType === 'image') {
@@ -874,7 +917,10 @@
       return;
     }
     
-    ctx.globalAlpha = bannerSettings.imageOpacity;
+    // For collage, opacity is handled per-image, so don't set global alpha
+    if (bannerSettings.imageLayout !== 'collage') {
+      ctx.globalAlpha = bannerSettings.imageOpacity;
+    }
     
     switch (bannerSettings.imageLayout) {
       case 'full':
@@ -1280,12 +1326,15 @@
       return { offsetX, offsetY };
     }
     
-    // Custom layout: use user-defined positions
-    if (bannerSettings.collageLayout === 'custom' && bannerSettings.collageImagePositions.length > 0) {
+    // Custom layout: use user-defined positions (default to custom if positions exist)
+    if ((bannerSettings.collageLayout === 'custom' || bannerSettings.collageImagePositions.length > 0) && bannerSettings.collageImagePositions.length > 0) {
       validImages.forEach((imageData, index) => {
         const { img, orientation, zoom } = imageData;
         const customPos = bannerSettings.collageImagePositions[imageData.originalIndex ?? index];
         if (!customPos) return;
+        
+        // Get per-image opacity (for collage, use per-image opacity)
+        const imageOpacity = imageData.opacity ?? bannerSettings.imageOpacity ?? 1.0;
         
         const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * zoom;
         const scale = Math.min(baseSize / img.width, baseSize / img.height);
@@ -1297,6 +1346,8 @@
         const y = (imgAreaHeight * customPos.y / 100) - (drawHeight / 2);
         
         ctx.save();
+        // Apply per-image opacity for collage
+        ctx.globalAlpha = imageOpacity;
         ctx.translate(x + drawWidth / 2, y + drawHeight / 2);
         ctx.rotate((customPos.rotation || 0) * Math.PI / 180);
         
@@ -1907,17 +1958,31 @@
                 onclick={() => {
                   if (isSelected) {
                     selectedBannerImages = selectedBannerImages.filter(sel => sel.id !== image.id && sel.url !== image.url);
+                    applyPresetCollagePositions();
                   } else {
-                    // Add image with default orientation, zoom, and z-index from global settings
+                    // Preset positions for first 3 images
+                    const presets = [
+                      { x: 50, y: 60, zoom: 0.8, zIndex: 3, opacity: 1.0 }, // Center image
+                      { x: 20, y: 40, zoom: 0.6, zIndex: 1, opacity: 1.0 }, // Image 2
+                      { x: 80, y: 40, zoom: 0.6, zIndex: 2, opacity: 1.0 }  // Image 3
+                    ];
+                    const newIndex = selectedBannerImages.length;
+                    const preset = presets[newIndex] || { zoom: 1.0, zIndex: newIndex, opacity: 1.0 };
+                    
+                    // Add image with preset or default values
                     selectedBannerImages = [...selectedBannerImages, {
                       ...image,
                       rotation: bannerSettings.imageRotation ?? 0,
                       flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
                       flipVertical: bannerSettings.imageFlipVertical ?? false,
-                      zoom: bannerSettings.imageSize ?? 1.0, // Per-image zoom
-                      zIndex: selectedBannerImages.length, // Default z-index based on order
+                      zoom: preset.zoom,
+                      zIndex: preset.zIndex,
+                      opacity: preset.opacity,
                       isFeatured: selectedBannerImages.length === 0 // First image is featured by default
                     }];
+                    
+                    // Update positions
+                    applyPresetCollagePositions();
                   }
                   updatePrimaryImage();
                 }}
@@ -1926,15 +1991,29 @@
                     e.preventDefault();
                     if (isSelected) {
                       selectedBannerImages = selectedBannerImages.filter(sel => sel.id !== image.id && sel.url !== image.url);
+                      applyPresetCollagePositions();
                     } else {
-                      // Add image with default orientation from global settings
+                      // Preset positions for first 3 images
+                      const presets = [
+                        { x: 50, y: 60, zoom: 0.8, zIndex: 3, opacity: 1.0 }, // Center image
+                        { x: 20, y: 40, zoom: 0.6, zIndex: 1, opacity: 1.0 }, // Image 2
+                        { x: 80, y: 40, zoom: 0.6, zIndex: 2, opacity: 1.0 }  // Image 3
+                      ];
+                      const newIndex = selectedBannerImages.length;
+                      const preset = presets[newIndex] || { zoom: 1.0, zIndex: newIndex, opacity: 1.0 };
+                      
+                      // Add image with preset or default values
                       selectedBannerImages = [...selectedBannerImages, {
                         ...image,
                         rotation: bannerSettings.imageRotation ?? 0,
                         flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
                         flipVertical: bannerSettings.imageFlipVertical ?? false,
+                        zoom: preset.zoom,
+                        zIndex: preset.zIndex,
+                        opacity: preset.opacity,
                         isFeatured: selectedBannerImages.length === 0 // First image is featured by default
                       }];
+                      applyPresetCollagePositions();
                     }
                     updatePrimaryImage();
                   }
@@ -2100,7 +2179,45 @@
                         selectedBannerImages = [...selectedBannerImages];
                       }}
                       class="px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
-                      title="Reset to global zoom"
+                      title="Reset to default zoom"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </div>
+                
+                <div class="mb-2">
+                  <label for="opacity-{index}" class="block text-xs text-gray-600 mb-1">
+                    Opacity: {Math.round((image.opacity ?? bannerSettings.imageOpacity ?? 1.0) * 100)}%
+                  </label>
+                  <div class="flex items-center gap-2">
+                    <input
+                      id="opacity-{index}"
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={image.opacity ?? bannerSettings.imageOpacity ?? 1.0}
+                      oninput={(e) => {
+                        selectedBannerImages[index] = {
+                          ...selectedBannerImages[index],
+                          opacity: parseFloat(e.target.value)
+                        };
+                        selectedBannerImages = [...selectedBannerImages]; // Trigger reactivity
+                      }}
+                      class="flex-1"
+                    />
+                    <button
+                      type="button"
+                      onclick={() => {
+                        selectedBannerImages[index] = {
+                          ...selectedBannerImages[index],
+                          opacity: 1.0
+                        };
+                        selectedBannerImages = [...selectedBannerImages];
+                      }}
+                      class="px-2 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
+                      title="Reset to full opacity"
                     >
                       Reset
                     </button>
@@ -2283,30 +2400,31 @@
           </div>
         {/if}
         
-        <div class="mb-4">
-          <label for="image-opacity" class="block text-sm font-medium text-gray-700 mb-2">
-            Image Opacity: {Math.round(bannerSettings.imageOpacity * 100)}%
-          </label>
-          <input
-            id="image-opacity"
-            type="range"
-            min="0"
-            max="1"
-            step="0.1"
-            bind:value={bannerSettings.imageOpacity}
-            class="w-full"
-          />
-        </div>
-        
-        <!-- Image Orientation Controls -->
-        <div class="mb-4">
-          <h4 class="block text-sm font-medium text-gray-700 mb-2">
-            Image Orientation
-          </h4>
+        {#if bannerSettings.imageLayout !== 'collage'}
+          <div class="mb-4">
+            <label for="image-opacity" class="block text-sm font-medium text-gray-700 mb-2">
+              Image Opacity: {Math.round(bannerSettings.imageOpacity * 100)}%
+            </label>
+            <input
+              id="image-opacity"
+              type="range"
+              min="0"
+              max="1"
+              step="0.1"
+              bind:value={bannerSettings.imageOpacity}
+              class="w-full"
+            />
+          </div>
           
-          <div class="mb-3">
-            <label for="image-rotation" class="block text-xs text-gray-600 mb-1">
-              Rotation: {bannerSettings.imageRotation}°
+          <!-- Image Orientation Controls -->
+          <div class="mb-4">
+            <h4 class="block text-sm font-medium text-gray-700 mb-2">
+              Image Orientation
+            </h4>
+            
+            <div class="mb-3">
+              <label for="image-rotation" class="block text-xs text-gray-600 mb-1">
+                Rotation: {bannerSettings.imageRotation}°
             </label>
             <div class="flex items-center gap-2">
               <input
@@ -2348,223 +2466,115 @@
             </label>
           </div>
         </div>
+        {/if}
         
-        <!-- Image Size/Zoom Control (applies to all layouts) -->
-        <div class="mb-4">
-          <label for="image-size" class="block text-sm font-medium text-gray-700 mb-2">
-            Image Size/Zoom: {Math.round(bannerSettings.imageSize * 100)}%
-          </label>
-          <div class="flex items-center gap-2">
-            <input
-              id="image-size"
-              type="range"
-              min="0.1"
-              max="2.0"
-              step="0.05"
-              bind:value={bannerSettings.imageSize}
-              class="flex-1"
-            />
-            <button
-              type="button"
-              onclick={() => bannerSettings.imageSize = 1.0}
-              class="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
-            >
-              Reset
-            </button>
+        <!-- Image Size/Zoom Control (applies to all layouts except collage) -->
+        {#if bannerSettings.imageLayout !== 'collage'}
+          <div class="mb-4">
+            <label for="image-size" class="block text-sm font-medium text-gray-700 mb-2">
+              Image Size/Zoom: {Math.round(bannerSettings.imageSize * 100)}%
+            </label>
+            <div class="flex items-center gap-2">
+              <input
+                id="image-size"
+                type="range"
+                min="0.1"
+                max="2.0"
+                step="0.05"
+                bind:value={bannerSettings.imageSize}
+                class="flex-1"
+              />
+              <button
+                type="button"
+                onclick={() => bannerSettings.imageSize = 1.0}
+                class="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
+              >
+                Reset
+              </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-1">
+              Adjusts the size of images in all layouts (100% = default size)
+            </p>
           </div>
-          <p class="text-xs text-gray-500 mt-1">
-            Adjusts the size of images in all layouts (100% = default size)
-          </p>
-        </div>
+        {/if}
         
         <!-- Collage Settings (only show when collage layout is selected) -->
-        {#if bannerSettings.imageLayout === 'collage'}
+        {#if bannerSettings.imageLayout === 'collage' && selectedBannerImages.length > 0}
           <div class="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
-            <h4 class="text-sm font-semibold text-gray-900 mb-3">Collage Layout Settings</h4>
-            
-            <!-- Collage Layout Type -->
-            <div class="mb-3">
-              <label for="collage-layout" class="block text-xs font-medium text-gray-700 mb-1">
-                Layout Type
-              </label>
-              <select
-                id="collage-layout"
-                bind:value={bannerSettings.collageLayout}
-                class="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="auto">Auto (Smart arrangement)</option>
-                <option value="grid">Grid</option>
-                <option value="circle">Circle</option>
-                <option value="stacked">Stacked</option>
-                <option value="diagonal">Diagonal</option>
-                <option value="scattered">Scattered</option>
-                <option value="custom">Custom Positions</option>
-              </select>
-            </div>
-            
-            <!-- Grid-specific settings -->
-            {#if bannerSettings.collageLayout === 'grid'}
-              <div class="mb-3">
-                <label for="collage-grid-columns" class="block text-xs text-gray-600 mb-1">
-                  Grid Columns: {bannerSettings.collageGridColumns}
-                </label>
-                <input
-                  id="collage-grid-columns"
-                  type="range"
-                  min="1"
-                  max="4"
-                  step="1"
-                  bind:value={bannerSettings.collageGridColumns}
-                  class="w-full"
-                />
-              </div>
-            {/if}
-            
-            <!-- Circle-specific settings -->
-            {#if bannerSettings.collageLayout === 'circle' || (bannerSettings.collageLayout === 'auto' && selectedBannerImages.length === 3)}
-              <div class="mb-3">
-                <label for="collage-radius" class="block text-xs text-gray-600 mb-1">
-                  Circle Radius: {Math.round(bannerSettings.collageRadius * 100)}%
-                </label>
-                <input
-                  id="collage-radius"
-                  type="range"
-                  min="0.1"
-                  max="0.5"
-                  step="0.01"
-                  bind:value={bannerSettings.collageRadius}
-                  class="w-full"
-                />
-              </div>
-            {/if}
-            
-            <!-- Spacing -->
-            <div class="mb-3">
-              <label for="collage-spacing" class="block text-xs text-gray-600 mb-1">
-                Image Spacing: {bannerSettings.collageSpacing}px
-              </label>
-              <input
-                id="collage-spacing"
-                type="range"
-                min="0"
-                max="100"
-                step="5"
-                bind:value={bannerSettings.collageSpacing}
-                class="w-full"
-              />
-            </div>
-            
-            <!-- Alignment -->
-            <div class="mb-3">
-              <label for="collage-alignment" class="block text-xs font-medium text-gray-700 mb-1">
-                Alignment
-              </label>
-              <select
-                id="collage-alignment"
-                bind:value={bannerSettings.collageAlignment}
-                class="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="center">Center</option>
-                <option value="top">Top</option>
-                <option value="bottom">Bottom</option>
-                <option value="left">Left</option>
-                <option value="right">Right</option>
-                <option value="top-left">Top Left</option>
-                <option value="top-right">Top Right</option>
-                <option value="bottom-left">Bottom Left</option>
-                <option value="bottom-right">Bottom Right</option>
-              </select>
-            </div>
-            
-            <!-- Allow Overlap -->
-            <div class="mb-3">
-              <label class="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  bind:checked={bannerSettings.collageAllowOverlap}
-                  class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                />
-                <span class="text-xs text-gray-700">Allow images to overlap</span>
-              </label>
-            </div>
+            <h4 class="text-sm font-semibold text-gray-900 mb-3">Image Positions</h4>
             
             <!-- Custom Position Controls (for each image) -->
-            {#if bannerSettings.collageLayout === 'custom' && selectedBannerImages.length > 0}
-              <div class="border-t pt-3 mt-3">
-                <h5 class="text-xs font-semibold text-gray-900 mb-2">Custom Image Positions</h5>
-                <div class="space-y-2 max-h-48 overflow-y-auto">
-                  {#each selectedBannerImages as image, index}
-                    {@const pos = bannerSettings.collageImagePositions[index] || { x: 50, y: 50, rotation: 0 }}
-                    <div class="p-2 bg-white rounded border border-gray-200">
-                      <div class="flex items-center gap-2 mb-2">
-                        <img
-                          src={image.displayUrl || image.url}
-                          alt="Image {index + 1}"
-                          class="w-8 h-8 object-cover rounded"
-                        />
-                        <span class="text-xs font-medium text-gray-700">Image {index + 1}</span>
-                      </div>
-                      <div class="grid grid-cols-3 gap-2">
-                        <div>
-                          <label class="block text-[10px] text-gray-600 mb-0.5">X: {pos.x}%</label>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="1"
-                            value={pos.x}
-                            oninput={(e) => {
-                              if (!bannerSettings.collageImagePositions[index]) {
-                                bannerSettings.collageImagePositions[index] = { x: 50, y: 50, rotation: 0 };
-                              }
-                              bannerSettings.collageImagePositions[index].x = parseInt(e.target.value);
-                              bannerSettings.collageImagePositions = [...bannerSettings.collageImagePositions];
-                            }}
-                            class="w-full"
-                          />
-                        </div>
-                        <div>
-                          <label class="block text-[10px] text-gray-600 mb-0.5">Y: {pos.y}%</label>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="1"
-                            value={pos.y}
-                            oninput={(e) => {
-                              if (!bannerSettings.collageImagePositions[index]) {
-                                bannerSettings.collageImagePositions[index] = { x: 50, y: 50, rotation: 0 };
-                              }
-                              bannerSettings.collageImagePositions[index].y = parseInt(e.target.value);
-                              bannerSettings.collageImagePositions = [...bannerSettings.collageImagePositions];
-                            }}
-                            class="w-full"
-                          />
-                        </div>
-                        <div>
-                          <label class="block text-[10px] text-gray-600 mb-0.5">Rot: {pos.rotation}°</label>
-                          <input
-                            type="range"
-                            min="-180"
-                            max="180"
-                            step="1"
-                            value={pos.rotation || 0}
-                            oninput={(e) => {
-                              if (!bannerSettings.collageImagePositions[index]) {
-                                bannerSettings.collageImagePositions[index] = { x: 50, y: 50, rotation: 0 };
-                              }
-                              bannerSettings.collageImagePositions[index].rotation = parseInt(e.target.value);
-                              bannerSettings.collageImagePositions = [...bannerSettings.collageImagePositions];
-                            }}
-                            class="w-full"
-                          />
-                        </div>
-                      </div>
+            <div class="space-y-2 max-h-64 overflow-y-auto">
+              {#each selectedBannerImages as image, index}
+                {@const pos = bannerSettings.collageImagePositions[index] || { x: 50, y: 50, rotation: 0 }}
+                <div class="p-2 bg-white rounded border border-gray-200">
+                  <div class="flex items-center gap-2 mb-2">
+                    <img
+                      src={image.displayUrl || image.url}
+                      alt="Image {index + 1}"
+                      class="w-8 h-8 object-cover rounded"
+                    />
+                    <span class="text-xs font-medium text-gray-700">Image {index + 1}</span>
+                  </div>
+                  <div class="grid grid-cols-3 gap-2">
+                    <div>
+                      <label class="block text-[10px] text-gray-600 mb-0.5">X: {pos.x}%</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={pos.x}
+                        oninput={(e) => {
+                          if (!bannerSettings.collageImagePositions[index]) {
+                            bannerSettings.collageImagePositions[index] = { x: 50, y: 50, rotation: 0 };
+                          }
+                          bannerSettings.collageImagePositions[index].x = parseInt(e.target.value);
+                          bannerSettings.collageImagePositions = [...bannerSettings.collageImagePositions];
+                        }}
+                        class="w-full"
+                      />
                     </div>
-                  {/each}
+                    <div>
+                      <label class="block text-[10px] text-gray-600 mb-0.5">Y: {pos.y}%</label>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={pos.y}
+                        oninput={(e) => {
+                          if (!bannerSettings.collageImagePositions[index]) {
+                            bannerSettings.collageImagePositions[index] = { x: 50, y: 50, rotation: 0 };
+                          }
+                          bannerSettings.collageImagePositions[index].y = parseInt(e.target.value);
+                          bannerSettings.collageImagePositions = [...bannerSettings.collageImagePositions];
+                        }}
+                        class="w-full"
+                      />
+                    </div>
+                    <div>
+                      <label class="block text-[10px] text-gray-600 mb-0.5">Rot: {pos.rotation}°</label>
+                      <input
+                        type="range"
+                        min="-180"
+                        max="180"
+                        step="1"
+                        value={pos.rotation || 0}
+                        oninput={(e) => {
+                          if (!bannerSettings.collageImagePositions[index]) {
+                            bannerSettings.collageImagePositions[index] = { x: 50, y: 50, rotation: 0 };
+                          }
+                          bannerSettings.collageImagePositions[index].rotation = parseInt(e.target.value);
+                          bannerSettings.collageImagePositions = [...bannerSettings.collageImagePositions];
+                        }}
+                        class="w-full"
+                      />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            {/if}
+              {/each}
+            </div>
           </div>
         {/if}
       </div>
