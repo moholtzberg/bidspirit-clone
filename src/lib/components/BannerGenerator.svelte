@@ -1943,15 +1943,19 @@
         categoryText += bannerSettings.categoryHebrew;
       }
       
+      // Set font and measure text width
       ctx.font = `bold ${bannerSettings.fontSize * 0.7}px ${bannerSettings.fontFamily}`;
       const textMetrics = ctx.measureText(categoryText);
       const textWidth = textMetrics.width;
       
       // Ribbon dimensions - bigger with negative margin for overflow effect
       const negativeMargin = 45; // How much ribbon extends beyond canvas
-      const ribbonPadding = negativeMargin + 35; // Padding equal to negative margin plus extra
-      const ribbonWidth = (textWidth * 1.3) + (ribbonPadding * 2);
-      const ribbonHeight = 60; // Increased height
+      const ribbonPadding = 40; // Minimal padding for better text centering
+      // Add a minimum width if textWidth is less than a threshold
+      const minRibbonWidth = 150; // Minimum ribbon width
+      const calculatedWidth = (textWidth * 2) + (ribbonPadding * 2);
+      const ribbonWidth = Math.max(calculatedWidth, minRibbonWidth);
+      const ribbonHeight = 50; // Increased height
       const angle = Math.PI / 4; // 45 degrees for diagonal ribbon (top-right to bottom-left)
       
       // Position ribbon so it extends beyond the top-right corner
