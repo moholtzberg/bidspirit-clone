@@ -68,6 +68,10 @@
     // Ribbon
     ribbonColor: '#DC2626', // Default red color for category ribbon
     
+    // Bottom Border
+    showBottomBorder: false, // Show bottom border with auction info
+    bottomBorderColor: '#2563EB', // Default blue color
+    
     // Spacing
     padding: 30,
     textImageRatio: 0.4, // 0.4 = 40% text, 60% image
@@ -1848,8 +1852,8 @@
       
       if (bannerSettings.yearEnglish && bannerSettings.yearHebrew) {
         // Both years - use bullet separator
-        yearText = `${bannerSettings.yearEnglish} • ${bannerSettings.yearHebrew}`;
-        separator = ' • ';
+        yearText = `${bannerSettings.yearEnglish} | ${bannerSettings.yearHebrew}`;
+        separator = '   •   ';
       } else if (bannerSettings.yearEnglish) {
         yearText = bannerSettings.yearEnglish;
       } else if (bannerSettings.yearHebrew) {
@@ -1945,8 +1949,8 @@
       
       // Ribbon dimensions - bigger with negative margin for overflow effect
       const negativeMargin = 45; // How much ribbon extends beyond canvas
-      const ribbonPadding = negativeMargin + 25; // Padding equal to negative margin plus extra
-      const ribbonWidth = textWidth + ribbonPadding * 2;
+      const ribbonPadding = negativeMargin + 35; // Padding equal to negative margin plus extra
+      const ribbonWidth = (textWidth * 1.3) + (ribbonPadding * 2);
       const ribbonHeight = 60; // Increased height
       const angle = Math.PI / 4; // 45 degrees for diagonal ribbon (top-right to bottom-left)
       
@@ -2032,6 +2036,52 @@
       ctx.textBaseline = 'middle';
       ctx.font = `bold ${bannerSettings.fontSize * 0.7}px ${bannerSettings.fontFamily}`;
       ctx.fillText(categoryText, 0, 0);
+      
+      ctx.restore();
+    }
+    
+    // Bottom Border with Auction Info
+    if (bannerSettings.showBottomBorder && (auction || auctionHouse)) {
+      ctx.save();
+      
+      const borderHeight = 40;
+      const borderY = height - borderHeight;
+      
+      // Draw border background
+      ctx.fillStyle = bannerSettings.bottomBorderColor || '#2563EB';
+      ctx.fillRect(0, borderY, width, borderHeight);
+      
+      // Draw text (white for contrast)
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'middle';
+      ctx.font = `${bannerSettings.fontSize * 0.25}px ${bannerSettings.fontFamily}`;
+      
+      // Build text content
+      let borderText = '';
+      if (auctionHouse && auctionHouse.name) {
+        borderText += auctionHouse.name;
+      }
+      if (auction && auction.title) {
+        if (borderText) borderText += ' • ';
+        borderText += auction.title;
+      }
+      if (auction && auction.startDate) {
+        if (borderText) borderText += ' • ';
+        const date = new Date(auction.startDate);
+        const formattedDate = date.toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'short',
+          day: 'numeric'
+        });
+        borderText += formattedDate;
+      }
+      
+      if (borderText) {
+        // Add padding
+        const padding = 15;
+        ctx.fillText(borderText, padding, borderY + borderHeight / 2);
+      }
       
       ctx.restore();
     }
@@ -2954,6 +3004,40 @@
           </div>
           <p class="text-xs text-gray-500 mt-1">Color of the category ribbon (text will be white)</p>
         </div>
+        
+        <div class="mb-4">
+          <label class="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              bind:checked={bannerSettings.showBottomBorder}
+              class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+            />
+            <span class="text-sm font-medium text-gray-700">Show Bottom Border</span>
+          </label>
+          <p class="text-xs text-gray-500 mt-1 ml-6">Display auction house name, auction name, and date at the bottom</p>
+        </div>
+        
+        {#if bannerSettings.showBottomBorder}
+          <div class="mb-4">
+            <label for="bottom-border-color" class="block text-sm font-medium text-gray-700 mb-2">
+              Bottom Border Color
+            </label>
+            <div class="flex gap-2">
+              <input
+                id="bottom-border-color"
+                type="color"
+                bind:value={bannerSettings.bottomBorderColor}
+                class="h-12 w-20 border border-gray-300 rounded-lg cursor-pointer"
+              />
+              <input
+                type="text"
+                bind:value={bannerSettings.bottomBorderColor}
+                placeholder="#2563EB"
+                class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              />
+            </div>
+          </div>
+        {/if}
       </div>
       
       <!-- Typography Settings -->
