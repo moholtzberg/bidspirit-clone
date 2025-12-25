@@ -629,10 +629,10 @@
         ...primaryImage,
         rotation: bannerSettings.imageRotation ?? 0,
         flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
-        flipVertical: bannerSettings.imageFlipVertical ?? false
+        flipVertical: bannerSettings.imageFlipVertical ?? false,
+        isFeatured: true // First/primary image is featured by default
       }];
-      bannerSettings.primaryImageUrl = primaryImage.url;
-      bannerSettings.backgroundImageUrl = primaryImage.url;
+      updatePrimaryImage();
     }
   }
 
@@ -1544,6 +1544,38 @@
       colors
     };
   }
+  
+  // Update primary image URL based on featured image or first image
+  function updatePrimaryImage() {
+    if (selectedBannerImages.length > 0) {
+      const featuredImage = selectedBannerImages.find(img => img.isFeatured) || selectedBannerImages[0];
+      bannerSettings.primaryImageUrl = featuredImage.url || featuredImage.displayUrl || '';
+      bannerSettings.backgroundImageUrl = featuredImage.url || featuredImage.displayUrl || '';
+    } else {
+      bannerSettings.primaryImageUrl = '';
+      bannerSettings.backgroundImageUrl = '';
+    }
+  }
+  
+  // Move image up in order
+  function moveImageUp(index) {
+    if (index > 0) {
+      const newImages = [...selectedBannerImages];
+      [newImages[index - 1], newImages[index]] = [newImages[index], newImages[index - 1]];
+      selectedBannerImages = newImages;
+      updatePrimaryImage();
+    }
+  }
+  
+  // Move image down in order
+  function moveImageDown(index) {
+    if (index < selectedBannerImages.length - 1) {
+      const newImages = [...selectedBannerImages];
+      [newImages[index], newImages[index + 1]] = [newImages[index + 1], newImages[index]];
+      selectedBannerImages = newImages;
+      updatePrimaryImage();
+    }
+  }
 </script>
 
 <div class="bg-white rounded-lg shadow-lg p-6 border-2 border-purple-200">
@@ -1604,13 +1636,11 @@
                       ...image,
                       rotation: bannerSettings.imageRotation ?? 0,
                       flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
-                      flipVertical: bannerSettings.imageFlipVertical ?? false
+                      flipVertical: bannerSettings.imageFlipVertical ?? false,
+                      isFeatured: selectedBannerImages.length === 0 // First image is featured by default
                     }];
                   }
-                  if (selectedBannerImages.length > 0) {
-                    bannerSettings.primaryImageUrl = selectedBannerImages[0].url;
-                    bannerSettings.backgroundImageUrl = selectedBannerImages[0].url;
-                  }
+                  updatePrimaryImage();
                 }}
                 onkeydown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
@@ -1623,9 +1653,11 @@
                         ...image,
                         rotation: bannerSettings.imageRotation ?? 0,
                         flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
-                        flipVertical: bannerSettings.imageFlipVertical ?? false
+                        flipVertical: bannerSettings.imageFlipVertical ?? false,
+                        isFeatured: selectedBannerImages.length === 0 // First image is featured by default
                       }];
                     }
+                    updatePrimaryImage();
                   }
                 }}
               >
@@ -1642,6 +1674,97 @@
                     ✓
                   </div>
                 {/if}
+              </div>
+            {/each}
+          </div>
+        </div>
+      {/if}
+      
+      <!-- Selected Images Management (Reorder & Set Featured) -->
+      {#if selectedBannerImages.length > 0}
+        <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <h3 class="text-lg font-semibold text-gray-900 mb-3">Selected Images (Drag to Reorder)</h3>
+          <div class="space-y-2 max-h-96 overflow-y-auto">
+            {#each selectedBannerImages as image, index}
+              <div
+                class="flex items-center gap-3 p-2 bg-white rounded border border-gray-200 hover:border-blue-400 transition-all"
+                draggable="true"
+                role="listitem"
+                ondragstart={(e) => {
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData('text/plain', index.toString());
+                  e.currentTarget.classList.add('opacity-50');
+                }}
+                ondragend={(e) => {
+                  e.currentTarget.classList.remove('opacity-50');
+                }}
+                ondragover={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                }}
+                ondrop={(e) => {
+                  e.preventDefault();
+                  const dragIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                  const dropIndex = index;
+                  
+                  if (dragIndex !== dropIndex) {
+                    const newImages = [...selectedBannerImages];
+                    const [movedImage] = newImages.splice(dragIndex, 1);
+                    newImages.splice(dropIndex, 0, movedImage);
+                    selectedBannerImages = newImages;
+                    updatePrimaryImage();
+                  }
+                }}
+              >
+                <!-- Drag Handle -->
+                <div class="cursor-move text-gray-400 hover:text-gray-600">
+                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path>
+                  </svg>
+                </div>
+                
+                <!-- Image Thumbnail -->
+                <img
+                  src={image.displayUrl || image.url}
+                  alt="Selected image {index + 1}"
+                  class="w-12 h-12 object-cover rounded"
+                  onerror={(e) => {
+                    e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ddd" width="100" height="100"/%3E%3Ctext x="50" y="50" text-anchor="middle" dy=".3em" fill="%23999"%3E{index + 1}%3C/text%3E%3C/svg%3E';
+                  }}
+                />
+                
+                <!-- Position Number -->
+                <span class="text-sm font-medium text-gray-700 w-8">#{index + 1}</span>
+                
+                <!-- Featured/Default Toggle -->
+                <button
+                  type="button"
+                  onclick={() => {
+                    // Set this image as featured, unset others
+                    selectedBannerImages = selectedBannerImages.map((img, idx) => ({
+                      ...img,
+                      isFeatured: idx === index
+                    }));
+                    updatePrimaryImage();
+                  }}
+                  class="ml-auto px-2 py-1 text-xs rounded transition-colors {image.isFeatured ? 'bg-yellow-500 text-white hover:bg-yellow-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+                  title={image.isFeatured ? 'Featured Image' : 'Set as Featured'}
+                >
+                  {image.isFeatured ? '⭐ Featured' : 'Set Featured'}
+                </button>
+                
+                <!-- Remove Button -->
+                <button
+                  type="button"
+                  onclick={() => {
+                    selectedBannerImages = selectedBannerImages.filter((_, idx) => idx !== index);
+                    updatePrimaryImage();
+                  }}
+                  class="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                  title="Remove image"
+                >
+                  ✕
+                </button>
               </div>
             {/each}
           </div>

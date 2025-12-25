@@ -66,6 +66,55 @@ export async function POST({ params, request }) {
   }
 }
 
+// Update image order and primary status
+export async function PATCH({ params, request }) {
+  try {
+    const { images } = await request.json(); // Array of {id, displayOrder, isPrimary?}
+    
+    if (!Array.isArray(images) || images.length === 0) {
+      throw error(400, 'Images array is required');
+    }
+
+    // Verify lot exists
+    const lot = await prisma.lot.findUnique({
+      where: { id: params.id }
+    });
+
+    if (!lot) {
+      throw error(404, 'Lot not found');
+    }
+
+    // Check if any image is being set as primary
+    const primaryImage = images.find(img => img.isPrimary);
+    if (primaryImage) {
+      // Unset all existing primary images for this lot
+      await prisma.lotImage.updateMany({
+        where: { lotId: params.id, isPrimary: true },
+        data: { isPrimary: false }
+      });
+    }
+
+    // Update each image
+    await Promise.all(
+      images.map(img =>
+        prisma.lotImage.update({
+          where: { id: img.id },
+          data: {
+            displayOrder: img.displayOrder,
+            ...(img.isPrimary !== undefined ? { isPrimary: img.isPrimary } : {})
+          }
+        })
+      )
+    );
+
+    return json({ message: 'Images updated successfully' });
+  } catch (err) {
+    console.error('Error updating images:', err);
+    if (err.status) throw err;
+    throw error(500, 'Failed to update images');
+  }
+}
+
 // Delete an image
 export async function DELETE({ params, url }) {
   try {

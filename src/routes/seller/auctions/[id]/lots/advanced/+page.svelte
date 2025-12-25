@@ -552,6 +552,168 @@
     }
     expandedImageRows = new Set(expandedImageRows); // Trigger reactivity
   }
+  
+  async function reorderImages(lotId, draggedImageId, targetImageId) {
+    try {
+      const lot = lots.find(l => l.id === lotId);
+      if (!lot || !lot.images) return;
+      
+      const images = [...lot.images];
+      const draggedIndex = images.findIndex(img => img.id === draggedImageId);
+      const targetIndex = images.findIndex(img => img.id === targetImageId);
+      
+      if (draggedIndex === -1 || targetIndex === -1) return;
+      
+      // Reorder in local array
+      const [movedImage] = images.splice(draggedIndex, 1);
+      images.splice(targetIndex, 0, movedImage);
+      
+      // Update displayOrder for all images
+      const updatedImages = images.map((img, index) => ({
+        id: img.id,
+        displayOrder: index,
+        isPrimary: img.isPrimary || false
+      }));
+      
+      // Save to database
+      const response = await fetch(`/api/lots/${lotId}/images`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images: updatedImages })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to reorder images');
+      }
+      
+      // Reload data to get updated order
+      await loadData();
+    } catch (error) {
+      console.error('Error reordering images:', error);
+      alert('Failed to reorder images. Please try again.');
+    }
+  }
+  
+  async function moveImageUp(lotId, imageId) {
+    try {
+      const lot = lots.find(l => l.id === lotId);
+      if (!lot || !lot.images) return;
+      
+      const images = [...lot.images].sort((a, b) => {
+        if (a.isPrimary && !b.isPrimary) return -1;
+        if (!a.isPrimary && b.isPrimary) return 1;
+        return (a.displayOrder || 0) - (b.displayOrder || 0);
+      });
+      
+      const index = images.findIndex(img => img.id === imageId);
+      if (index === 0) return;
+      
+      // Swap with previous image
+      [images[index - 1], images[index]] = [images[index], images[index - 1]];
+      
+      // Update displayOrder for all images
+      const updatedImages = images.map((img, idx) => ({
+        id: img.id,
+        displayOrder: idx,
+        isPrimary: img.isPrimary || false
+      }));
+      
+      // Save to database
+      const response = await fetch(`/api/lots/${lotId}/images`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images: updatedImages })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to move image');
+      }
+      
+      // Reload data
+      await loadData();
+    } catch (error) {
+      console.error('Error moving image up:', error);
+      alert('Failed to move image. Please try again.');
+    }
+  }
+  
+  async function moveImageDown(lotId, imageId) {
+    try {
+      const lot = lots.find(l => l.id === lotId);
+      if (!lot || !lot.images) return;
+      
+      const images = [...lot.images].sort((a, b) => {
+        if (a.isPrimary && !b.isPrimary) return -1;
+        if (!a.isPrimary && b.isPrimary) return 1;
+        return (a.displayOrder || 0) - (b.displayOrder || 0);
+      });
+      
+      const index = images.findIndex(img => img.id === imageId);
+      if (index === images.length - 1) return;
+      
+      // Swap with next image
+      [images[index], images[index + 1]] = [images[index + 1], images[index]];
+      
+      // Update displayOrder for all images
+      const updatedImages = images.map((img, idx) => ({
+        id: img.id,
+        displayOrder: idx,
+        isPrimary: img.isPrimary || false
+      }));
+      
+      // Save to database
+      const response = await fetch(`/api/lots/${lotId}/images`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images: updatedImages })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to move image');
+      }
+      
+      // Reload data
+      await loadData();
+    } catch (error) {
+      console.error('Error moving image down:', error);
+      alert('Failed to move image. Please try again.');
+    }
+  }
+  
+  async function setFeaturedImage(lotId, imageId) {
+    try {
+      const lot = lots.find(l => l.id === lotId);
+      if (!lot || !lot.images) return;
+      
+      const currentImage = lot.images.find(img => img.id === imageId);
+      const isCurrentlyPrimary = currentImage?.isPrimary || false;
+      
+      // If clicking the same image that's already primary, unset it
+      // Otherwise, set this one as primary and unset others
+      const images = lot.images.map(img => ({
+        id: img.id,
+        displayOrder: img.displayOrder || 0,
+        isPrimary: img.id === imageId ? !isCurrentlyPrimary : false
+      }));
+      
+      // Save to database
+      const response = await fetch(`/api/lots/${lotId}/images`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ images })
+      });
+      
+      if (!response.ok) {
+        throw new Error('Failed to set featured image');
+      }
+      
+      // Reload data
+      await loadData();
+    } catch (error) {
+      console.error('Error setting featured image:', error);
+      alert('Failed to set featured image. Please try again.');
+    }
+  }
 
   async function loadCategoriesAndTags() {
     try {
@@ -1188,29 +1350,105 @@
                         </div>
                         
                         <!-- Current Images Grid -->
-                        {#if (lot._images || []).length > 0}
-                          <div class="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-4 mb-4">
-                            {#each (lot._images || []) as image, index}
-                              {@const imageObj = lot.images?.[index] || (typeof image === 'string' ? { url: image } : image)}
-                              {@const imageId = imageObj.id || null}
-                              <div class="relative group">
-                                <img 
-                                  src={imageObj.url || image} 
-                                  alt="Image {index + 1}" 
-                                  class="w-full h-24 object-cover rounded border border-gray-300"
-                                />
-                                {#if imageId}
-                                  <button
-                                    onclick={() => removeImage(lot.id, imageId)}
-                                    class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Delete image"
-                                  >
-                                    ×
-                                  </button>
-                                {/if}
-                                <div class="absolute bottom-1 left-1 bg-black bg-opacity-50 text-white text-xs px-1 rounded">
-                                  {index + 1}
+                        {#if (lot.images || []).length > 0}
+                          {@const sortedImages = [...(lot.images || [])].sort((a, b) => {
+                            // Sort by: primary first, then by displayOrder
+                            if (a.isPrimary && !b.isPrimary) return -1;
+                            if (!a.isPrimary && b.isPrimary) return 1;
+                            return (a.displayOrder || 0) - (b.displayOrder || 0);
+                          })}
+                          <div class="space-y-2 mb-4">
+                            {#each sortedImages as imageObj, index}
+                              <div
+                                class="flex items-center gap-3 p-2 bg-white rounded border border-gray-200 hover:border-blue-400 transition-all"
+                                draggable="true"
+                                role="listitem"
+                                ondragstart={(e) => {
+                                  e.dataTransfer.effectAllowed = 'move';
+                                  e.dataTransfer.setData('text/plain', imageObj.id);
+                                  e.currentTarget.classList.add('opacity-50');
+                                }}
+                                ondragend={(e) => {
+                                  e.currentTarget.classList.remove('opacity-50');
+                                }}
+                                ondragover={(e) => {
+                                  e.preventDefault();
+                                  e.dataTransfer.dropEffect = 'move';
+                                }}
+                                ondrop={(e) => {
+                                  e.preventDefault();
+                                  const draggedImageId = e.dataTransfer.getData('text/plain');
+                                  const targetImageId = imageObj.id;
+                                  
+                                  if (draggedImageId !== targetImageId) {
+                                    reorderImages(lot.id, draggedImageId, targetImageId);
+                                  }
+                                }}
+                              >
+                                <!-- Drag Handle -->
+                                <div class="cursor-move text-gray-400 hover:text-gray-600" title="Drag to reorder">
+                                  <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path>
+                                  </svg>
                                 </div>
+                                
+                                <!-- Up/Down Buttons -->
+                                <div class="flex flex-col gap-0.5">
+                                  <button
+                                    type="button"
+                                    onclick={() => moveImageUp(lot.id, imageObj.id)}
+                                    disabled={index === 0}
+                                    class="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title="Move up"
+                                    aria-label="Move image up"
+                                  >
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path>
+                                    </svg>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onclick={() => moveImageDown(lot.id, imageObj.id)}
+                                    disabled={index === (lot.images || []).length - 1}
+                                    class="p-0.5 text-gray-400 hover:text-gray-600 disabled:opacity-30 disabled:cursor-not-allowed"
+                                    title="Move down"
+                                    aria-label="Move image down"
+                                  >
+                                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+                                    </svg>
+                                  </button>
+                                </div>
+                                
+                                <!-- Image Thumbnail -->
+                                <img
+                                  src={imageObj.url} 
+                                  alt="Image {index + 1}" 
+                                  class="w-16 h-16 object-cover rounded border border-gray-300"
+                                />
+                                
+                                <!-- Position Number -->
+                                <span class="text-sm font-medium text-gray-700 w-8">#{index + 1}</span>
+                                
+                                <!-- Featured/Default Toggle -->
+                                <button
+                                  type="button"
+                                  onclick={() => setFeaturedImage(lot.id, imageObj.id)}
+                                  class="ml-auto px-3 py-1 text-xs rounded transition-colors {imageObj.isPrimary ? 'bg-yellow-500 text-white hover:bg-yellow-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+                                  title={imageObj.isPrimary ? 'Featured Image (click to unset)' : 'Set as Featured Image'}
+                                >
+                                  {imageObj.isPrimary ? '⭐ Featured' : 'Set Featured'}
+                                </button>
+                                
+                                <!-- Remove Button -->
+                                <button
+                                  type="button"
+                                  onclick={() => removeImage(lot.id, imageObj.id)}
+                                  class="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
+                                  title="Remove image"
+                                >
+                                  ✕
+                                </button>
                               </div>
                             {/each}
                           </div>
