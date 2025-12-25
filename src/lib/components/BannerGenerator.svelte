@@ -37,6 +37,11 @@
     imageFlipHorizontal: false, // Flip horizontally
     imageFlipVertical: false, // Flip vertically
     
+    // Collage settings
+    collageImageSize: 0.65, // Size multiplier for collage images (0.1 to 1.0)
+    collageSpacing: 40, // Spacing/offset between images in pixels
+    collageRadius: 0.28, // Radius multiplier for 3-image circular layout (0.1 to 0.5)
+    
     // Background
     backgroundType: 'solid', // 'solid', 'gradient', 'image', 'pattern'
     backgroundColor: '#F5F1E8',
@@ -1202,8 +1207,8 @@
       const { img: img1, orientation: orientation1 } = validImages[0];
       const { img: img2, orientation: orientation2 } = validImages[1];
       
-      // Calculate sizes - make images larger for better visual impact
-      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * 0.65;
+      // Calculate sizes - use configurable size multiplier
+      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.collageImageSize;
       
       // Scale each image to fit, maintaining aspect ratio
       const scale1 = Math.min(baseSize / img1.width, baseSize / img1.height);
@@ -1219,8 +1224,8 @@
       const y1 = imgAreaHeight - drawHeight1 - imgAreaHeight * 0.08; // 8% from bottom
       
       // Second image: top right, slightly behind (offset and rotated)
-      const offsetX = 40; // Larger offset for more dramatic effect
-      const offsetY = -40;
+      const offsetX = bannerSettings.collageSpacing; // Configurable spacing
+      const offsetY = -bannerSettings.collageSpacing;
       const x2 = imgAreaX + imgAreaWidth * 0.55 - offsetX; // More to the right
       const y2 = imgAreaHeight * 0.08 - offsetY; // 8% from top
       
@@ -1261,10 +1266,10 @@
       // Layering: 2 behind 1, 3 behind 2, 1 behind 3 (circular)
       const centerX = imgAreaX + imgAreaWidth / 2;
       const centerY = imgAreaHeight / 2;
-      const radius = Math.min(imgAreaWidth, imgAreaHeight) * 0.28; // Slightly larger radius
+      const radius = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.collageRadius; // Configurable radius
       
-      // Calculate sizes - make images larger
-      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * 0.55;
+      // Calculate sizes - use configurable size multiplier
+      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.collageImageSize;
       
       // Prepare image data with positions
       const imageData = validImages.map((imageData, index) => {
@@ -1285,8 +1290,8 @@
         // Image 1 is behind 3, Image 2 is behind 1, Image 3 is behind 2
         const behindIndex = (index + 2) % 3; // Which image this one is behind
         const behindAngle = (behindIndex * 2 * Math.PI / 3) - Math.PI / 2;
-        const offsetX = Math.cos(behindAngle) * 30; // Larger offset for more overlap
-        const offsetY = Math.sin(behindAngle) * 30;
+        const offsetX = Math.cos(behindAngle) * bannerSettings.collageSpacing; // Configurable spacing
+        const offsetY = Math.sin(behindAngle) * bannerSettings.collageSpacing;
         
         return {
           img,
@@ -1831,6 +1836,60 @@
             </label>
           </div>
         </div>
+        
+        <!-- Collage Settings (only show when collage layout is selected) -->
+        {#if bannerSettings.imageLayout === 'collage'}
+          <div class="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
+            <h4 class="text-sm font-semibold text-gray-900 mb-3">Collage Settings</h4>
+            
+            <div class="mb-3">
+              <label for="collage-image-size" class="block text-xs text-gray-600 mb-1">
+                Image Size: {Math.round(bannerSettings.collageImageSize * 100)}%
+              </label>
+              <input
+                id="collage-image-size"
+                type="range"
+                min="0.2"
+                max="1.0"
+                step="0.05"
+                bind:value={bannerSettings.collageImageSize}
+                class="w-full"
+              />
+            </div>
+            
+            <div class="mb-3">
+              <label for="collage-spacing" class="block text-xs text-gray-600 mb-1">
+                Image Spacing: {bannerSettings.collageSpacing}px
+              </label>
+              <input
+                id="collage-spacing"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                bind:value={bannerSettings.collageSpacing}
+                class="w-full"
+              />
+            </div>
+            
+            {#if selectedBannerImages.length === 3}
+              <div class="mb-3">
+                <label for="collage-radius" class="block text-xs text-gray-600 mb-1">
+                  Circle Radius: {Math.round(bannerSettings.collageRadius * 100)}%
+                </label>
+                <input
+                  id="collage-radius"
+                  type="range"
+                  min="0.1"
+                  max="0.5"
+                  step="0.01"
+                  bind:value={bannerSettings.collageRadius}
+                  class="w-full"
+                />
+              </div>
+            {/if}
+          </div>
+        {/if}
       </div>
       
       <!-- Background Settings -->
