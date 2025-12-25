@@ -56,7 +56,7 @@
     backgroundPattern: 'none', // 'none', 'dots', 'lines', 'grid', 'diagonal'
     
     // Text
-    fontSize: 48,
+    fontSize: 42,
     fontFamily: 'Cormorant Garamond, Times New Roman, serif',
     hebrewFontFamily: 'Frank Ruhl Libre, Cardo, serif',
     textColor: '#2C1810',
@@ -64,6 +64,9 @@
     textPosition: 'left', // 'left', 'center', 'right' (for text area)
     textBackground: 'rgba(245, 241, 232, 0.95)',
     textBackgroundOpacity: 0.95,
+    
+    // Ribbon
+    ribbonColor: '#DC2626', // Default red color for category ribbon
     
     // Spacing
     padding: 30,
@@ -101,7 +104,8 @@
     const presets = [
       { x: 50, y: 60, zoom: 0.8, zIndex: 3, opacity: 1.0 }, // Center image
       { x: 20, y: 40, zoom: 0.6, zIndex: 1, opacity: 1.0 }, // Image 2
-      { x: 80, y: 40, zoom: 0.6, zIndex: 2, opacity: 1.0 }  // Image 3
+      { x: 80, y: 40, zoom: 0.6, zIndex: 2, opacity: 1.0 },  // Image 3
+      { x: 50, y: 20, zoom: 0.55, zIndex: 1, opacity: 1.0 }, // Image 4
     ];
     
     // Apply presets to first 3 images
@@ -151,7 +155,7 @@
     let result = '';
     let remaining = hebrewYear;
     if (remaining >= 5000) {
-      result += 'ה\'';
+      // Remove the leading ה' prefix
       remaining -= 5000;
     }
     const hundredsDigit = Math.floor(remaining / 100);
@@ -1887,7 +1891,7 @@
           ctx.restore();
           
           // Draw Hebrew year
-          ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.hebrewFontFamily}`;
+          ctx.font = `bold ${bannerSettings.fontSize * 1.5}px ${bannerSettings.hebrewFontFamily}`;
           ctx.fillText(bannerSettings.yearHebrew, startX + englishWidth + separatorWidth + hebrewWidth / 2, yearY);
         } else {
           // Single year
@@ -1940,8 +1944,8 @@
       const textWidth = textMetrics.width;
       
       // Ribbon dimensions - bigger with negative margin for overflow effect
-      const negativeMargin = 40; // How much ribbon extends beyond canvas
-      const ribbonPadding = negativeMargin + 40; // Padding equal to negative margin plus extra
+      const negativeMargin = 45; // How much ribbon extends beyond canvas
+      const ribbonPadding = negativeMargin + 25; // Padding equal to negative margin plus extra
       const ribbonWidth = textWidth + ribbonPadding * 2;
       const ribbonHeight = 60; // Increased height
       const angle = Math.PI / 4; // 45 degrees for diagonal ribbon (top-right to bottom-left)
@@ -1978,7 +1982,7 @@
       ctx.shadowOffsetY = 3;
       
       // Ribbon shape (folded ribbon effect)
-      ctx.fillStyle = bannerSettings.textColor || '#2C1810';
+      ctx.fillStyle = bannerSettings.ribbonColor || '#DC2626';
       ctx.beginPath();
       
       // Main ribbon body (rounded rectangle)
@@ -2022,11 +2026,11 @@
       ctx.shadowOffsetX = 0;
       ctx.shadowOffsetY = 0;
       
-      // Draw text on ribbon
+      // Draw text on ribbon (always white for contrast)
       ctx.fillStyle = '#FFFFFF';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.font = `bold ${bannerSettings.fontSize * 0.55}px ${bannerSettings.fontFamily}`;
+      ctx.font = `bold ${bannerSettings.fontSize * 0.7}px ${bannerSettings.fontFamily}`;
       ctx.fillText(categoryText, 0, 0);
       
       ctx.restore();
@@ -2928,6 +2932,27 @@
             dir="rtl"
             class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
+        </div>
+        
+        <div class="mb-4">
+          <label for="ribbon-color" class="block text-sm font-medium text-gray-700 mb-2">
+            Ribbon Color
+          </label>
+          <div class="flex gap-2">
+            <input
+              id="ribbon-color"
+              type="color"
+              bind:value={bannerSettings.ribbonColor}
+              class="h-12 w-20 border border-gray-300 rounded-lg cursor-pointer"
+            />
+            <input
+              type="text"
+              bind:value={bannerSettings.ribbonColor}
+              placeholder="#DC2626"
+              class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+          </div>
+          <p class="text-xs text-gray-500 mt-1">Color of the category ribbon (text will be white)</p>
         </div>
       </div>
       
