@@ -1100,8 +1100,98 @@
       const x = imgAreaX + (imgAreaWidth - drawWidth) / 2;
       const y = (imgAreaHeight - drawHeight) / 2;
       ctx.drawImage(img, x, y, drawWidth, drawHeight);
+    } else if (validImages.length === 2) {
+      // 2 images: first image bottom left, second slightly behind it on top right
+      const img1 = validImages[0];
+      const img2 = validImages[1];
+      
+      // Calculate sizes - make images about 60% of available space
+      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * 0.6;
+      
+      // Scale each image to fit
+      const scale1 = Math.min(baseSize / img1.width, baseSize / img1.height);
+      const scale2 = Math.min(baseSize / img2.width, baseSize / img2.height);
+      
+      const drawWidth1 = img1.width * scale1;
+      const drawHeight1 = img1.height * scale1;
+      const drawWidth2 = img2.width * scale2;
+      const drawHeight2 = img2.height * scale2;
+      
+      // First image: bottom left
+      const x1 = imgAreaX + imgAreaWidth * 0.1; // 10% from left
+      const y1 = imgAreaHeight - drawHeight1 - imgAreaHeight * 0.1; // 10% from bottom
+      
+      // Second image: top right, slightly behind (offset and rotated slightly)
+      const offsetX = 30; // Offset to create "behind" effect
+      const offsetY = -30;
+      const x2 = imgAreaX + imgAreaWidth * 0.5 - offsetX; // Center-right with offset
+      const y2 = imgAreaHeight * 0.1 - offsetY; // 10% from top with offset
+      
+      // Draw second image first (behind), with slight rotation
+      ctx.save();
+      ctx.translate(x2 + drawWidth2 / 2, y2 + drawHeight2 / 2);
+      ctx.rotate(-0.05); // Slight rotation (about 3 degrees)
+      ctx.drawImage(img2, -drawWidth2 / 2, -drawHeight2 / 2, drawWidth2, drawHeight2);
+      ctx.restore();
+      
+      // Draw first image on top (foreground)
+      ctx.drawImage(img1, x1, y1, drawWidth1, drawHeight1);
+      
+    } else if (validImages.length === 3) {
+      // 3 images: circular arrangement with each slightly behind the next
+      // Layering: 2 behind 1, 3 behind 2, 1 behind 3 (circular)
+      const centerX = imgAreaX + imgAreaWidth / 2;
+      const centerY = imgAreaHeight / 2;
+      const radius = Math.min(imgAreaWidth, imgAreaHeight) * 0.25; // Distance from center
+      
+      // Calculate sizes
+      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * 0.5;
+      
+      // Prepare image data with positions
+      const imageData = validImages.map((img, index) => {
+        const scale = Math.min(baseSize / img.width, baseSize / img.height);
+        const drawWidth = img.width * scale;
+        const drawHeight = img.height * scale;
+        
+        // Position in circle: 120 degrees apart (360/3)
+        const angle = (index * 2 * Math.PI / 3) - Math.PI / 2; // Start from top
+        const x = centerX + Math.cos(angle) * radius;
+        const y = centerY + Math.sin(angle) * radius;
+        
+        // Rotation for each image (slight tilt)
+        const rotation = angle + Math.PI / 2; // Perpendicular to radius
+        
+        // Offset to create "behind" effect - each image is slightly offset inward
+        // Image 1 is behind 3, Image 2 is behind 1, Image 3 is behind 2
+        const behindIndex = (index + 2) % 3; // Which image this one is behind
+        const behindAngle = (behindIndex * 2 * Math.PI / 3) - Math.PI / 2;
+        const offsetX = Math.cos(behindAngle) * 25; // Offset toward the image it's behind
+        const offsetY = Math.sin(behindAngle) * 25;
+        
+        return {
+          img,
+          drawWidth,
+          drawHeight,
+          x: x + offsetX,
+          y: y + offsetY,
+          rotation
+        };
+      });
+      
+      // Draw in order: 3, 2, 1 (so 1 is on top, 2 is in middle, 3 is behind)
+      // This creates: 2 behind 1, 3 behind 2, 1 behind 3
+      const drawOrder = [2, 1, 0]; // Draw 3rd, then 2nd, then 1st
+      drawOrder.forEach((orderIndex) => {
+        const data = imageData[orderIndex];
+        ctx.save();
+        ctx.translate(data.x, data.y);
+        ctx.rotate(data.rotation);
+        ctx.drawImage(data.img, -data.drawWidth / 2, -data.drawHeight / 2, data.drawWidth, data.drawHeight);
+        ctx.restore();
+      });
+      
     } else {
-      // Grid layout for multiple images
+      // 4+ images: Grid layout
       const cols = Math.ceil(Math.sqrt(validImages.length));
       const rows = Math.ceil(validImages.length / cols);
       const cellWidth = imgAreaWidth / cols;
