@@ -602,6 +602,7 @@
                   <BannerGenerator 
                     type="auction" 
                     {auction}
+                    auctionHouse={auction?.auctionHouse || null}
                     onSave={(bannerUrl) => {
                       // Save banner URL to auction settings
                       if (settings) {

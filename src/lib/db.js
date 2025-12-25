@@ -31,7 +31,8 @@ function mapAuction(prismaAuction) {
     auctionHouseId: prismaAuction.auctionHouseId,
     sellerId: prismaAuction.sellerId,
     createdAt: prismaAuction.createdAt,
-    updatedAt: prismaAuction.updatedAt
+    updatedAt: prismaAuction.updatedAt,
+    auctionHouse: prismaAuction.auctionHouse ? mapAuctionHouse(prismaAuction.auctionHouse) : null
   };
 }
 

@@ -1867,36 +1867,40 @@
         
         // If both years exist, draw them separately with a decorative separator
         if (bannerSettings.yearEnglish && bannerSettings.yearHebrew) {
-          // Measure text widths
+          // Measure text widths - both use same font size
           ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.fontFamily}`;
           const englishWidth = ctx.measureText(bannerSettings.yearEnglish).width;
           
           ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.hebrewFontFamily}`;
           const hebrewWidth = ctx.measureText(bannerSettings.yearHebrew).width;
           
-          const separatorWidth = bannerSettings.fontSize * 0.4;
-          const totalWidth = englishWidth + separatorWidth + hebrewWidth;
+          // Even spacing on both sides of separator
+          const spacing = bannerSettings.fontSize * 0.6; // Space between text and separator
+          const separatorSize = bannerSettings.fontSize * 0.2; // Size of the separator diamond
+          const totalWidth = englishWidth + spacing + separatorSize + spacing + hebrewWidth;
           const startX = centerX - totalWidth / 2;
           
-          // Draw English year
+          // Draw English year (right-aligned to its position)
           ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.fontFamily}`;
-          ctx.fillText(bannerSettings.yearEnglish, startX + englishWidth / 2, yearY);
+          ctx.textAlign = 'right';
+          ctx.fillText(bannerSettings.yearEnglish, startX + englishWidth, yearY);
           
-          // Draw decorative separator (bullet or diamond)
-          const separatorX = startX + englishWidth + separatorWidth / 2;
+          // Draw decorative separator (diamond) - centered between the two years
+          const separatorX = startX + englishWidth + spacing + separatorSize / 2;
           ctx.fillStyle = bannerSettings.textColor;
-          ctx.beginPath();
-          // Draw a diamond/bullet shape
           ctx.save();
           ctx.translate(separatorX, yearY);
           ctx.rotate(Math.PI / 4); // Rotate 45 degrees for diamond
-          ctx.fillRect(-bannerSettings.fontSize * 0.15, -bannerSettings.fontSize * 0.15, 
-                       bannerSettings.fontSize * 0.3, bannerSettings.fontSize * 0.3);
+          ctx.fillRect(-separatorSize / 2, -separatorSize / 2, separatorSize, separatorSize);
           ctx.restore();
           
-          // Draw Hebrew year
-          ctx.font = `bold ${bannerSettings.fontSize * 1.5}px ${bannerSettings.hebrewFontFamily}`;
-          ctx.fillText(bannerSettings.yearHebrew, startX + englishWidth + separatorWidth + hebrewWidth / 2, yearY);
+          // Draw Hebrew year (left-aligned from separator)
+          ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.hebrewFontFamily}`;
+          ctx.textAlign = 'left';
+          ctx.fillText(bannerSettings.yearHebrew, startX + englishWidth + spacing + separatorSize + spacing, yearY);
+          
+          // Reset text alignment for subsequent text
+          ctx.textAlign = 'center';
         } else {
           // Single year
           ctx.fillText(yearText, centerX, yearY);
@@ -2899,69 +2903,6 @@
         </div>
         
         <div class="mb-4">
-          <label for="subtitle-en" class="block text-sm font-medium text-gray-700 mb-2">
-            Subtitle (English)
-          </label>
-          <textarea
-            id="subtitle-en"
-            bind:value={bannerSettings.subtitle}
-            placeholder="Banner subtitle"
-            rows="2"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          ></textarea>
-        </div>
-        
-        <div class="mb-4">
-          <label for="subtitle-he" class="block text-sm font-medium text-gray-700 mb-2">
-            Subtitle (Hebrew)
-          </label>
-          <textarea
-            id="subtitle-he"
-            bind:value={bannerSettings.subtitleHebrew}
-            placeholder="תת-כותרת בעברית"
-            rows="2"
-            dir="rtl"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          ></textarea>
-        </div>
-        
-        <div class="mb-4">
-          <label for="year-en" class="block text-sm font-medium text-gray-700 mb-2">
-            Year (English)
-          </label>
-          <input
-            id="year-en"
-            type="text"
-            bind:value={bannerSettings.yearEnglish}
-            placeholder="e.g., 1890"
-            oninput={(e) => {
-              bannerSettings.yearEnglish = e.target.value;
-              if (bannerSettings.yearEnglish) {
-                bannerSettings.yearHebrew = convertToHebrewYear(bannerSettings.yearEnglish);
-              } else {
-                bannerSettings.yearHebrew = '';
-              }
-            }}
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          />
-        </div>
-        
-        <div class="mb-4">
-          <label for="year-he" class="block text-sm font-medium text-gray-700 mb-2">
-            Year (Hebrew)
-          </label>
-          <input
-            id="year-he"
-            type="text"
-            bind:value={bannerSettings.yearHebrew}
-            placeholder="Auto-filled from English year, or enter manually"
-            dir="rtl"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          />
-          <p class="text-xs text-gray-500 mt-1">Auto-converts from English year, or enter manually</p>
-        </div>
-        
-        <div class="mb-4">
           <label for="category-en" class="block text-sm font-medium text-gray-700 mb-2">
             Category (English)
           </label>
@@ -3118,6 +3059,69 @@
               <option value="center">Center</option>
               <option value="right">Right</option>
             </select>
+          </div>
+          
+          <div class="mb-4">
+            <label for="subtitle-en" class="block text-sm font-medium text-gray-700 mb-2">
+              Subtitle (English)
+            </label>
+            <textarea
+              id="subtitle-en"
+              bind:value={bannerSettings.subtitle}
+              placeholder="Banner subtitle"
+              rows="2"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            ></textarea>
+          </div>
+          
+          <div class="mb-4">
+            <label for="subtitle-he" class="block text-sm font-medium text-gray-700 mb-2">
+              Subtitle (Hebrew)
+            </label>
+            <textarea
+              id="subtitle-he"
+              bind:value={bannerSettings.subtitleHebrew}
+              placeholder="תת-כותרת בעברית"
+              rows="2"
+              dir="rtl"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            ></textarea>
+          </div>
+          
+          <div class="mb-4">
+            <label for="year-en" class="block text-sm font-medium text-gray-700 mb-2">
+              Year (English)
+            </label>
+            <input
+              id="year-en"
+              type="text"
+              bind:value={bannerSettings.yearEnglish}
+              placeholder="e.g., 1890"
+              oninput={(e) => {
+                bannerSettings.yearEnglish = e.target.value;
+                if (bannerSettings.yearEnglish) {
+                  bannerSettings.yearHebrew = convertToHebrewYear(bannerSettings.yearEnglish);
+                } else {
+                  bannerSettings.yearHebrew = '';
+                }
+              }}
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+          </div>
+          
+          <div class="mb-4">
+            <label for="year-he" class="block text-sm font-medium text-gray-700 mb-2">
+              Year (Hebrew)
+            </label>
+            <input
+              id="year-he"
+              type="text"
+              bind:value={bannerSettings.yearHebrew}
+              placeholder="Auto-filled from English year, or enter manually"
+              dir="rtl"
+              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            />
+            <p class="text-xs text-gray-500 mt-1">Auto-converts from English year, or enter manually</p>
           </div>
         </div>
       {/if}
