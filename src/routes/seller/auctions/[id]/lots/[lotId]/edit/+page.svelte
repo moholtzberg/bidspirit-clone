@@ -31,6 +31,7 @@
   let tagInput = $state('');
   let showCategoryDropdown = $state(false);
   let showTagDropdown = $state(false);
+  let removeBackground = $state(false);
   
   onMount(async () => {
     await loadData();
@@ -649,6 +650,17 @@
                   {/each}
                 </div>
               {/if}
+              <div class="mb-2">
+                <label class="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    bind:checked={removeBackground}
+                    class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <span class="text-sm text-gray-700">Remove background automatically</span>
+                </label>
+                <p class="text-xs text-gray-500 ml-6">Uses AI to remove background from images</p>
+              </div>
               <input
                 type="file"
                 multiple

@@ -41,8 +41,13 @@
     imageSize: 1.0, // Size multiplier for images (0.1 to 2.0)
     
     // Collage-specific settings
+    collageLayout: 'auto', // 'auto', 'grid', 'circle', 'stacked', 'diagonal', 'scattered', 'custom'
     collageSpacing: 40, // Spacing/offset between images in pixels
     collageRadius: 0.28, // Radius multiplier for 3-image circular layout (0.1 to 0.5)
+    collageGridColumns: 2, // Number of columns for grid layout
+    collageImagePositions: [], // Custom positions for each image [{x: 0-100%, y: 0-100%, rotation: 0-360}]
+    collageAllowOverlap: true, // Allow images to overlap
+    collageAlignment: 'center', // 'center', 'top', 'bottom', 'left', 'right', 'top-left', etc.
     
     // Background
     backgroundType: 'solid', // 'solid', 'gradient', 'image', 'pattern'
@@ -632,6 +637,14 @@
         flipVertical: bannerSettings.imageFlipVertical ?? false,
         isFeatured: true // First/primary image is featured by default
       }];
+      // Initialize custom positions if using custom layout
+      if (bannerSettings.collageLayout === 'custom') {
+        bannerSettings.collageImagePositions = selectedBannerImages.map((_, idx) => ({
+          x: 20 + (idx * 30) % 60,
+          y: 20 + Math.floor(idx / 2) * 30,
+          rotation: 0
+        }));
+      }
       updatePrimaryImage();
     }
   }
@@ -1224,6 +1237,242 @@
     const imgAreaX = textAreaWidth;
     const imgAreaHeight = height;
     
+    // Helper function to calculate alignment offset
+    function getAlignmentOffset(alignment, areaWidth, areaHeight, itemWidth, itemHeight) {
+      let offsetX = 0;
+      let offsetY = 0;
+      
+      if (alignment.includes('left')) {
+        offsetX = 0;
+      } else if (alignment.includes('right')) {
+        offsetX = areaWidth - itemWidth;
+      } else {
+        offsetX = (areaWidth - itemWidth) / 2; // center
+      }
+      
+      if (alignment.includes('top')) {
+        offsetY = 0;
+      } else if (alignment.includes('bottom')) {
+        offsetY = areaHeight - itemHeight;
+      } else {
+        offsetY = (areaHeight - itemHeight) / 2; // center
+      }
+      
+      return { offsetX, offsetY };
+    }
+    
+    // Custom layout: use user-defined positions
+    if (bannerSettings.collageLayout === 'custom' && bannerSettings.collageImagePositions.length > 0) {
+      validImages.forEach((imageData, index) => {
+        const { img, orientation } = imageData;
+        const customPos = bannerSettings.collageImagePositions[index];
+        if (!customPos) return;
+        
+        const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.imageSize;
+        const scale = Math.min(baseSize / img.width, baseSize / img.height);
+        const drawWidth = img.width * scale;
+        const drawHeight = img.height * scale;
+        
+        // Convert percentage to pixel coordinates
+        const x = imgAreaX + (imgAreaWidth * customPos.x / 100) - (drawWidth / 2);
+        const y = (imgAreaHeight * customPos.y / 100) - (drawHeight / 2);
+        
+        ctx.save();
+        ctx.translate(x + drawWidth / 2, y + drawHeight / 2);
+        ctx.rotate((customPos.rotation || 0) * Math.PI / 180);
+        
+        // Apply per-image transformations
+        if (orientation) {
+          const rotationRad = (orientation.rotation * Math.PI) / 180;
+          ctx.rotate(rotationRad);
+          let scaleX = orientation.flipHorizontal ? -1 : 1;
+          let scaleY = orientation.flipVertical ? -1 : 1;
+          ctx.scale(scaleX, scaleY);
+        }
+        
+        ctx.drawImage(img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight);
+        ctx.restore();
+      });
+      return;
+    }
+    
+    // Grid layout
+    if (bannerSettings.collageLayout === 'grid' || (bannerSettings.collageLayout === 'auto' && validImages.length >= 4)) {
+      const cols = bannerSettings.collageLayout === 'grid' ? bannerSettings.collageGridColumns : Math.ceil(Math.sqrt(validImages.length));
+      const rows = Math.ceil(validImages.length / cols);
+      
+      const spacing = bannerSettings.collageSpacing;
+      const totalSpacing = spacing * (cols - 1);
+      const totalSpacingV = spacing * (rows - 1);
+      const cellWidth = (imgAreaWidth - totalSpacing) / cols;
+      const cellHeight = (imgAreaHeight - totalSpacingV) / rows;
+      
+      validImages.forEach((imageData, index) => {
+        const { img, orientation } = imageData;
+        const col = index % cols;
+        const row = Math.floor(index / cols);
+        const baseX = imgAreaX + col * (cellWidth + spacing);
+        const baseY = row * (cellHeight + spacing);
+        
+        const scale = Math.min(cellWidth / img.width, cellHeight / img.height) * bannerSettings.imageSize;
+        const drawWidth = img.width * scale;
+        const drawHeight = img.height * scale;
+        
+        // Apply alignment
+        const align = getAlignmentOffset(bannerSettings.collageAlignment, cellWidth, cellHeight, drawWidth, drawHeight);
+        const x = baseX + align.offsetX;
+        const y = baseY + align.offsetY;
+        
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+        ctx.shadowBlur = 8;
+        ctx.shadowOffsetX = 2;
+        ctx.shadowOffsetY = 2;
+        applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, orientation);
+        ctx.restore();
+      });
+      return;
+    }
+    
+    // Circle layout
+    if (bannerSettings.collageLayout === 'circle' || (bannerSettings.collageLayout === 'auto' && validImages.length === 3)) {
+      const centerX = imgAreaX + imgAreaWidth / 2;
+      const centerY = imgAreaHeight / 2;
+      const radius = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.collageRadius;
+      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.imageSize;
+      
+      const imageData = validImages.map((imageData, index) => {
+        const { img, orientation } = imageData;
+        const scale = Math.min(baseSize / img.width, baseSize / img.height);
+        const drawWidth = img.width * scale;
+        const drawHeight = img.height * scale;
+        
+        const angle = (index * 2 * Math.PI / validImages.length) - Math.PI / 2;
+        const baseX = centerX + Math.cos(angle) * radius;
+        const baseY = centerY + Math.sin(angle) * radius;
+        const rotation = angle + Math.PI / 2;
+        
+        const behindIndex = (index + validImages.length - 1) % validImages.length;
+        const behindAngle = (behindIndex * 2 * Math.PI / validImages.length) - Math.PI / 2;
+        const offsetX = Math.cos(behindAngle) * bannerSettings.collageSpacing;
+        const offsetY = Math.sin(behindAngle) * bannerSettings.collageSpacing;
+        
+        return { img, drawWidth, drawHeight, x: baseX + offsetX, y: baseY + offsetY, rotation, index, orientation };
+      });
+      
+      // Draw in reverse order for layering
+      const drawOrder = Array.from({ length: validImages.length }, (_, i) => validImages.length - 1 - i);
+      drawOrder.forEach((orderIndex) => {
+        const data = imageData[orderIndex];
+        ctx.save();
+        ctx.shadowColor = `rgba(0, 0, 0, ${0.2 + orderIndex * 0.1})`;
+        ctx.shadowBlur = 15;
+        ctx.shadowOffsetX = 6;
+        ctx.shadowOffsetY = 6;
+        ctx.translate(data.x, data.y);
+        ctx.rotate(data.rotation);
+        
+        if (data.orientation) {
+          const rotationRad = (data.orientation.rotation * Math.PI) / 180;
+          ctx.rotate(rotationRad);
+          let scaleX = data.orientation.flipHorizontal ? -1 : 1;
+          let scaleY = data.orientation.flipVertical ? -1 : 1;
+          ctx.scale(scaleX, scaleY);
+        }
+        
+        ctx.drawImage(data.img, -data.drawWidth / 2, -data.drawHeight / 2, data.drawWidth, data.drawHeight);
+        ctx.restore();
+      });
+      return;
+    }
+    
+    // Stacked layout
+    if (bannerSettings.collageLayout === 'stacked') {
+      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.imageSize;
+      const spacing = bannerSettings.collageSpacing;
+      
+      validImages.forEach((imageData, index) => {
+        const { img, orientation } = imageData;
+        const scale = Math.min(baseSize / img.width, baseSize / img.height);
+        const drawWidth = img.width * scale;
+        const drawHeight = img.height * scale;
+        
+        const offsetX = index * spacing * 0.3;
+        const offsetY = index * spacing * 0.3;
+        const align = getAlignmentOffset(bannerSettings.collageAlignment, imgAreaWidth, imgAreaHeight, drawWidth, drawHeight);
+        const x = imgAreaX + align.offsetX + offsetX;
+        const y = align.offsetY + offsetY;
+        
+        ctx.save();
+        ctx.shadowColor = `rgba(0, 0, 0, ${0.1 + index * 0.05})`;
+        ctx.shadowBlur = 10 + index * 2;
+        ctx.shadowOffsetX = 3 + index;
+        ctx.shadowOffsetY = 3 + index;
+        applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, orientation);
+        ctx.restore();
+      });
+      return;
+    }
+    
+    // Diagonal layout
+    if (bannerSettings.collageLayout === 'diagonal') {
+      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.imageSize;
+      const spacing = bannerSettings.collageSpacing;
+      
+      validImages.forEach((imageData, index) => {
+        const { img, orientation } = imageData;
+        const scale = Math.min(baseSize / img.width, baseSize / img.height);
+        const drawWidth = img.width * scale;
+        const drawHeight = img.height * scale;
+        
+        const progress = validImages.length > 1 ? index / (validImages.length - 1) : 0.5;
+        const x = imgAreaX + (imgAreaWidth - drawWidth) * progress;
+        const y = (imgAreaHeight - drawHeight) * (1 - progress);
+        
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetX = 3;
+        ctx.shadowOffsetY = 3;
+        applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, orientation);
+        ctx.restore();
+      });
+      return;
+    }
+    
+    // Scattered layout
+    if (bannerSettings.collageLayout === 'scattered') {
+      const baseSize = Math.min(imgAreaWidth, imgAreaHeight) * bannerSettings.imageSize;
+      
+      validImages.forEach((imageData, index) => {
+        const { img, orientation } = imageData;
+        const scale = Math.min(baseSize / img.width, baseSize / img.height);
+        const drawWidth = img.width * scale;
+        const drawHeight = img.height * scale;
+        
+        // Random-ish but deterministic positions based on index
+        const seed = index * 137.508; // Golden angle approximation
+        const angle = seed % (Math.PI * 2);
+        const distance = (imgAreaWidth * 0.3) * (0.3 + (index % 3) * 0.2);
+        const centerX = imgAreaX + imgAreaWidth / 2;
+        const centerY = imgAreaHeight / 2;
+        const x = centerX + Math.cos(angle) * distance - drawWidth / 2;
+        const y = centerY + Math.sin(angle) * distance - drawHeight / 2;
+        
+        ctx.save();
+        ctx.shadowColor = 'rgba(0, 0, 0, 0.2)';
+        ctx.shadowBlur = 10;
+        ctx.shadowOffsetX = 3;
+        ctx.shadowOffsetY = 3;
+        ctx.translate(x + drawWidth / 2, y + drawHeight / 2);
+        ctx.rotate((angle * 180 / Math.PI) * 0.1); // Slight rotation
+        applyImageTransform(ctx, img, -drawWidth / 2, -drawHeight / 2, drawWidth, drawHeight, orientation);
+        ctx.restore();
+      });
+      return;
+    }
+    
+    // Auto layout (original logic for 1, 2, 3, 4+ images)
     if (validImages.length === 1) {
       const { img, orientation } = validImages[0];
       const scale = Math.min(imgAreaWidth / img.width, imgAreaHeight / img.height);
@@ -2021,8 +2270,65 @@
         <!-- Collage Settings (only show when collage layout is selected) -->
         {#if bannerSettings.imageLayout === 'collage'}
           <div class="mb-4 p-3 bg-purple-50 rounded-lg border border-purple-200">
-            <h4 class="text-sm font-semibold text-gray-900 mb-3">Collage-Specific Settings</h4>
+            <h4 class="text-sm font-semibold text-gray-900 mb-3">Collage Layout Settings</h4>
             
+            <!-- Collage Layout Type -->
+            <div class="mb-3">
+              <label for="collage-layout" class="block text-xs font-medium text-gray-700 mb-1">
+                Layout Type
+              </label>
+              <select
+                id="collage-layout"
+                bind:value={bannerSettings.collageLayout}
+                class="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="auto">Auto (Smart arrangement)</option>
+                <option value="grid">Grid</option>
+                <option value="circle">Circle</option>
+                <option value="stacked">Stacked</option>
+                <option value="diagonal">Diagonal</option>
+                <option value="scattered">Scattered</option>
+                <option value="custom">Custom Positions</option>
+              </select>
+            </div>
+            
+            <!-- Grid-specific settings -->
+            {#if bannerSettings.collageLayout === 'grid'}
+              <div class="mb-3">
+                <label for="collage-grid-columns" class="block text-xs text-gray-600 mb-1">
+                  Grid Columns: {bannerSettings.collageGridColumns}
+                </label>
+                <input
+                  id="collage-grid-columns"
+                  type="range"
+                  min="1"
+                  max="4"
+                  step="1"
+                  bind:value={bannerSettings.collageGridColumns}
+                  class="w-full"
+                />
+              </div>
+            {/if}
+            
+            <!-- Circle-specific settings -->
+            {#if bannerSettings.collageLayout === 'circle' || (bannerSettings.collageLayout === 'auto' && selectedBannerImages.length === 3)}
+              <div class="mb-3">
+                <label for="collage-radius" class="block text-xs text-gray-600 mb-1">
+                  Circle Radius: {Math.round(bannerSettings.collageRadius * 100)}%
+                </label>
+                <input
+                  id="collage-radius"
+                  type="range"
+                  min="0.1"
+                  max="0.5"
+                  step="0.01"
+                  bind:value={bannerSettings.collageRadius}
+                  class="w-full"
+                />
+              </div>
+            {/if}
+            
+            <!-- Spacing -->
             <div class="mb-3">
               <label for="collage-spacing" class="block text-xs text-gray-600 mb-1">
                 Image Spacing: {bannerSettings.collageSpacing}px
@@ -2038,20 +2344,115 @@
               />
             </div>
             
-            {#if selectedBannerImages.length === 3}
-              <div class="mb-3">
-                <label for="collage-radius" class="block text-xs text-gray-600 mb-1">
-                  Circle Radius: {Math.round(bannerSettings.collageRadius * 100)}%
-                </label>
+            <!-- Alignment -->
+            <div class="mb-3">
+              <label for="collage-alignment" class="block text-xs font-medium text-gray-700 mb-1">
+                Alignment
+              </label>
+              <select
+                id="collage-alignment"
+                bind:value={bannerSettings.collageAlignment}
+                class="w-full px-2 py-1 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="center">Center</option>
+                <option value="top">Top</option>
+                <option value="bottom">Bottom</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+                <option value="top-left">Top Left</option>
+                <option value="top-right">Top Right</option>
+                <option value="bottom-left">Bottom Left</option>
+                <option value="bottom-right">Bottom Right</option>
+              </select>
+            </div>
+            
+            <!-- Allow Overlap -->
+            <div class="mb-3">
+              <label class="flex items-center gap-2 cursor-pointer">
                 <input
-                  id="collage-radius"
-                  type="range"
-                  min="0.1"
-                  max="0.5"
-                  step="0.01"
-                  bind:value={bannerSettings.collageRadius}
-                  class="w-full"
+                  type="checkbox"
+                  bind:checked={bannerSettings.collageAllowOverlap}
+                  class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
                 />
+                <span class="text-xs text-gray-700">Allow images to overlap</span>
+              </label>
+            </div>
+            
+            <!-- Custom Position Controls (for each image) -->
+            {#if bannerSettings.collageLayout === 'custom' && selectedBannerImages.length > 0}
+              <div class="border-t pt-3 mt-3">
+                <h5 class="text-xs font-semibold text-gray-900 mb-2">Custom Image Positions</h5>
+                <div class="space-y-2 max-h-48 overflow-y-auto">
+                  {#each selectedBannerImages as image, index}
+                    {@const pos = bannerSettings.collageImagePositions[index] || { x: 50, y: 50, rotation: 0 }}
+                    <div class="p-2 bg-white rounded border border-gray-200">
+                      <div class="flex items-center gap-2 mb-2">
+                        <img
+                          src={image.displayUrl || image.url}
+                          alt="Image {index + 1}"
+                          class="w-8 h-8 object-cover rounded"
+                        />
+                        <span class="text-xs font-medium text-gray-700">Image {index + 1}</span>
+                      </div>
+                      <div class="grid grid-cols-3 gap-2">
+                        <div>
+                          <label class="block text-[10px] text-gray-600 mb-0.5">X: {pos.x}%</label>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={pos.x}
+                            oninput={(e) => {
+                              if (!bannerSettings.collageImagePositions[index]) {
+                                bannerSettings.collageImagePositions[index] = { x: 50, y: 50, rotation: 0 };
+                              }
+                              bannerSettings.collageImagePositions[index].x = parseInt(e.target.value);
+                              bannerSettings.collageImagePositions = [...bannerSettings.collageImagePositions];
+                            }}
+                            class="w-full"
+                          />
+                        </div>
+                        <div>
+                          <label class="block text-[10px] text-gray-600 mb-0.5">Y: {pos.y}%</label>
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step="1"
+                            value={pos.y}
+                            oninput={(e) => {
+                              if (!bannerSettings.collageImagePositions[index]) {
+                                bannerSettings.collageImagePositions[index] = { x: 50, y: 50, rotation: 0 };
+                              }
+                              bannerSettings.collageImagePositions[index].y = parseInt(e.target.value);
+                              bannerSettings.collageImagePositions = [...bannerSettings.collageImagePositions];
+                            }}
+                            class="w-full"
+                          />
+                        </div>
+                        <div>
+                          <label class="block text-[10px] text-gray-600 mb-0.5">Rot: {pos.rotation}°</label>
+                          <input
+                            type="range"
+                            min="-180"
+                            max="180"
+                            step="1"
+                            value={pos.rotation || 0}
+                            oninput={(e) => {
+                              if (!bannerSettings.collageImagePositions[index]) {
+                                bannerSettings.collageImagePositions[index] = { x: 50, y: 50, rotation: 0 };
+                              }
+                              bannerSettings.collageImagePositions[index].rotation = parseInt(e.target.value);
+                              bannerSettings.collageImagePositions = [...bannerSettings.collageImagePositions];
+                            }}
+                            class="w-full"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  {/each}
+                </div>
               </div>
             {/if}
           </div>

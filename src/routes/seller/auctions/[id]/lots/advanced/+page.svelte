@@ -9,6 +9,7 @@
   let editingCell = $state(null); // { lotId, field, value }
   let selectedLots = $state(new Set());
   let imageUploads = $state({}); // { lotId: [files] }
+  let removeBackground = $state({}); // { lotId: boolean } - per-lot background removal setting
   let showImageModal = $state(null); // { lotId, images }
   let saving = $state({}); // Track which lots are being saved
   let availableCategories = $state([]);
@@ -477,6 +478,7 @@
       const formData = new FormData();
       files.forEach(file => formData.append('files', file));
       formData.append('lotId', actualLotId);
+      formData.append('removeBackground', (removeBackground[lotId] || false).toString());
 
       const uploadResponse = await fetch('/api/upload/image', {
         method: 'POST',
@@ -1460,6 +1462,21 @@
                         
                         <!-- Upload New Images -->
                         <div class="border-t border-gray-200 pt-4">
+                          <div class="mb-2">
+                            <label class="flex items-center gap-2 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={removeBackground[lot.id] || false}
+                                onchange={(e) => {
+                                  removeBackground[lot.id] = e.target.checked;
+                                  removeBackground = { ...removeBackground };
+                                }}
+                                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <span class="text-sm text-gray-700">Remove background</span>
+                            </label>
+                            <p class="text-xs text-gray-500 ml-6">Uses AI to remove background from images</p>
+                          </div>
                           <label class="block mb-2">
                             <span class="text-sm font-medium text-gray-700">Add Images</span>
                             <input

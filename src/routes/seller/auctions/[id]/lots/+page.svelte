@@ -25,6 +25,8 @@
     endTime: ''
   });
   
+  let removeBackground = $state(false);
+  
   let categoryMetaFieldsConfig = $state({});
   let auctionHouseId = $state(null);
   
@@ -315,6 +317,7 @@
     try {
       const formData = new FormData();
       files.forEach(file => formData.append('files', file));
+      formData.append('removeBackground', removeBackground.toString());
 
       const uploadResponse = await fetch('/api/upload/image', {
         method: 'POST',
