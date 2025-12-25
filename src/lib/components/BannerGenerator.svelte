@@ -520,6 +520,7 @@
 
   // Load images from selected lot
   async function loadLotImages(lotId) {
+    console.log('Loading images for lot:> ', lotId);
     selectedBannerImages = [];
     selectedLotImages = [];
     
@@ -539,13 +540,14 @@
     }
 
     const lot = lots.find(l => l.id === lotId);
+    console.log('Lot:> ', lot);
     if (!lot) return;
 
     bannerSettings.title = lot.title || '';
     bannerSettings.titleHebrew = lot.hebrewTitle || lot.HebrewTitle || '';
     bannerSettings.subtitle = lot.description ? lot.description.substring(0, 150) : '';
     bannerSettings.subtitleHebrew = lot.hebrewDescription || lot.HebrewDescription || '';
-    
+    console.log('Banner Settings:> ', bannerSettings);
     // Extract year from title if it contains a year
     const yearMatch = lot.title?.match(/\b(18|19|20)\d{2}\b/);
     if (yearMatch) {
@@ -747,20 +749,33 @@
   }
 
   async function drawImages(ctx, width, height) {
+    console.log('drawImages called, selectedBannerImages:', selectedBannerImages);
+    console.log('bannerSettings.primaryImageUrl:', bannerSettings.primaryImageUrl);
+    
     const imagesToUse = selectedBannerImages.length > 0 
-      ? selectedBannerImages.map(img => img.url)
+      ? selectedBannerImages.map(img => img.url || img.displayUrl || img)
       : (bannerSettings.primaryImageUrl ? [bannerSettings.primaryImageUrl] : []);
     
     if (imagesToUse.length === 0 && bannerSettings.backgroundImageUrl && bannerSettings.backgroundType === 'image') {
       imagesToUse.push(bannerSettings.backgroundImageUrl);
     }
     
-    if (imagesToUse.length === 0) return;
+    console.log('imagesToUse:', imagesToUse);
     
-    // Get presigned URLs
+    if (imagesToUse.length === 0) {
+      console.warn('No images to draw');
+      return;
+    }
+    
+    // Get presigned URLs (images from mapLot are already presigned, but check anyway)
     const imageUrls = await Promise.all(
       imagesToUse.map(async (imageUrl) => {
-        if (imageUrl.includes('.s3.') || imageUrl.includes('s3.amazonaws.com')) {
+        if (!imageUrl) return null;
+        
+        // Check if already presigned (has query params)
+        const isPresigned = imageUrl.includes('?X-Amz-') || imageUrl.includes('?');
+        
+        if (!isPresigned && (imageUrl.includes('.s3.') || imageUrl.includes('s3.amazonaws.com'))) {
           try {
             const match = imageUrl.match(/s3[^/]*\.amazonaws\.com\/(.+?)(?:\?|$)/);
             if (match) {
@@ -772,48 +787,92 @@
               });
               if (response.ok) {
                 const { urls } = await response.json();
-                if (urls[key]) return urls[key];
+                if (urls[key]) {
+                  console.log('Got presigned URL for key:', key);
+                  return urls[key];
+                }
               }
             }
           } catch (error) {
             console.warn('Failed to get presigned URL:', error);
           }
         }
+        console.log('Using image URL (already presigned or not S3):', imageUrl);
         return imageUrl;
       })
     );
+    
+    // Filter out null values
+    const validImageUrls = imageUrls.filter(url => url !== null);
+    console.log('Valid image URLs:', validImageUrls);
+    
+    if (validImageUrls.length === 0) {
+      console.warn('No valid image URLs after processing');
+      return;
+    }
     
     ctx.globalAlpha = bannerSettings.imageOpacity;
     
     switch (bannerSettings.imageLayout) {
       case 'full':
-        await drawFullBackgroundImage(ctx, width, height, imageUrls[0]);
+        await drawFullBackgroundImage(ctx, width, height, validImageUrls[0]);
         break;
       case 'center':
-        await drawCenterImage(ctx, width, height, imageUrls);
+        await drawCenterImage(ctx, width, height, validImageUrls);
         break;
       case 'collage':
-        await drawCollage(ctx, width, height, imageUrls);
+        await drawCollage(ctx, width, height, validImageUrls);
         break;
       case 'split':
-        await drawSplitImage(ctx, width, height, imageUrls[0]);
+        await drawSplitImage(ctx, width, height, validImageUrls[0]);
         break;
       case 'right':
-        await drawRightImage(ctx, width, height, imageUrls);
+        await drawRightImage(ctx, width, height, validImageUrls);
         break;
       case 'left':
-        await drawLeftImage(ctx, width, height, imageUrls);
+        await drawLeftImage(ctx, width, height, validImageUrls);
         break;
     }
     
     ctx.globalAlpha = 1.0;
   }
 
+  // Helper function to load image through proxy to avoid CORS issues
+  async function loadImageForCanvas(imageUrl) {
+    // If it's already a data URL, use it directly
+    if (imageUrl.startsWith('data:')) {
+      return imageUrl;
+    }
+    
+    // For S3 URLs, use proxy to avoid CORS
+    if (imageUrl.includes('.s3.') || imageUrl.includes('s3.amazonaws.com')) {
+      try {
+        const proxyUrl = `/api/images/proxy?url=${encodeURIComponent(imageUrl)}`;
+        const response = await fetch(proxyUrl);
+        if (response.ok) {
+          const blob = await response.blob();
+          return URL.createObjectURL(blob);
+        }
+      } catch (error) {
+        console.warn('Failed to load image through proxy, trying direct:', error);
+      }
+    }
+    
+    // Fallback to direct URL
+    return imageUrl;
+  }
+
   async function drawFullBackgroundImage(ctx, width, height, imageUrl) {
-    return new Promise((resolve) => {
+    if (!imageUrl) {
+      console.warn('No image URL provided for drawFullBackgroundImage');
+      return;
+    }
+    return new Promise(async (resolve) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      // Don't set crossOrigin when using proxy or blob URLs
+      const srcUrl = await loadImageForCanvas(imageUrl);
       img.onload = () => {
+        console.log('Image loaded successfully');
         if (bannerSettings.imagePosition === 'cover') {
           const scale = Math.max(width / img.width, height / img.height);
           const x = (width - img.width * scale) / 2;
@@ -825,40 +884,69 @@
           const y = (height - img.height * scale) / 2;
           ctx.drawImage(img, x, y, img.width * scale, img.height * scale);
         }
+        // Clean up blob URL if it was created
+        if (srcUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(srcUrl);
+        }
         resolve();
       };
-      img.onerror = () => resolve();
-      img.src = imageUrl;
+      img.onerror = (error) => {
+        console.error('Failed to load image:', imageUrl, error);
+        if (srcUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(srcUrl);
+        }
+        resolve();
+      };
+      console.log('Loading image:', imageUrl);
+      img.src = srcUrl;
     });
   }
 
   async function drawCenterImage(ctx, width, height, imageUrls) {
-    if (imageUrls.length === 0) return;
-    return new Promise((resolve) => {
+    if (imageUrls.length === 0 || !imageUrls[0]) {
+      console.warn('No image URL for drawCenterImage');
+      return;
+    }
+    return new Promise(async (resolve) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      const srcUrl = await loadImageForCanvas(imageUrls[0]);
       img.onload = () => {
+        console.log('Center image loaded successfully');
         const imgSize = Math.min(width, height) * 0.6;
         const x = (width - imgSize) / 2;
         const y = (height - imgSize) / 2;
         ctx.drawImage(img, x, y, imgSize, imgSize);
+        if (srcUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(srcUrl);
+        }
         resolve();
       };
-      img.onerror = () => resolve();
-      img.src = imageUrls[0];
+      img.onerror = (error) => {
+        console.error('Failed to load center image:', imageUrls[0], error);
+        if (srcUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(srcUrl);
+        }
+        resolve();
+      };
+      console.log('Loading center image:', imageUrls[0]);
+      img.src = srcUrl;
     });
   }
 
   async function drawRightImage(ctx, width, height, imageUrls) {
-    if (imageUrls.length === 0) return;
+    if (imageUrls.length === 0 || !imageUrls[0]) {
+      console.warn('No image URL for drawRightImage');
+      return;
+    }
     const textAreaWidth = width * bannerSettings.textImageRatio;
     const imgAreaWidth = width - textAreaWidth;
     const imgAreaX = textAreaWidth;
     
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      const srcUrl = await loadImageForCanvas(imageUrls[0]);
       img.onload = () => {
+        console.log('Right image loaded successfully');
         if (bannerSettings.imagePosition === 'cover') {
           const scale = Math.max(imgAreaWidth / img.width, height / img.height);
           const drawWidth = img.width * scale;
@@ -874,22 +962,36 @@
           const y = (height - drawHeight) / 2;
           ctx.drawImage(img, x, y, drawWidth, drawHeight);
         }
+        if (srcUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(srcUrl);
+        }
         resolve();
       };
-      img.onerror = () => resolve();
-      img.src = imageUrls[0];
+      img.onerror = (error) => {
+        console.error('Failed to load right image:', imageUrls[0], error);
+        if (srcUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(srcUrl);
+        }
+        resolve();
+      };
+      console.log('Loading right image:', imageUrls[0]);
+      img.src = srcUrl;
     });
   }
 
   async function drawLeftImage(ctx, width, height, imageUrls) {
-    if (imageUrls.length === 0) return;
+    if (imageUrls.length === 0 || !imageUrls[0]) {
+      console.warn('No image URL for drawLeftImage');
+      return;
+    }
     const textAreaWidth = width * bannerSettings.textImageRatio;
     const imgAreaWidth = width - textAreaWidth;
     
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      const srcUrl = await loadImageForCanvas(imageUrls[0]);
       img.onload = () => {
+        console.log('Left image loaded successfully');
         if (bannerSettings.imagePosition === 'cover') {
           const scale = Math.max(imgAreaWidth / img.width, height / img.height);
           const drawWidth = img.width * scale;
@@ -905,39 +1007,79 @@
           const y = (height - drawHeight) / 2;
           ctx.drawImage(img, x, y, drawWidth, drawHeight);
         }
+        if (srcUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(srcUrl);
+        }
         resolve();
       };
-      img.onerror = () => resolve();
-      img.src = imageUrls[0];
+      img.onerror = (error) => {
+        console.error('Failed to load left image:', imageUrls[0], error);
+        if (srcUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(srcUrl);
+        }
+        resolve();
+      };
+      console.log('Loading left image:', imageUrls[0]);
+      img.src = srcUrl;
     });
   }
 
   async function drawSplitImage(ctx, width, height, imageUrl) {
-    return new Promise((resolve) => {
+    if (!imageUrl) {
+      console.warn('No image URL for drawSplitImage');
+      return;
+    }
+    return new Promise(async (resolve) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      const srcUrl = await loadImageForCanvas(imageUrl);
       img.onload = () => {
+        console.log('Split image loaded successfully');
         // Split screen: image on one side, text on other
         const splitPoint = width / 2;
         ctx.drawImage(img, splitPoint, 0, splitPoint, height);
+        if (srcUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(srcUrl);
+        }
         resolve();
       };
-      img.onerror = () => resolve();
-      img.src = imageUrl;
+      img.onerror = (error) => {
+        console.error('Failed to load split image:', imageUrl, error);
+        if (srcUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(srcUrl);
+        }
+        resolve();
+      };
+      console.log('Loading split image:', imageUrl);
+      img.src = srcUrl;
     });
   }
 
   async function drawCollage(ctx, width, height, imageUrls) {
-    if (imageUrls.length === 0) return;
+    if (imageUrls.length === 0) {
+      console.warn('No image URLs for drawCollage');
+      return;
+    }
+    
+    console.log('Loading collage images:', imageUrls);
     
     const loadedImages = await Promise.all(
-      imageUrls.map((url) => {
+      imageUrls.map(async (url) => {
+        if (!url) return null;
+        const srcUrl = await loadImageForCanvas(url);
         return new Promise((resolve) => {
           const img = new Image();
-          img.crossOrigin = 'anonymous';
-          img.onload = () => resolve(img);
-          img.onerror = () => resolve(null);
-          img.src = url;
+          img.onload = () => {
+            console.log('Collage image loaded:', url);
+            resolve(img);
+          };
+          img.onerror = (error) => {
+            console.error('Failed to load collage image:', url, error);
+            if (srcUrl.startsWith('blob:')) {
+              URL.revokeObjectURL(srcUrl);
+            }
+            resolve(null);
+          };
+          img.src = srcUrl;
         });
       })
     );
@@ -1210,90 +1352,12 @@
       {/if}
       
       <!-- Image URL Input -->
-      <div>
-        <label for="image-url" class="block text-sm font-medium text-gray-700 mb-2">
-          Primary Image URL
-        </label>
-        <input
-          id="image-url"
-          type="text"
-          bind:value={bannerSettings.primaryImageUrl}
-          placeholder="Image URL"
-          class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-        />
-      </div>
+
+      
+
       
       <!-- Layout Presets -->
-      <div class="p-4 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border-2 border-purple-200">
-        <h3 class="text-lg font-semibold text-gray-900 mb-3">Layout Presets</h3>
-        <p class="text-sm text-gray-600 mb-4">Choose a preset layout to get started quickly. Hover to download.</p>
-        <div class="grid grid-cols-2 gap-4">
-          {#each layoutPresets as preset}
-            <div
-              class="relative bg-white rounded-lg border-2 border-gray-200 hover:border-purple-400 hover:shadow-lg transition-all group cursor-pointer overflow-hidden"
-              role="button"
-              tabindex="0"
-              onclick={() => applyPreset(preset)}
-              onkeydown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  applyPreset(preset);
-                }
-              }}
-            >
-              <!-- Preview Image -->
-              <div 
-                class="relative w-full aspect-[400/210] bg-gray-100 rounded-t-lg overflow-hidden"
-                role="presentation"
-                onmouseenter={() => ensurePresetPreview(preset)}
-              >
-                {#if presetPreviews[preset.id]}
-                  <img
-                    src={presetPreviews[preset.id]}
-                    alt="{preset.name} preview"
-                    class="w-full h-full object-cover"
-                  />
-                {:else if generatingPresetIds.has(preset.id)}
-                  <!-- Loading animation -->
-                  <div class="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 to-blue-50">
-                    <div class="relative w-16 h-16 mb-2">
-                      <div class="absolute inset-0 border-4 border-purple-200 rounded-full"></div>
-                      <div class="absolute inset-0 border-4 border-purple-600 border-t-transparent rounded-full animate-spin"></div>
-                    </div>
-                    <div class="text-purple-600 text-xs font-medium">Generating...</div>
-                  </div>
-                {:else}
-                  <div class="w-full h-full flex items-center justify-center bg-gray-100">
-                    <div class="text-gray-400 text-sm">Hover to generate preview</div>
-                  </div>
-                {/if}
-                
-                <!-- Download Button (appears on hover) -->
-                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all duration-200 flex items-center justify-center opacity-0 group-hover:opacity-100">
-                  <button
-                    type="button"
-                    onclick={(e) => downloadPresetPreview(preset, e)}
-                    class="px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold shadow-lg hover:bg-purple-700 transition-colors flex items-center gap-2"
-                  >
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                    </svg>
-                    Download
-                  </button>
-                </div>
-              </div>
-              
-              <!-- Preset Info -->
-              <div class="p-3">
-                <div class="font-semibold text-sm text-gray-900 group-hover:text-purple-600 transition-colors">
-                  {preset.name}
-                </div>
-                <div class="text-xs text-gray-500 mt-0.5">{preset.description}</div>
-              </div>
-            </div>
-          {/each}
-        </div>
-      </div>
+
       
       <!-- Layout Settings -->
       <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
