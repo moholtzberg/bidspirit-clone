@@ -148,27 +148,30 @@
               </div>
             </div>
             
-            <div>
-              <label for="rotation-{index}" class="block text-xs text-gray-600 mb-1">
-                Rotation: {image.rotation ?? 0}°
-              </label>
-              <input
-                id="rotation-{index}"
-                type="range"
-                min="-180"
-                max="180"
-                step="1"
-                value={image.rotation ?? 0}
-                oninput={(e) => {
-                  selectedBannerImages[index] = {
-                    ...selectedBannerImages[index],
-                    rotation: parseInt(e.target.value)
-                  };
-                  selectedBannerImages = [...selectedBannerImages];
-                }}
-                class="w-full"
-              />
-            </div>
+            <!-- Image Rotation (hidden for collage layouts, as layout position rotation is used instead) -->
+            {#if bannerSettings.imageLayout !== 'collage'}
+              <div>
+                <label for="rotation-{index}" class="block text-xs text-gray-600 mb-1">
+                  Rotation: {image.rotation ?? 0}°
+                </label>
+                <input
+                  id="rotation-{index}"
+                  type="range"
+                  min="-180"
+                  max="180"
+                  step="1"
+                  value={image.rotation ?? 0}
+                  oninput={(e) => {
+                    selectedBannerImages[index] = {
+                      ...selectedBannerImages[index],
+                      rotation: parseInt(e.target.value)
+                    };
+                    selectedBannerImages = [...selectedBannerImages];
+                  }}
+                  class="w-full"
+                />
+              </div>
+            {/if}
             
             <div class="flex gap-4">
               <label class="flex items-center gap-2 cursor-pointer">
@@ -274,7 +277,7 @@
                     />
                   </div>
                   <div>
-                    <label for="pos-rot-{index}" class="block text-[10px] text-gray-600 mb-0.5">Rot: {pos.rotation}°</label>
+                    <label for="pos-rot-{index}" class="block text-[10px] text-gray-600 mb-0.5">Rotation: {pos.rotation}°</label>
                     <input
                       id="pos-rot-{index}"
                       type="range"
