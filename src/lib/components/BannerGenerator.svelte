@@ -76,13 +76,13 @@
     textBackgroundOpacity: 0.95,
     
     // Per-field text settings
-    titleEnglishFontSize: 42,
+    titleEnglishFontSize: 48,
     titleEnglishAlign: 'center',
-    titleHebrewFontSize: 42,
+    titleHebrewFontSize: 48,
     titleHebrewAlign: 'center',
-    subtitleEnglishFontSize: 20,
+    subtitleEnglishFontSize: 28,
     subtitleEnglishAlign: 'center',
-    subtitleHebrewFontSize: 20,
+    subtitleHebrewFontSize: 28,
     subtitleHebrewAlign: 'center',
     yearEnglishFontSize: 76,
     yearEnglishAlign: 'center',
@@ -90,7 +90,8 @@
     yearHebrewAlign: 'center',
     
     // Ribbon
-    ribbonColor: '#DC2626', // Default red color for category ribbon
+    ribbonColor: '#DC2626', // Default red color for ribbon
+    ribbonPosition: 'right', // 'left' or 'right' - position of ribbon on banner
     
     // Bottom Border
     showBottomBorder: false, // Show bottom border with auction info
@@ -100,8 +101,8 @@
     imageShadowEnabled: false, // Enable shadows on images
     imageShadowColor: 'rgba(0, 0, 0, 0.3)', // Shadow color
     imageShadowBlur: 10, // Shadow blur radius
-    imageShadowOffsetX: 5, // Shadow horizontal offset
-    imageShadowOffsetY: 5, // Shadow vertical offset
+    imageShadowOffsetX: 8, // Shadow horizontal offset
+    imageShadowOffsetY: 8, // Shadow vertical offset
     
     // Spacing
     padding: 30,
@@ -598,6 +599,7 @@
     const textAlign = bannerSettings.textAlign;
     const textImageRatio = bannerSettings.textImageRatio;
     const ribbonColor = bannerSettings.ribbonColor;
+    const ribbonPosition = bannerSettings.ribbonPosition;
     const showBottomBorder = bannerSettings.showBottomBorder;
     const bottomBorderColor = bannerSettings.bottomBorderColor;
     const imageShadowEnabled = bannerSettings.imageShadowEnabled;
@@ -2115,7 +2117,7 @@
       });
     }
     
-    // Category Ribbon in top right corner
+    // Ribbon in top corner (left or right)
     if (bannerSettings.category || bannerSettings.categoryHebrew) {
       ctx.save();
       
@@ -2142,22 +2144,28 @@
       const calculatedWidth = (textWidth * 2) + (ribbonPadding * 2);
       const ribbonWidth = Math.max(calculatedWidth, minRibbonWidth);
       const ribbonHeight = 50; // Increased height
-      const angle = Math.PI / 4; // 45 degrees for diagonal ribbon (top-right to bottom-left)
       
-      // Position ribbon so it extends beyond the top-right corner
+      // Determine angle and position based on ribbon position setting
+      const ribbonPosition = bannerSettings.ribbonPosition || 'right';
+      const isRight = ribbonPosition === 'right';
+      const angle = isRight ? Math.PI / 4 : -Math.PI / 4; // 45 degrees for right, -45 for left
+      
+      // Position ribbon so it extends beyond the top corner
       // The ribbon should overflow the canvas edges to look like it's cut off
       const ribbonHalfWidth = ribbonWidth / 2;
       const ribbonHalfHeight = ribbonHeight / 2;
       
       // Calculate where the ribbon center should be so it extends beyond the corner
       // When rotated 45 degrees, the corner offset from center is:
-      const cos45 = Math.cos(angle);
-      const sin45 = Math.sin(angle);
+      const cos45 = Math.cos(Math.abs(angle));
+      const sin45 = Math.sin(Math.abs(angle));
       const cornerOffsetX = ribbonHalfWidth * cos45 - ribbonHalfHeight * sin45;
       const cornerOffsetY = ribbonHalfWidth * sin45 + ribbonHalfHeight * cos45;
       
-      // Position center so ribbon extends beyond top-right of canvas by negativeMargin
-      const ribbonCenterX = width + negativeMargin - cornerOffsetX;
+      // Position center so ribbon extends beyond top corner of canvas by negativeMargin
+      const ribbonCenterX = isRight 
+        ? width + negativeMargin - cornerOffsetX  // Top right
+        : -negativeMargin + cornerOffsetX;        // Top left
       const ribbonCenterY = -negativeMargin + cornerOffsetY;
       
       // Clip to canvas bounds for overflow cutoff effect

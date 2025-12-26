@@ -247,11 +247,11 @@
     <div class="pt-2 border-t border-gray-200">
       <div class="space-y-2">
         <div>
-          <label for="category-en" class="block text-xs font-medium text-gray-700 mb-1">
-            Category (English)
+          <label for="ribbon-en" class="block text-xs font-medium text-gray-700 mb-1">
+            Ribbon Text (English)
           </label>
           <input
-            id="category-en"
+            id="ribbon-en"
             type="text"
             bind:value={bannerSettings.category}
             placeholder="e.g., Paintings, Sculpture, etc."
@@ -260,17 +260,31 @@
         </div>
         
         <div>
-          <label for="category-he" class="block text-xs font-medium text-gray-700 mb-1">
-            Category (Hebrew)
+          <label for="ribbon-he" class="block text-xs font-medium text-gray-700 mb-1">
+            Ribbon Text (Hebrew)
           </label>
           <input
-            id="category-he"
+            id="ribbon-he"
             type="text"
             bind:value={bannerSettings.categoryHebrew}
             placeholder="קטגוריה בעברית"
             dir="rtl"
             class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
           />
+        </div>
+        
+        <div>
+          <label for="ribbon-position" class="block text-xs font-medium text-gray-700 mb-1">
+            Ribbon Position
+          </label>
+          <select
+            id="ribbon-position"
+            bind:value={bannerSettings.ribbonPosition}
+            class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+          >
+            <option value="right">Top Right</option>
+            <option value="left">Top Left</option>
+          </select>
         </div>
         
         <div>
@@ -291,7 +305,7 @@
               class="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
           </div>
-          <p class="text-xs text-gray-500 mt-1">Color of the category ribbon (text will be white)</p>
+          <p class="text-xs text-gray-500 mt-1">Color of the ribbon (text will be white)</p>
         </div>
         
         <div>
