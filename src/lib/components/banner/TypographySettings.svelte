@@ -59,6 +59,78 @@
         class="w-full h-12 border border-gray-300 rounded-lg"
       />
     </div>
+    
+    <div class="pt-2 border-t border-gray-200">
+      <div class="text-xs font-medium text-gray-700 mb-2">Spacing</div>
+      
+      <div>
+        <label for="text-spacing-title" class="block text-xs text-gray-600 mb-1">
+          Title Spacing: {bannerSettings.textSpacingTitle ?? 20}px
+        </label>
+        <input
+          id="text-spacing-title"
+          type="range"
+          min="0"
+          max="100"
+          step="5"
+          value={bannerSettings.textSpacingTitle ?? 20}
+          oninput={(e) => bannerSettings.textSpacingTitle = parseInt(e.target.value)}
+          class="w-full"
+        />
+        <p class="text-xs text-gray-500 mt-1">Spacing after title</p>
+      </div>
+      
+      <div>
+        <label for="text-spacing-year" class="block text-xs text-gray-600 mb-1">
+          Year Spacing: {bannerSettings.textSpacingYear ?? 20}px
+        </label>
+        <input
+          id="text-spacing-year"
+          type="range"
+          min="0"
+          max="100"
+          step="5"
+          value={bannerSettings.textSpacingYear ?? 20}
+          oninput={(e) => bannerSettings.textSpacingYear = parseInt(e.target.value)}
+          class="w-full"
+        />
+        <p class="text-xs text-gray-500 mt-1">Spacing after year</p>
+      </div>
+      
+      <div>
+        <label for="text-spacing-subtitle" class="block text-xs text-gray-600 mb-1">
+          Subtitle Spacing: {bannerSettings.textSpacingSubtitle ?? 10}px
+        </label>
+        <input
+          id="text-spacing-subtitle"
+          type="range"
+          min="0"
+          max="100"
+          step="5"
+          value={bannerSettings.textSpacingSubtitle ?? 10}
+          oninput={(e) => bannerSettings.textSpacingSubtitle = parseInt(e.target.value)}
+          class="w-full"
+        />
+        <p class="text-xs text-gray-500 mt-1">Spacing after subtitle</p>
+      </div>
+      
+      <div>
+        <label for="text-line-height" class="block text-xs text-gray-600 mb-1">
+          Line Height Multiplier: {(bannerSettings.textLineHeight ?? 1.2).toFixed(1)}x
+        </label>
+        <input
+          id="text-line-height"
+          type="range"
+          min="0.8"
+          max="2.5"
+          step="0.1"
+          value={bannerSettings.textLineHeight ?? 1.2}
+          oninput={(e) => bannerSettings.textLineHeight = parseFloat(e.target.value)}
+          class="w-full"
+        />
+        <p class="text-xs text-gray-500 mt-1">Spacing between lines of text</p>
+      </div>
+    </div>
   </div>
 </CollapsibleSection>
 

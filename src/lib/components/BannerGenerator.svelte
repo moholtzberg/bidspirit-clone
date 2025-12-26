@@ -607,6 +607,24 @@
     const imageShadowOffsetY = bannerSettings.imageShadowOffsetY;
     const collageImagePositions = bannerSettings.collageImagePositions;
     
+    // Track per-field text settings
+    const titleEnglishFontSize = bannerSettings.titleEnglishFontSize;
+    const titleEnglishAlign = bannerSettings.titleEnglishAlign;
+    const titleHebrewFontSize = bannerSettings.titleHebrewFontSize;
+    const titleHebrewAlign = bannerSettings.titleHebrewAlign;
+    const subtitleEnglishFontSize = bannerSettings.subtitleEnglishFontSize;
+    const subtitleEnglishAlign = bannerSettings.subtitleEnglishAlign;
+    const subtitleHebrewFontSize = bannerSettings.subtitleHebrewFontSize;
+    const subtitleHebrewAlign = bannerSettings.subtitleHebrewAlign;
+    const yearEnglishFontSize = bannerSettings.yearEnglishFontSize;
+    const yearEnglishAlign = bannerSettings.yearEnglishAlign;
+    const yearHebrewFontSize = bannerSettings.yearHebrewFontSize;
+    const yearHebrewAlign = bannerSettings.yearHebrewAlign;
+    const textSpacingTitle = bannerSettings.textSpacingTitle;
+    const textSpacingYear = bannerSettings.textSpacingYear;
+    const textSpacingSubtitle = bannerSettings.textSpacingSubtitle;
+    const textLineHeight = bannerSettings.textLineHeight;
+    
     // Skip on initial mount to avoid generating empty preview
     if (isInitialMount) {
       isInitialMount = false;
@@ -1952,13 +1970,14 @@
       const textX = textAlign === 'center' ? centerX : 
                     textAlign === 'right' ? rightX : leftX;
       
+      const lineHeight = bannerSettings.textLineHeight ?? 1.2;
       ctx.font = `bold ${fontSize}px ${bannerSettings.fontFamily}`;
       ctx.textAlign = textAlign;
       const titleLines = wrapText(ctx, bannerSettings.title, maxTextWidth);
       titleLines.forEach((line, index) => {
-        ctx.fillText(line, textX, currentY + (index * fontSize * 1.2));
+        ctx.fillText(line, textX, currentY + (index * fontSize * lineHeight));
       });
-      currentY += titleLines.length * fontSize * 1.2 + 20;
+      currentY += titleLines.length * fontSize * lineHeight + (bannerSettings.textSpacingTitle ?? 20);
     }
     
     // Decorative line between English and Hebrew
@@ -1983,13 +2002,14 @@
       const textX = textAlign === 'center' ? centerX : 
                     textAlign === 'right' ? rightX : leftX;
       
+      const lineHeight = bannerSettings.textLineHeight ?? 1.2;
       ctx.font = `bold ${fontSize}px ${bannerSettings.hebrewFontFamily}`;
       ctx.textAlign = textAlign;
       const titleHebrewLines = wrapText(ctx, bannerSettings.titleHebrew, maxTextWidth);
       titleHebrewLines.forEach((line, index) => {
-        ctx.fillText(line, textX, currentY + (index * fontSize * 1.2));
+        ctx.fillText(line, textX, currentY + (index * fontSize * lineHeight));
       });
-      currentY += titleHebrewLines.length * fontSize * 1.2 + 20;
+      currentY += titleHebrewLines.length * fontSize * lineHeight + (bannerSettings.textSpacingTitle ?? 20);
     }
     
     // Year (English and Hebrew) - Larger and more prominent, on same line with separator
@@ -2056,7 +2076,7 @@
         ctx.fillText(yearText, textX, yearY);
       }
       
-      currentY += Math.max(englishFontSize, hebrewFontSize) * 1.2;
+      currentY += Math.max(englishFontSize, hebrewFontSize) * (bannerSettings.textLineHeight ?? 1.2) + (bannerSettings.textSpacingYear ?? 20);
     }
     
     // Reset text baseline
@@ -2068,14 +2088,15 @@
       const textAlign = bannerSettings.subtitleEnglishAlign || bannerSettings.textAlign;
       const textX = textAlign === 'center' ? centerX : 
                     textAlign === 'right' ? rightX : leftX;
+      const lineHeight = bannerSettings.textLineHeight ?? 1.2;
       
       ctx.font = `${fontSize}px ${bannerSettings.fontFamily}`;
       ctx.textAlign = textAlign;
       const subtitleLines = wrapText(ctx, bannerSettings.subtitle, maxTextWidth);
       subtitleLines.forEach((line, index) => {
-        ctx.fillText(line, textX, currentY + (index * fontSize * 1.2));
+        ctx.fillText(line, textX, currentY + (index * fontSize * lineHeight));
       });
-      currentY += subtitleLines.length * fontSize * 1.2;
+      currentY += subtitleLines.length * fontSize * lineHeight + (bannerSettings.textSpacingSubtitle ?? 10);
     }
     
     // Subtitle (Hebrew)
@@ -2084,12 +2105,13 @@
       const textAlign = bannerSettings.subtitleHebrewAlign || bannerSettings.textAlign;
       const textX = textAlign === 'center' ? centerX : 
                     textAlign === 'right' ? rightX : leftX;
+      const lineHeight = bannerSettings.textLineHeight ?? 1.2;
       
       ctx.font = `${fontSize}px ${bannerSettings.hebrewFontFamily}`;
       ctx.textAlign = textAlign;
       const subtitleHebrewLines = wrapText(ctx, bannerSettings.subtitleHebrew, maxTextWidth);
       subtitleHebrewLines.forEach((line, index) => {
-        ctx.fillText(line, textX, currentY + (index * fontSize * 1.2));
+        ctx.fillText(line, textX, currentY + (index * fontSize * lineHeight));
       });
     }
     
