@@ -72,6 +72,13 @@
     showBottomBorder: false, // Show bottom border with auction info
     bottomBorderColor: '#2563EB', // Default blue color
     
+    // Image Shadows
+    imageShadowEnabled: false, // Enable shadows on images
+    imageShadowColor: 'rgba(0, 0, 0, 0.3)', // Shadow color
+    imageShadowBlur: 10, // Shadow blur radius
+    imageShadowOffsetX: 5, // Shadow horizontal offset
+    imageShadowOffsetY: 5, // Shadow vertical offset
+    
     // Spacing
     padding: 30,
     textImageRatio: 0.4, // 0.4 = 40% text, 60% image
@@ -979,10 +986,29 @@
     return imageUrl;
   }
 
+  // Helper function to apply shadow settings
+  function applyImageShadow(ctx) {
+    if (bannerSettings.imageShadowEnabled) {
+      ctx.shadowColor = bannerSettings.imageShadowColor;
+      ctx.shadowBlur = bannerSettings.imageShadowBlur;
+      ctx.shadowOffsetX = bannerSettings.imageShadowOffsetX;
+      ctx.shadowOffsetY = bannerSettings.imageShadowOffsetY;
+    } else {
+      // Clear shadow settings
+      ctx.shadowColor = 'transparent';
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
+    }
+  }
+
   // Helper function to apply image transformations (rotation, flip)
   // Accepts optional per-image orientation, falls back to global settings
   function applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, imageOrientation = null) {
     ctx.save();
+    
+    // Apply shadow before drawing
+    applyImageShadow(ctx);
     
     // Move to center of image
     const centerX = x + drawWidth / 2;
@@ -1356,6 +1382,10 @@
         ctx.save();
         // Apply per-image opacity for collage
         ctx.globalAlpha = imageOpacity;
+        
+        // Apply shadow before drawing
+        applyImageShadow(ctx);
+        
         ctx.translate(x + drawWidth / 2, y + drawHeight / 2);
         ctx.rotate((customPos.rotation || 0) * Math.PI / 180);
         
@@ -1403,10 +1433,7 @@
         const y = baseY + align.offsetY;
         
         ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
-        ctx.shadowBlur = 8;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
+        applyImageShadow(ctx);
         applyImageTransform(ctx, img, x, y, drawWidth, drawHeight, orientation);
         ctx.restore();
       });
@@ -1444,10 +1471,10 @@
       // Draw in z-index order (already sorted, but maintain for clarity)
       imageData.forEach((data) => {
         ctx.save();
-        ctx.shadowColor = `rgba(0, 0, 0, ${0.2 + (data.zIndex ?? data.sortedIndex) * 0.1})`;
-        ctx.shadowBlur = 15;
-        ctx.shadowOffsetX = 6;
-        ctx.shadowOffsetY = 6;
+        
+        // Apply configurable shadow
+        applyImageShadow(ctx);
+        
         ctx.translate(data.x, data.y);
         ctx.rotate(data.rotation);
         
@@ -1615,14 +1642,9 @@
       ctx.drawImage(img2, -drawWidth2 / 2, -drawHeight2 / 2, drawWidth2, drawHeight2);
       ctx.restore();
       
-      // Add shadow to first image
+      // Draw first image on top (foreground) with per-image transformations and shadow
       ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.25)';
-      ctx.shadowBlur = 12;
-      ctx.shadowOffsetX = 4;
-      ctx.shadowOffsetY = 4;
-      
-      // Draw first image on top (foreground) with per-image transformations
+      applyImageShadow(ctx);
       applyImageTransform(ctx, img1, x1, y1, drawWidth1, drawHeight1, orientation1);
       ctx.restore();
       
@@ -1675,12 +1697,8 @@
       imageData.forEach((data) => {
         ctx.save();
         
-        // Add shadow for depth (stronger for images with lower z-index)
-        const shadowIntensity = 0.2 + (data.zIndex * 0.1);
-        ctx.shadowColor = `rgba(0, 0, 0, ${Math.min(shadowIntensity, 0.4)})`;
-        ctx.shadowBlur = 15;
-        ctx.shadowOffsetX = 6;
-        ctx.shadowOffsetY = 6;
+        // Apply configurable shadow
+        applyImageShadow(ctx);
         
         ctx.translate(data.x, data.y);
         ctx.rotate(data.rotation);
@@ -1731,14 +1749,9 @@
         const drawX = x + (cellWidth - drawWidth) / 2;
         const drawY = y + (cellHeight - drawHeight) / 2;
         
-        // Add subtle shadow for depth
+        // Apply per-image transformations with shadow
         ctx.save();
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
-        ctx.shadowBlur = 8;
-        ctx.shadowOffsetX = 2;
-        ctx.shadowOffsetY = 2;
-        
-        // Apply per-image transformations
+        applyImageShadow(ctx);
         applyImageTransform(ctx, img, drawX, drawY, drawWidth, drawHeight, orientation);
         ctx.restore();
       });
@@ -3122,6 +3135,86 @@
               class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
             />
             <p class="text-xs text-gray-500 mt-1">Auto-converts from English year, or enter manually</p>
+          </div>
+          
+          <!-- Image Shadow Settings -->
+          <div class="mb-4 pt-4 border-t border-gray-300">
+            <h4 class="text-md font-semibold text-gray-900 mb-3">Image Shadows</h4>
+            
+            <div class="mb-4">
+              <label class="flex items-center">
+                <input
+                  type="checkbox"
+                  bind:checked={bannerSettings.imageShadowEnabled}
+                  class="mr-2 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                />
+                <span class="text-sm font-medium text-gray-700">Enable Image Shadows</span>
+              </label>
+            </div>
+            
+            {#if bannerSettings.imageShadowEnabled}
+              <div class="mb-4">
+                <label for="shadow-color" class="block text-sm font-medium text-gray-700 mb-2">
+                  Shadow Color
+                </label>
+                <div class="flex gap-2">
+                  <input
+                    id="shadow-color"
+                    type="color"
+                    bind:value={bannerSettings.imageShadowColor}
+                    class="h-10 w-20 border border-gray-300 rounded-lg cursor-pointer"
+                  />
+                  <input
+                    type="text"
+                    bind:value={bannerSettings.imageShadowColor}
+                    placeholder="rgba(0, 0, 0, 0.3)"
+                    class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+              
+              <div class="mb-4">
+                <label for="shadow-blur" class="block text-sm font-medium text-gray-700 mb-2">
+                  Shadow Blur: {bannerSettings.imageShadowBlur}px
+                </label>
+                <input
+                  id="shadow-blur"
+                  type="range"
+                  min="0"
+                  max="50"
+                  bind:value={bannerSettings.imageShadowBlur}
+                  class="w-full"
+                />
+              </div>
+              
+              <div class="mb-4">
+                <label for="shadow-offset-x" class="block text-sm font-medium text-gray-700 mb-2">
+                  Shadow Offset X: {bannerSettings.imageShadowOffsetX}px
+                </label>
+                <input
+                  id="shadow-offset-x"
+                  type="range"
+                  min="-20"
+                  max="20"
+                  bind:value={bannerSettings.imageShadowOffsetX}
+                  class="w-full"
+                />
+              </div>
+              
+              <div class="mb-4">
+                <label for="shadow-offset-y" class="block text-sm font-medium text-gray-700 mb-2">
+                  Shadow Offset Y: {bannerSettings.imageShadowOffsetY}px
+                </label>
+                <input
+                  id="shadow-offset-y"
+                  type="range"
+                  min="-20"
+                  max="20"
+                  bind:value={bannerSettings.imageShadowOffsetY}
+                  class="w-full"
+                />
+              </div>
+            {/if}
           </div>
         </div>
       {/if}
