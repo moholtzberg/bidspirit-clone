@@ -96,7 +96,7 @@
   
   let generatedBannerUrl = $state(null);
   let generatingBanner = $state(false);
-  let showAdvancedSettings = $state(false);
+
   let presetPreviews = $state({}); // Store preview URLs for each preset
   let generatingPreviews = $state(false);
   let generatingPresetIds = $state(new Set()); // Track which presets are currently generating
@@ -2278,12 +2278,6 @@
     <h2 class="text-xl font-bold text-gray-900">
       Banner Generator - {type === 'lot' ? 'Lot' : type === 'auction' ? 'Auction' : 'Auction House'}
     </h2>
-    <button
-      onclick={() => showAdvancedSettings = !showAdvancedSettings}
-      class="text-xs text-purple-600 hover:text-purple-800 px-2 py-1"
-    >
-      {showAdvancedSettings ? 'Hide' : 'Show'} Advanced
-    </button>
   </div>
   
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
