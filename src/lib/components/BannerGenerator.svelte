@@ -116,6 +116,13 @@
   let generatingPreviews = $state(false);
   let generatingPresetIds = $state(new Set()); // Track which presets are currently generating
   
+  // Template management
+  let showTemplateSelector = $state(true);
+  let showSaveTemplateDialog = $state(false);
+  let templateName = $state('');
+  let savedTemplates = $state([]);
+  let selectedTemplateId = $state(null);
+  
   // Collapsible sections state
   let collapsedSections = $state({
     lotSelection: true,
@@ -534,18 +541,99 @@
     { value: 'pattern', label: 'Pattern' }
   ];
 
+  // Load saved templates from localStorage
+  function loadSavedTemplates() {
+    try {
+      const stored = localStorage.getItem(`banner-templates-${type}`);
+      if (stored) {
+        savedTemplates = JSON.parse(stored);
+      } else {
+        savedTemplates = [];
+      }
+    } catch (error) {
+      console.error('Error loading templates:', error);
+      savedTemplates = [];
+    }
+  }
+
+  // Save templates to localStorage
+  function saveTemplatesToStorage() {
+    try {
+      localStorage.setItem(`banner-templates-${type}`, JSON.stringify(savedTemplates));
+    } catch (error) {
+      console.error('Error saving templates:', error);
+    }
+  }
+
+  // Load a template
+  function loadTemplate(template) {
+    if (template && template.settings) {
+      bannerSettings = {
+        ...bannerSettings,
+        ...template.settings
+      };
+      showTemplateSelector = false;
+      selectedTemplateId = template.id;
+    }
+  }
+
+  // Save current settings as a template
+  function saveAsTemplate() {
+    if (!templateName.trim()) {
+      alert('Please enter a template name');
+      return;
+    }
+
+    const newTemplate = {
+      id: `template-${Date.now()}`,
+      name: templateName.trim(),
+      createdAt: new Date().toISOString(),
+      settings: { ...bannerSettings }
+    };
+
+    savedTemplates = [...savedTemplates, newTemplate];
+    saveTemplatesToStorage();
+    templateName = '';
+    showSaveTemplateDialog = false;
+  }
+
+  // Delete a template
+  function deleteTemplate(templateId, event) {
+    event.stopPropagation();
+    if (confirm('Are you sure you want to delete this template?')) {
+      savedTemplates = savedTemplates.filter(t => t.id !== templateId);
+      saveTemplatesToStorage();
+      if (selectedTemplateId === templateId) {
+        selectedTemplateId = null;
+      }
+    }
+  }
+
+  // Start with blank template
+  function startBlank() {
+    showTemplateSelector = false;
+    selectedTemplateId = null;
+  }
+
+  // Initialize templates on mount
+  $effect(() => {
+    loadSavedTemplates();
+  });
+
   // Initialize based on type
   $effect(() => {
-    if (type === 'auction' && auction) {
-      bannerSettings.title = auction.title || '';
-      bannerSettings.subtitle = auction.description ? auction.description.substring(0, 150) : '';
-      bannerSettings.primaryImageUrl = auction.imageUrl || '';
-      bannerSettings.backgroundImageUrl = auction.imageUrl || '';
-    } else if (type === 'auctionHouse' && auctionHouse) {
-      bannerSettings.title = auctionHouse.name || '';
-      bannerSettings.subtitle = auctionHouse.description ? auctionHouse.description.substring(0, 150) : '';
-      bannerSettings.primaryImageUrl = auctionHouse.logoUrl || '';
-      bannerSettings.backgroundImageUrl = auctionHouse.logoUrl || '';
+    if (!showTemplateSelector) {
+      if (type === 'auction' && auction) {
+        bannerSettings.title = auction.title || '';
+        bannerSettings.subtitle = auction.description ? auction.description.substring(0, 150) : '';
+        bannerSettings.primaryImageUrl = auction.imageUrl || '';
+        bannerSettings.backgroundImageUrl = auction.imageUrl || '';
+      } else if (type === 'auctionHouse' && auctionHouse) {
+        bannerSettings.title = auctionHouse.name || '';
+        bannerSettings.subtitle = auctionHouse.description ? auctionHouse.description.substring(0, 150) : '';
+        bannerSettings.primaryImageUrl = auctionHouse.logoUrl || '';
+        bannerSettings.backgroundImageUrl = auctionHouse.logoUrl || '';
+      }
     }
   });
 
@@ -2341,8 +2429,127 @@
     <h2 class="text-xl font-bold text-gray-900">
       Banner Generator - {type === 'lot' ? 'Lot' : type === 'auction' ? 'Auction' : 'Auction House'}
     </h2>
+    {#if !showTemplateSelector}
+      <button
+        onclick={() => showSaveTemplateDialog = true}
+        class="text-xs text-purple-600 hover:text-purple-800 px-3 py-1.5 border border-purple-300 rounded hover:bg-purple-50"
+        title="Save current settings as template"
+      >
+        💾 Save Template
+      </button>
+    {/if}
   </div>
   
+  <!-- Template Selector -->
+  {#if showTemplateSelector}
+    <div class="mb-6 p-6 bg-gray-50 rounded-lg border border-gray-200">
+      <h3 class="text-lg font-semibold text-gray-900 mb-4">Choose a Template</h3>
+      
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+        <!-- Blank Template -->
+        <button
+          onclick={startBlank}
+          class="p-4 bg-white border-2 border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all text-left"
+        >
+          <div class="font-semibold text-gray-900 mb-1">Blank Template</div>
+          <div class="text-xs text-gray-600">Start with default settings</div>
+        </button>
+        
+        <!-- Saved Templates -->
+        {#each savedTemplates as template}
+          <div class="relative group">
+            <button
+              onclick={() => loadTemplate(template)}
+              class="w-full p-4 bg-white border-2 border-gray-300 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all text-left"
+            >
+              <div class="font-semibold text-gray-900 mb-1">{template.name}</div>
+              <div class="text-xs text-gray-600">
+                {new Date(template.createdAt).toLocaleDateString()}
+              </div>
+            </button>
+            <button
+              onclick={(e) => deleteTemplate(template.id, e)}
+              class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 p-1 bg-red-500 text-white rounded hover:bg-red-600 transition-opacity"
+              title="Delete template"
+            >
+              ✕
+            </button>
+          </div>
+        {/each}
+      </div>
+      
+      {#if savedTemplates.length === 0}
+        <p class="text-sm text-gray-500 text-center py-4">No saved templates yet. Start with blank or save your first template!</p>
+      {/if}
+    </div>
+  {/if}
+  
+  <!-- Save Template Dialog -->
+  {#if showSaveTemplateDialog}
+    <div 
+      class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" 
+      role="button"
+      tabindex="0"
+      onclick={(e) => {
+        // Only close if clicking directly on the backdrop, not on the dialog content
+        if (e.target === e.currentTarget) {
+          showSaveTemplateDialog = false;
+        }
+      }}
+      onkeydown={(e) => {
+        if (e.key === 'Escape') {
+          showSaveTemplateDialog = false;
+        }
+      }}
+    >
+      <div 
+        class="bg-white rounded-lg p-6 max-w-md w-full mx-4" 
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="save-template-title"
+      >
+        <h3 id="save-template-title" class="text-lg font-semibold text-gray-900 mb-4">Save Template</h3>
+        <div class="mb-4">
+          <label for="template-name" class="block text-sm font-medium text-gray-700 mb-2">
+            Template Name
+          </label>
+          <input
+            id="template-name"
+            type="text"
+            bind:value={templateName}
+            placeholder="e.g., Classic Auction Banner"
+            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            onkeydown={(e) => {
+              if (e.key === 'Enter') {
+                saveAsTemplate();
+              } else if (e.key === 'Escape') {
+                showSaveTemplateDialog = false;
+              }
+            }}
+          />
+        </div>
+        <div class="flex gap-3 justify-end">
+          <button
+            onclick={() => {
+              showSaveTemplateDialog = false;
+              templateName = '';
+            }}
+            class="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50"
+          >
+            Cancel
+          </button>
+          <button
+            onclick={saveAsTemplate}
+            class="px-4 py-2 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+          >
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  {/if}
+  
+  {#if !showTemplateSelector}
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
     <!-- Left: Settings -->
     <div class="space-y-3 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
@@ -2437,4 +2644,5 @@
     <!-- Right: Preview -->
     <BannerPreview {generatedBannerUrl} />
   </div>
+  {/if}
 </div>
