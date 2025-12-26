@@ -534,6 +534,98 @@
     }
   });
 
+  // Auto-generate preview when dependencies change
+  let previewGenerationTimeout = null;
+  let isInitialMount = true;
+  
+  $effect(() => {
+    // Watch for changes in key state that should trigger preview regeneration
+    const lotId = selectedBannerLotId; // Track lot selection
+    const imageCount = selectedBannerImages.length; // Track image selection
+    
+    // Track individual image properties by accessing them directly
+    // This ensures we catch changes to zoom, opacity, rotation, position, etc.
+    for (const img of selectedBannerImages) {
+      // Access properties to create reactive dependencies
+      const _ = img.id;
+      const __ = img.url;
+      const ___ = img.zoom;
+      const ____ = img.opacity;
+      const _____ = img.rotation;
+      const ______ = img.flipHorizontal;
+      const _______ = img.flipVertical;
+      const ________ = img.zIndex;
+    }
+    
+    // Track banner settings - create a reactive dependency by accessing key properties
+    const title = bannerSettings.title;
+    const titleHebrew = bannerSettings.titleHebrew;
+    const subtitle = bannerSettings.subtitle;
+    const subtitleHebrew = bannerSettings.subtitleHebrew;
+    const yearEnglish = bannerSettings.yearEnglish;
+    const yearHebrew = bannerSettings.yearHebrew;
+    const category = bannerSettings.category;
+    const categoryHebrew = bannerSettings.categoryHebrew;
+    const imageLayout = bannerSettings.imageLayout;
+    const imagePosition = bannerSettings.imagePosition;
+    const imageOpacity = bannerSettings.imageOpacity;
+    const imageRotation = bannerSettings.imageRotation;
+    const imageFlipHorizontal = bannerSettings.imageFlipHorizontal;
+    const imageFlipVertical = bannerSettings.imageFlipVertical;
+    const imageSize = bannerSettings.imageSize;
+    const backgroundType = bannerSettings.backgroundType;
+    const backgroundColor = bannerSettings.backgroundColor;
+    const backgroundImageUrl = bannerSettings.backgroundImageUrl;
+    const backgroundPattern = bannerSettings.backgroundPattern;
+    const fontSize = bannerSettings.fontSize;
+    const fontFamily = bannerSettings.fontFamily;
+    const hebrewFontFamily = bannerSettings.hebrewFontFamily;
+    const textColor = bannerSettings.textColor;
+    const textAlign = bannerSettings.textAlign;
+    const textImageRatio = bannerSettings.textImageRatio;
+    const ribbonColor = bannerSettings.ribbonColor;
+    const showBottomBorder = bannerSettings.showBottomBorder;
+    const bottomBorderColor = bannerSettings.bottomBorderColor;
+    const imageShadowEnabled = bannerSettings.imageShadowEnabled;
+    const imageShadowColor = bannerSettings.imageShadowColor;
+    const imageShadowBlur = bannerSettings.imageShadowBlur;
+    const imageShadowOffsetX = bannerSettings.imageShadowOffsetX;
+    const imageShadowOffsetY = bannerSettings.imageShadowOffsetY;
+    const collageImagePositions = bannerSettings.collageImagePositions;
+    
+    // Skip on initial mount to avoid generating empty preview
+    if (isInitialMount) {
+      isInitialMount = false;
+      return;
+    }
+    
+    // Clear any pending generation
+    if (previewGenerationTimeout) {
+      clearTimeout(previewGenerationTimeout);
+    }
+    
+    // Debounce preview generation to avoid excessive regenerations
+    // Only generate if we have at least a title or images
+    const shouldGenerate = title || imageCount > 0 || backgroundImageUrl || (type === 'auction' && auction) || (type === 'auctionHouse' && auctionHouse);
+    
+    if (shouldGenerate) {
+      previewGenerationTimeout = setTimeout(() => {
+        // Don't regenerate if already generating
+        if (!generatingBanner) {
+          generateQuickBanner().catch(err => {
+            console.error('Error auto-generating preview:', err);
+          });
+        }
+      }, 300); // 300ms debounce
+    }
+    
+    return () => {
+      if (previewGenerationTimeout) {
+        clearTimeout(previewGenerationTimeout);
+      }
+    };
+  });
+
   // Helper function to wrap text
   function wrapText(ctx, text, maxWidth) {
     const words = text.split(' ');
