@@ -1,4 +1,14 @@
 <script>
+  import ImageSelection from './banner/ImageSelection.svelte';
+  import ImageSettings from './banner/ImageSettings.svelte';
+  import LayoutSettings from './banner/LayoutSettings.svelte';
+  import BackgroundSettings from './banner/BackgroundSettings.svelte';
+  import TextContentSettings from './banner/TextContentSettings.svelte';
+  import TypographySettings from './banner/TypographySettings.svelte';
+  import ImageShadowSettings from './banner/ImageShadowSettings.svelte';
+  import BannerPreview from './banner/BannerPreview.svelte';
+  import BannerActions from './banner/BannerActions.svelte';
+  
   // Props
   let {
     lots = [],
@@ -90,6 +100,16 @@
   let presetPreviews = $state({}); // Store preview URLs for each preset
   let generatingPreviews = $state(false);
   let generatingPresetIds = $state(new Set()); // Track which presets are currently generating
+  
+  // Collapsible sections state
+  let collapsedSections = $state({
+    imageSelection: true,
+    imageSettings: true,
+    layout: true,
+    background: true,
+    textContent: true,
+    typography: true
+  });
 
   // Available fonts
   const fonts = [
@@ -699,7 +719,7 @@
       bannerSettings.collageImagePositions = [{
         x: 50,
         y: 60,
-        rotation: 0
+          rotation: 0
       }];
       updatePrimaryImage();
     }
@@ -934,7 +954,7 @@
     
     // For collage, opacity is handled per-image, so don't set global alpha
     if (bannerSettings.imageLayout !== 'collage') {
-      ctx.globalAlpha = bannerSettings.imageOpacity;
+    ctx.globalAlpha = bannerSettings.imageOpacity;
     }
     
     switch (bannerSettings.imageLayout) {
@@ -2159,22 +2179,22 @@
   }
 </script>
 
-<div class="bg-white rounded-lg shadow-lg p-6 border-2 border-purple-200">
-  <div class="flex items-center justify-between mb-4">
-    <h2 class="text-2xl font-bold text-gray-900">
+<div class="bg-white rounded-lg shadow-lg p-4 border-2 border-purple-200">
+  <div class="flex items-center justify-between mb-3">
+    <h2 class="text-xl font-bold text-gray-900">
       Banner Generator - {type === 'lot' ? 'Lot' : type === 'auction' ? 'Auction' : 'Auction House'}
     </h2>
     <button
       onclick={() => showAdvancedSettings = !showAdvancedSettings}
-      class="text-sm text-purple-600 hover:text-purple-800"
+      class="text-xs text-purple-600 hover:text-purple-800 px-2 py-1"
     >
       {showAdvancedSettings ? 'Hide' : 'Show'} Advanced
     </button>
   </div>
   
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
     <!-- Left: Settings -->
-    <div class="space-y-6">
+    <div class="space-y-3 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
       <!-- Lot Selection (only for lot type) -->
       {#if type === 'lot' && lots && lots.length > 0}
         <div>
@@ -2198,1065 +2218,73 @@
       {/if}
       
       <!-- Image Selection -->
-      {#if selectedLotImages.length > 0}
-        <div class="p-4 bg-purple-50 rounded-lg border border-purple-200">
-          <h3 class="text-lg font-semibold text-gray-900 mb-3">Select Images for Banner</h3>
-          <div class="grid grid-cols-3 gap-3 max-h-64 overflow-y-auto">
-            {#each selectedLotImages as image}
-              {@const isSelected = selectedBannerImages.some(sel => sel.id === image.id || sel.url === image.url)}
-              <div
-                class="relative cursor-pointer border-2 rounded-lg overflow-hidden transition-all {isSelected ? 'border-purple-600 ring-2 ring-purple-300' : 'border-gray-300 hover:border-purple-400'}"
-                role="button"
-                tabindex="0"
-                onclick={() => {
-                  if (isSelected) {
-                    selectedBannerImages = selectedBannerImages.filter(sel => sel.id !== image.id && sel.url !== image.url);
-                    applyPresetCollagePositions();
-                  } else {
-                    // Preset positions for first 3 images
-                    const presets = [
-                      { x: 50, y: 60, zoom: 0.8, zIndex: 3, opacity: 1.0 }, // Center image
-                      { x: 20, y: 40, zoom: 0.6, zIndex: 1, opacity: 1.0 }, // Image 2
-                      { x: 80, y: 40, zoom: 0.6, zIndex: 2, opacity: 1.0 }  // Image 3
-                    ];
-                    const newIndex = selectedBannerImages.length;
-                    const preset = presets[newIndex] || { zoom: 1.0, zIndex: newIndex, opacity: 1.0 };
-                    
-                    // Add image with preset or default values
-                    selectedBannerImages = [...selectedBannerImages, {
-                      ...image,
-                      rotation: bannerSettings.imageRotation ?? 0,
-                      flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
-                      flipVertical: bannerSettings.imageFlipVertical ?? false,
-                      zoom: preset.zoom,
-                      zIndex: preset.zIndex,
-                      opacity: preset.opacity,
-                      isFeatured: selectedBannerImages.length === 0 // First image is featured by default
-                    }];
-                    
-                    // Update positions
-                    applyPresetCollagePositions();
-                  }
-                  updatePrimaryImage();
-                }}
-                onkeydown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    if (isSelected) {
-                      selectedBannerImages = selectedBannerImages.filter(sel => sel.id !== image.id && sel.url !== image.url);
-                      applyPresetCollagePositions();
-                    } else {
-                      // Preset positions for first 3 images
-                      const presets = [
-                        { x: 50, y: 60, zoom: 0.8, zIndex: 3, opacity: 1.0 }, // Center image
-                        { x: 20, y: 40, zoom: 0.6, zIndex: 1, opacity: 1.0 }, // Image 2
-                        { x: 80, y: 40, zoom: 0.6, zIndex: 2, opacity: 1.0 }  // Image 3
-                      ];
-                      const newIndex = selectedBannerImages.length;
-                      const preset = presets[newIndex] || { zoom: 1.0, zIndex: newIndex, opacity: 1.0 };
-                      
-                      // Add image with preset or default values
-                      selectedBannerImages = [...selectedBannerImages, {
-                        ...image,
-                        rotation: bannerSettings.imageRotation ?? 0,
-                        flipHorizontal: bannerSettings.imageFlipHorizontal ?? false,
-                        flipVertical: bannerSettings.imageFlipVertical ?? false,
-                        zoom: preset.zoom,
-                        zIndex: preset.zIndex,
-                        opacity: preset.opacity,
-                        isFeatured: selectedBannerImages.length === 0 // First image is featured by default
-                      }];
-                      applyPresetCollagePositions();
-                    }
-                    updatePrimaryImage();
-                  }
-                }}
-              >
-                <img
-                  src={image.displayUrl || image.url}
-                  alt="Lot image"
-                  class="w-full h-24 object-cover"
-                  onerror={(e) => {
-                    e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ddd" width="100" height="100"/%3E%3Ctext x="50" y="50" text-anchor="middle" dy=".3em" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E';
-                  }}
-                />
-                {#if isSelected}
-                  <div class="absolute top-1 right-1 bg-purple-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs font-bold">
-                    ✓
-                  </div>
-                {/if}
-              </div>
-            {/each}
-          </div>
-        </div>
-      {/if}
+      <ImageSelection
+        bind:selectedLotImages
+        bind:selectedBannerImages
+        bind:bannerSettings
+        {applyPresetCollagePositions}
+        {updatePrimaryImage}
+        bind:isCollapsed={collapsedSections.imageSelection}
+      />
       
-      <!-- Unified Image Management (Reorder, Orientation, Layout) -->
-      {#if selectedBannerImages.length > 0}
-        <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">Image Settings</h3>
-          <div class="space-y-3 max-h-[600px] overflow-y-auto">
-            {#each selectedBannerImages as image, index}
-              {@const pos = bannerSettings.collageImagePositions[index] || { x: 50, y: 50, rotation: 0 }}
-              <div
-                class="bg-white rounded-lg border border-gray-200 overflow-hidden"
-                draggable="true"
-                role="listitem"
-                ondragstart={(e) => {
-                  e.dataTransfer.effectAllowed = 'move';
-                  e.dataTransfer.setData('text/plain', index.toString());
-                  e.currentTarget.classList.add('opacity-50');
-                }}
-                ondragend={(e) => {
-                  e.currentTarget.classList.remove('opacity-50');
-                }}
-                ondragover={(e) => {
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = 'move';
-                }}
-                ondrop={(e) => {
-                  e.preventDefault();
-                  const dragIndex = parseInt(e.dataTransfer.getData('text/plain'));
-                  const dropIndex = index;
-                  
-                  if (dragIndex !== dropIndex) {
-                    const newImages = [...selectedBannerImages];
-                    const [movedImage] = newImages.splice(dragIndex, 1);
-                    newImages.splice(dropIndex, 0, movedImage);
-                    selectedBannerImages = newImages;
-                    updatePrimaryImage();
-                  }
-                }}
-              >
-                <!-- Header: Drag Handle, Thumbnail, Position, Actions -->
-                <div class="flex items-center gap-3 p-3 bg-gray-50 border-b border-gray-200">
-                  <div class="cursor-move text-gray-400 hover:text-gray-600" title="Drag to reorder">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"></path>
-                    </svg>
-                  </div>
-                  
-                  <img
-                    src={image.displayUrl || image.url}
-                    alt="Image {index + 1}"
-                    class="w-12 h-12 object-cover rounded"
-                    onerror={(e) => {
-                      e.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ddd" width="100" height="100"/%3E%3Ctext x="50" y="50" text-anchor="middle" dy=".3em" fill="%23999"%3E{index + 1}%3C/text%3E%3C/svg%3E';
-                    }}
-                  />
-                  
-                  <span class="text-sm font-medium text-gray-700">#{index + 1}</span>
-                  
-                  <button
-                    type="button"
-                    onclick={() => {
-                      selectedBannerImages = selectedBannerImages.map((img, idx) => ({
-                        ...img,
-                        isFeatured: idx === index
-                      }));
-                      updatePrimaryImage();
-                    }}
-                    class="px-2 py-1 text-xs rounded transition-colors {image.isFeatured ? 'bg-yellow-500 text-white hover:bg-yellow-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
-                    title={image.isFeatured ? 'Featured Image' : 'Set as Featured'}
-                  >
-                    {image.isFeatured ? '⭐ Featured' : 'Set Featured'}
-                  </button>
-                  
-                  <button
-                    type="button"
-                    onclick={() => {
-                      selectedBannerImages = selectedBannerImages.filter((_, idx) => idx !== index);
-                      applyPresetCollagePositions();
-                      updatePrimaryImage();
-                    }}
-                    class="ml-auto px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600"
-                    title="Remove image"
-                  >
-                    ✕
-                  </button>
-                </div>
-                
-                <!-- Controls Grid -->
-                <div class="p-3 space-y-3">
-                  <!-- Orientation Controls -->
-                  <div class="grid grid-cols-2 gap-3">
-                    <div>
-                      <label for="zoom-{index}" class="block text-xs text-gray-600 mb-1">
-                        Zoom: {Math.round((image.zoom ?? bannerSettings.imageSize ?? 1.0) * 100)}%
-                      </label>
-                      <input
-                        id="zoom-{index}"
-                        type="range"
-                        min="0.1"
-                        max="2.0"
-                        step="0.1"
-                        value={image.zoom ?? bannerSettings.imageSize ?? 1.0}
-                        oninput={(e) => {
-                          selectedBannerImages[index] = {
-                            ...selectedBannerImages[index],
-                            zoom: parseFloat(e.target.value)
-                          };
-                          selectedBannerImages = [...selectedBannerImages];
-                        }}
-                        class="w-full"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label for="opacity-{index}" class="block text-xs text-gray-600 mb-1">
-                        Opacity: {Math.round((image.opacity ?? bannerSettings.imageOpacity ?? 1.0) * 100)}%
-                      </label>
-                      <input
-                        id="opacity-{index}"
-                        type="range"
-                        min="0"
-                        max="1"
-                        step="0.1"
-                        value={image.opacity ?? bannerSettings.imageOpacity ?? 1.0}
-                        oninput={(e) => {
-                          selectedBannerImages[index] = {
-                            ...selectedBannerImages[index],
-                            opacity: parseFloat(e.target.value)
-                          };
-                          selectedBannerImages = [...selectedBannerImages];
-                        }}
-                        class="w-full"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div>
-                    <label for="rotation-{index}" class="block text-xs text-gray-600 mb-1">
-                      Rotation: {image.rotation ?? 0}°
-                    </label>
-                    <input
-                      id="rotation-{index}"
-                      type="range"
-                      min="-180"
-                      max="180"
-                      step="1"
-                      value={image.rotation ?? 0}
-                      oninput={(e) => {
-                        selectedBannerImages[index] = {
-                          ...selectedBannerImages[index],
-                          rotation: parseInt(e.target.value)
-                        };
-                        selectedBannerImages = [...selectedBannerImages];
-                      }}
-                      class="w-full"
-                    />
-                  </div>
-                  
-                  <div class="flex gap-4">
-                    <label class="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={image.flipHorizontal ?? false}
-                        onchange={(e) => {
-                          selectedBannerImages[index] = {
-                            ...selectedBannerImages[index],
-                            flipHorizontal: e.target.checked
-                          };
-                          selectedBannerImages = [...selectedBannerImages];
-                        }}
-                        class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                      />
-                      <span class="text-xs text-gray-700">Flip Horizontal</span>
-                    </label>
-                    
-                    <label class="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={image.flipVertical ?? false}
-                        onchange={(e) => {
-                          selectedBannerImages[index] = {
-                            ...selectedBannerImages[index],
-                            flipVertical: e.target.checked
-                          };
-                          selectedBannerImages = [...selectedBannerImages];
-                        }}
-                        class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                      />
-                      <span class="text-xs text-gray-700">Flip Vertical</span>
-                    </label>
-                  </div>
-                  
-                  <!-- Z-Index Control (for collage layouts) -->
-                  {#if bannerSettings.imageLayout === 'collage'}
-                    <div>
-                      <label for="zindex-{index}" class="block text-xs text-gray-600 mb-1">
-                        Stack Order (Z-Index): {image.zIndex ?? index}
-                        <span class="text-gray-400 ml-1">(Higher = on top)</span>
-                      </label>
-                      <input
-                        id="zindex-{index}"
-                        type="range"
-                        min="0"
-                        max="10"
-                        step="1"
-                        value={image.zIndex ?? index}
-                        oninput={(e) => {
-                          selectedBannerImages[index] = {
-                            ...selectedBannerImages[index],
-                            zIndex: parseInt(e.target.value)
-                          };
-                          selectedBannerImages = [...selectedBannerImages];
-                        }}
-                        class="w-full"
-                      />
-                    </div>
-                  {/if}
-                  
-                  <!-- Layout Position Controls (for collage layouts) -->
-                  {#if bannerSettings.imageLayout === 'collage'}
-                    <div class="pt-2 border-t border-gray-200">
-                      <div class="text-xs font-medium text-gray-700 mb-2">Layout Position</div>
-                      <div class="grid grid-cols-3 gap-2">
-                        <div>
-                          <label class="block text-[10px] text-gray-600 mb-0.5">X: {pos.x}%</label>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="1"
-                            value={pos.x}
-                            oninput={(e) => {
-                              if (!bannerSettings.collageImagePositions[index]) {
-                                bannerSettings.collageImagePositions[index] = { x: 50, y: 50, rotation: 0 };
-                              }
-                              bannerSettings.collageImagePositions[index].x = parseInt(e.target.value);
-                              bannerSettings.collageImagePositions = [...bannerSettings.collageImagePositions];
-                            }}
-                            class="w-full"
-                          />
-                        </div>
-                        <div>
-                          <label class="block text-[10px] text-gray-600 mb-0.5">Y: {pos.y}%</label>
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            step="1"
-                            value={pos.y}
-                            oninput={(e) => {
-                              if (!bannerSettings.collageImagePositions[index]) {
-                                bannerSettings.collageImagePositions[index] = { x: 50, y: 50, rotation: 0 };
-                              }
-                              bannerSettings.collageImagePositions[index].y = parseInt(e.target.value);
-                              bannerSettings.collageImagePositions = [...bannerSettings.collageImagePositions];
-                            }}
-                            class="w-full"
-                          />
-                        </div>
-                        <div>
-                          <label class="block text-[10px] text-gray-600 mb-0.5">Rot: {pos.rotation}°</label>
-                          <input
-                            type="range"
-                            min="-180"
-                            max="180"
-                            step="1"
-                            value={pos.rotation || 0}
-                            oninput={(e) => {
-                              if (!bannerSettings.collageImagePositions[index]) {
-                                bannerSettings.collageImagePositions[index] = { x: 50, y: 50, rotation: 0 };
-                              }
-                              bannerSettings.collageImagePositions[index].rotation = parseInt(e.target.value);
-                              bannerSettings.collageImagePositions = [...bannerSettings.collageImagePositions];
-                            }}
-                            class="w-full"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  {/if}
-                </div>
-              </div>
-            {/each}
-          </div>
-        </div>
-      {/if}
-      
-      <!-- Image URL Input -->
-
-      
-
-      
-      <!-- Layout Presets -->
-
+      <!-- Image Settings -->
+      <ImageSettings
+        bind:selectedBannerImages
+        bind:bannerSettings
+        {applyPresetCollagePositions}
+        {updatePrimaryImage}
+        bind:isCollapsed={collapsedSections.imageSettings}
+      />
       
       <!-- Layout Settings -->
-      <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Layout</h3>
-        
-        <div class="mb-4">
-          <label for="image-layout" class="block text-sm font-medium text-gray-700 mb-2">
-            Image Layout
-          </label>
-          <select
-            id="image-layout"
-            bind:value={bannerSettings.imageLayout}
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          >
-            {#each imageLayouts as layout}
-              <option value={layout.value}>{layout.label}</option>
-            {/each}
-          </select>
-        </div>
-        
-        <div class="mb-4">
-          <label for="image-position" class="block text-sm font-medium text-gray-700 mb-2">
-            Image Position
-          </label>
-          <select
-            id="image-position"
-            bind:value={bannerSettings.imagePosition}
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          >
-            <option value="cover">Cover (Fill)</option>
-            <option value="contain">Contain (Fit)</option>
-          </select>
-        </div>
-        
-        {#if bannerSettings.imageLayout !== 'full' && bannerSettings.imageLayout !== 'center'}
-          <div class="mb-4">
-            <label for="text-image-ratio" class="block text-sm font-medium text-gray-700 mb-2">
-              Text/Image Ratio: {Math.round(bannerSettings.textImageRatio * 100)}% / {Math.round((1 - bannerSettings.textImageRatio) * 100)}%
-            </label>
-            <input
-              id="text-image-ratio"
-              type="range"
-              min="0.2"
-              max="0.8"
-              step="0.1"
-              bind:value={bannerSettings.textImageRatio}
-              class="w-full"
-            />
-          </div>
-        {/if}
-        
-        {#if bannerSettings.imageLayout !== 'collage'}
-          <div class="mb-4">
-            <label for="image-opacity" class="block text-sm font-medium text-gray-700 mb-2">
-              Image Opacity: {Math.round(bannerSettings.imageOpacity * 100)}%
-            </label>
-            <input
-              id="image-opacity"
-              type="range"
-              min="0"
-              max="1"
-              step="0.1"
-              bind:value={bannerSettings.imageOpacity}
-              class="w-full"
-            />
-          </div>
-          
-          <!-- Image Orientation Controls -->
-          <div class="mb-4">
-            <h4 class="block text-sm font-medium text-gray-700 mb-2">
-              Image Orientation
-            </h4>
-            
-            <div class="mb-3">
-              <label for="image-rotation" class="block text-xs text-gray-600 mb-1">
-                Rotation: {bannerSettings.imageRotation}°
-            </label>
-            <div class="flex items-center gap-2">
-              <input
-                id="image-rotation"
-                type="range"
-                min="-180"
-                max="180"
-                step="1"
-                bind:value={bannerSettings.imageRotation}
-                class="flex-1"
-              />
-              <button
-                type="button"
-                onclick={() => bannerSettings.imageRotation = 0}
-                class="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
-              >
-                Reset
-              </button>
-            </div>
-          </div>
-          
-          <div class="flex gap-4">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                bind:checked={bannerSettings.imageFlipHorizontal}
-                class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-              />
-              <span class="text-sm text-gray-700">Flip Horizontal</span>
-            </label>
-            
-            <label class="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                bind:checked={bannerSettings.imageFlipVertical}
-                class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-              />
-              <span class="text-sm text-gray-700">Flip Vertical</span>
-            </label>
-          </div>
-        </div>
-        {/if}
-        
-        <!-- Image Size/Zoom Control (applies to all layouts except collage) -->
-        {#if bannerSettings.imageLayout !== 'collage'}
-          <div class="mb-4">
-            <label for="image-size" class="block text-sm font-medium text-gray-700 mb-2">
-              Image Size/Zoom: {Math.round(bannerSettings.imageSize * 100)}%
-            </label>
-            <div class="flex items-center gap-2">
-              <input
-                id="image-size"
-                type="range"
-                min="0.1"
-                max="2.0"
-                step="0.05"
-                bind:value={bannerSettings.imageSize}
-                class="flex-1"
-              />
-              <button
-                type="button"
-                onclick={() => bannerSettings.imageSize = 1.0}
-                class="px-3 py-1 text-xs bg-gray-200 hover:bg-gray-300 rounded"
-              >
-                Reset
-              </button>
-            </div>
-            <p class="text-xs text-gray-500 mt-1">
-              Adjusts the size of images in all layouts (100% = default size)
-            </p>
-          </div>
-        {/if}
-        
-      </div>
+      <LayoutSettings
+        bind:bannerSettings
+        {imageLayouts}
+        bind:isCollapsed={collapsedSections.layout}
+      />
       
       <!-- Background Settings -->
-      <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Background</h3>
-        
-        <div class="mb-4">
-          <label for="background-type" class="block text-sm font-medium text-gray-700 mb-2">
-            Background Type
-          </label>
-          <select
-            id="background-type"
-            bind:value={bannerSettings.backgroundType}
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          >
-            {#each backgroundTypes as bgType}
-              <option value={bgType.value}>{bgType.label}</option>
-            {/each}
-          </select>
-        </div>
-        
-        {#if bannerSettings.backgroundType === 'solid'}
-          <div class="mb-4">
-            <label for="background-color" class="block text-sm font-medium text-gray-700 mb-2">
-              Background Color
-            </label>
-            <div class="flex gap-2">
-              <input
-                id="background-color"
-                type="color"
-                bind:value={bannerSettings.backgroundColor}
-                class="h-12 w-20 border border-gray-300 rounded-lg cursor-pointer"
-              />
-              <input
-                type="text"
-                bind:value={bannerSettings.backgroundColor}
-                placeholder="#F5F1E8"
-                class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-        {/if}
-        
-        {#if bannerSettings.backgroundType === 'gradient'}
-          <div class="mb-4">
-            <label for="gradient-type" class="block text-sm font-medium text-gray-700 mb-2">
-              Gradient Type
-            </label>
-            <select
-              id="gradient-type"
-              bind:value={bannerSettings.backgroundGradient.type}
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-3"
-            >
-              <option value="linear">Linear</option>
-              <option value="radial">Radial</option>
-            </select>
-            <div class="block text-sm font-medium text-gray-700 mb-2">Gradient Colors</div>
-            <div class="grid grid-cols-2 gap-2">
-              {#each bannerSettings.backgroundGradient.colors as color, index}
-                <div>
-                  <label for="gradient-color-{index}" class="block text-xs text-gray-600 mb-1">Color {index + 1}</label>
-                  <div class="flex gap-2">
-                    <input
-                      id="gradient-color-{index}"
-                      type="color"
-                      value={color}
-                      oninput={(e) => updateGradientColor(index, e.target.value)}
-                      class="h-10 w-16 border border-gray-300 rounded-lg cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={color}
-                      oninput={(e) => updateGradientColor(index, e.target.value)}
-                      class="flex-1 px-2 py-1 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                    />
-                  </div>
-                </div>
-              {/each}
-            </div>
-          </div>
-        {/if}
-        
-        {#if bannerSettings.backgroundType === 'image'}
-          <div class="mb-4">
-            <label for="background-image-url" class="block text-sm font-medium text-gray-700 mb-2">
-              Background Image URL
-            </label>
-            <input
-              id="background-image-url"
-              type="text"
-              bind:value={bannerSettings.backgroundImageUrl}
-              placeholder="https://example.com/image.jpg"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-2"
-            />
-            <p class="text-xs text-gray-500 mb-2">This image will be used as the full background</p>
-            {#if bannerSettings.backgroundImageUrl}
-              <div class="mt-2 p-2 bg-white rounded border border-gray-200">
-                <img
-                  src={bannerSettings.backgroundImageUrl}
-                  alt="Background preview"
-                  class="w-full h-24 object-cover rounded"
-                  onerror={(e) => {
-                    e.target.style.display = 'none';
-                    const errorDiv = e.target.nextElementSibling;
-                    if (errorDiv) errorDiv.style.display = 'block';
-                  }}
-                />
-                <div class="hidden text-xs text-red-500 text-center py-2">Failed to load image</div>
-              </div>
-            {/if}
-          </div>
-        {/if}
-        
-        {#if bannerSettings.backgroundType === 'pattern'}
-          <div class="mb-4">
-            <label for="background-pattern" class="block text-sm font-medium text-gray-700 mb-2">
-              Pattern Style
-            </label>
-            <select
-              id="background-pattern"
-              bind:value={bannerSettings.backgroundPattern}
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-3"
-            >
-              <option value="none">None</option>
-              <option value="dots">Dots</option>
-              <option value="lines">Lines</option>
-              <option value="grid">Grid</option>
-              <option value="diagonal">Diagonal</option>
-            </select>
-            {#if bannerSettings.backgroundPattern !== 'none'}
-              <label for="pattern-background-color" class="block text-sm font-medium text-gray-700 mb-2">
-                Pattern Base Color
-              </label>
-              <div class="flex gap-2">
-                <input
-                  id="pattern-background-color"
-                  type="color"
-                  bind:value={bannerSettings.backgroundColor}
-                  class="h-12 w-20 border border-gray-300 rounded-lg cursor-pointer"
-                />
-                <input
-                  type="text"
-                  bind:value={bannerSettings.backgroundColor}
-                  placeholder="#F5F1E8"
-                  class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                />
-              </div>
-            {/if}
-          </div>
-        {/if}
-      </div>
+      <BackgroundSettings
+        bind:bannerSettings
+        {backgroundTypes}
+        {updateGradientColor}
+        bind:isCollapsed={collapsedSections.background}
+      />
       
       <!-- Text Content -->
-      <div class="p-4 bg-green-50 rounded-lg border border-green-200">
-        <h3 class="text-lg font-semibold text-gray-900 mb-4">Text Content</h3>
-        
-        <div class="mb-4">
-          <label for="title-en" class="block text-sm font-medium text-gray-700 mb-2">
-            Title (English)
-          </label>
-          <input
-            id="title-en"
-            type="text"
-            bind:value={bannerSettings.title}
-            placeholder="Banner title"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          />
-        </div>
-        
-        <div class="mb-4">
-          <label for="title-he" class="block text-sm font-medium text-gray-700 mb-2">
-            Title (Hebrew)
-          </label>
-          <input
-            id="title-he"
-            type="text"
-            bind:value={bannerSettings.titleHebrew}
-            placeholder="כותרת בעברית"
-            dir="rtl"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          />
-        </div>
-        
-        <div class="mb-4">
-          <label for="category-en" class="block text-sm font-medium text-gray-700 mb-2">
-            Category (English)
-          </label>
-          <input
-            id="category-en"
-            type="text"
-            bind:value={bannerSettings.category}
-            placeholder="e.g., Paintings, Sculpture, etc."
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          />
-        </div>
-        
-        <div class="mb-4">
-          <label for="category-he" class="block text-sm font-medium text-gray-700 mb-2">
-            Category (Hebrew)
-          </label>
-          <input
-            id="category-he"
-            type="text"
-            bind:value={bannerSettings.categoryHebrew}
-            placeholder="קטגוריה בעברית"
-            dir="rtl"
-            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-          />
-        </div>
-        
-        <div class="mb-4">
-          <label for="ribbon-color" class="block text-sm font-medium text-gray-700 mb-2">
-            Ribbon Color
-          </label>
-          <div class="flex gap-2">
-            <input
-              id="ribbon-color"
-              type="color"
-              bind:value={bannerSettings.ribbonColor}
-              class="h-12 w-20 border border-gray-300 rounded-lg cursor-pointer"
-            />
-            <input
-              type="text"
-              bind:value={bannerSettings.ribbonColor}
-              placeholder="#DC2626"
-              class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-          <p class="text-xs text-gray-500 mt-1">Color of the category ribbon (text will be white)</p>
-        </div>
-        
-        <div class="mb-4">
-          <label class="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              bind:checked={bannerSettings.showBottomBorder}
-              class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-            />
-            <span class="text-sm font-medium text-gray-700">Show Bottom Border</span>
-          </label>
-          <p class="text-xs text-gray-500 mt-1 ml-6">Display auction house name, auction name, and date at the bottom</p>
-        </div>
-        
-        {#if bannerSettings.showBottomBorder}
-          <div class="mb-4">
-            <label for="bottom-border-color" class="block text-sm font-medium text-gray-700 mb-2">
-              Bottom Border Color
-            </label>
-            <div class="flex gap-2">
-              <input
-                id="bottom-border-color"
-                type="color"
-                bind:value={bannerSettings.bottomBorderColor}
-                class="h-12 w-20 border border-gray-300 rounded-lg cursor-pointer"
-              />
-              <input
-                type="text"
-                bind:value={bannerSettings.bottomBorderColor}
-                placeholder="#2563EB"
-                class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-        {/if}
-      </div>
+      <TextContentSettings
+        bind:bannerSettings
+        bind:isCollapsed={collapsedSections.textContent}
+      />
       
       <!-- Typography Settings -->
       {#if showAdvancedSettings}
-        <div class="p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <h3 class="text-lg font-semibold text-gray-900 mb-4">Typography</h3>
-          
-          <div class="mb-4">
-            <label for="font-size" class="block text-sm font-medium text-gray-700 mb-2">
-              Font Size: {bannerSettings.fontSize}px
-            </label>
-            <input
-              id="font-size"
-              type="range"
-              min="24"
-              max="72"
-              bind:value={bannerSettings.fontSize}
-              class="w-full"
-            />
-          </div>
-          
-          <div class="mb-4">
-            <label for="font-family" class="block text-sm font-medium text-gray-700 mb-2">
-              English Font
-            </label>
-            <select
-              id="font-family"
-              bind:value={bannerSettings.fontFamily}
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            >
-              {#each fonts as font}
-                <option value={font.value}>{font.name}</option>
-              {/each}
-            </select>
-          </div>
-          
-          <div class="mb-4">
-            <label for="hebrew-font-family" class="block text-sm font-medium text-gray-700 mb-2">
-              Hebrew Font
-            </label>
-            <select
-              id="hebrew-font-family"
-              bind:value={bannerSettings.hebrewFontFamily}
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            >
-              {#each hebrewFonts as font}
-                <option value={font.value}>{font.name}</option>
-              {/each}
-            </select>
-          </div>
-          
-          <div class="mb-4">
-            <label for="text-color" class="block text-sm font-medium text-gray-700 mb-2">
-              Text Color
-            </label>
-            <input
-              id="text-color"
-              type="color"
-              bind:value={bannerSettings.textColor}
-              class="w-full h-12 border border-gray-300 rounded-lg"
-            />
-          </div>
-          
-          <div class="mb-4">
-            <label for="text-align" class="block text-sm font-medium text-gray-700 mb-2">
-              Text Alignment
-            </label>
-            <select
-              id="text-align"
-              bind:value={bannerSettings.textAlign}
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            >
-              <option value="left">Left</option>
-              <option value="center">Center</option>
-              <option value="right">Right</option>
-            </select>
-          </div>
-          
-          <div class="mb-4">
-            <label for="subtitle-en" class="block text-sm font-medium text-gray-700 mb-2">
-              Subtitle (English)
-            </label>
-            <textarea
-              id="subtitle-en"
-              bind:value={bannerSettings.subtitle}
-              placeholder="Banner subtitle"
-              rows="2"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            ></textarea>
-          </div>
-          
-          <div class="mb-4">
-            <label for="subtitle-he" class="block text-sm font-medium text-gray-700 mb-2">
-              Subtitle (Hebrew)
-            </label>
-            <textarea
-              id="subtitle-he"
-              bind:value={bannerSettings.subtitleHebrew}
-              placeholder="תת-כותרת בעברית"
-              rows="2"
-              dir="rtl"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            ></textarea>
-          </div>
-          
-          <div class="mb-4">
-            <label for="year-en" class="block text-sm font-medium text-gray-700 mb-2">
-              Year (English)
-            </label>
-            <input
-              id="year-en"
-              type="text"
-              bind:value={bannerSettings.yearEnglish}
-              placeholder="e.g., 1890"
-              oninput={(e) => {
-                bannerSettings.yearEnglish = e.target.value;
-                if (bannerSettings.yearEnglish) {
-                  bannerSettings.yearHebrew = convertToHebrewYear(bannerSettings.yearEnglish);
-                } else {
-                  bannerSettings.yearHebrew = '';
-                }
-              }}
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-          </div>
-          
-          <div class="mb-4">
-            <label for="year-he" class="block text-sm font-medium text-gray-700 mb-2">
-              Year (Hebrew)
-            </label>
-            <input
-              id="year-he"
-              type="text"
-              bind:value={bannerSettings.yearHebrew}
-              placeholder="Auto-filled from English year, or enter manually"
-              dir="rtl"
-              class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-            />
-            <p class="text-xs text-gray-500 mt-1">Auto-converts from English year, or enter manually</p>
-          </div>
-          
-          <!-- Image Shadow Settings -->
-          <div class="mb-4 pt-4 border-t border-gray-300">
-            <h4 class="text-md font-semibold text-gray-900 mb-3">Image Shadows</h4>
-            
-            <div class="mb-4">
-              <label class="flex items-center">
-                <input
-                  type="checkbox"
-                  bind:checked={bannerSettings.imageShadowEnabled}
-                  class="mr-2 h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
-                />
-                <span class="text-sm font-medium text-gray-700">Enable Image Shadows</span>
-              </label>
-            </div>
-            
-            {#if bannerSettings.imageShadowEnabled}
-              <div class="mb-4">
-                <label for="shadow-color" class="block text-sm font-medium text-gray-700 mb-2">
-                  Shadow Color
-                </label>
-                <div class="flex gap-2">
-                  <input
-                    id="shadow-color"
-                    type="color"
-                    bind:value={bannerSettings.imageShadowColor}
-                    class="h-10 w-20 border border-gray-300 rounded-lg cursor-pointer"
-                  />
-                  <input
-                    type="text"
-                    bind:value={bannerSettings.imageShadowColor}
-                    placeholder="rgba(0, 0, 0, 0.3)"
-                    class="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
-              
-              <div class="mb-4">
-                <label for="shadow-blur" class="block text-sm font-medium text-gray-700 mb-2">
-                  Shadow Blur: {bannerSettings.imageShadowBlur}px
-                </label>
-                <input
-                  id="shadow-blur"
-                  type="range"
-                  min="0"
-                  max="50"
-                  bind:value={bannerSettings.imageShadowBlur}
-                  class="w-full"
-                />
-              </div>
-              
-              <div class="mb-4">
-                <label for="shadow-offset-x" class="block text-sm font-medium text-gray-700 mb-2">
-                  Shadow Offset X: {bannerSettings.imageShadowOffsetX}px
-                </label>
-                <input
-                  id="shadow-offset-x"
-                  type="range"
-                  min="-20"
-                  max="20"
-                  bind:value={bannerSettings.imageShadowOffsetX}
-                  class="w-full"
-                />
-              </div>
-              
-              <div class="mb-4">
-                <label for="shadow-offset-y" class="block text-sm font-medium text-gray-700 mb-2">
-                  Shadow Offset Y: {bannerSettings.imageShadowOffsetY}px
-                </label>
-                <input
-                  id="shadow-offset-y"
-                  type="range"
-                  min="-20"
-                  max="20"
-                  bind:value={bannerSettings.imageShadowOffsetY}
-                  class="w-full"
-                />
-              </div>
-            {/if}
-          </div>
-        </div>
+        <TypographySettings
+          bind:bannerSettings
+          {fonts}
+          {hebrewFonts}
+          {convertToHebrewYear}
+          bind:isCollapsed={collapsedSections.typography}
+        />
+        
+        <!-- Image Shadow Settings -->
+        <ImageShadowSettings
+          bind:bannerSettings
+          bind:isCollapsed={collapsedSections.imageShadows}
+        />
       {/if}
       
       <!-- Actions -->
-      <div class="space-y-3">
-        <button
-          onclick={generateQuickBanner}
-          disabled={generatingBanner || !bannerSettings.title}
-          class="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 transition-colors font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
-        >
-          {generatingBanner ? 'Generating...' : 'Generate Banner'}
-        </button>
-        
-        {#if generatedBannerUrl}
-          <button
-            onclick={downloadBanner}
-            class="w-full bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 transition-colors font-semibold"
-          >
-            Download Banner
-          </button>
-        {/if}
-      </div>
+      <BannerActions
+        generatingBanner={generatingBanner}
+        generatedBannerUrl={generatedBannerUrl}
+        onGenerate={generateQuickBanner}
+        onDownload={downloadBanner}
+        canGenerate={!!bannerSettings.title}
+      />
     </div>
     
     <!-- Right: Preview -->
-    <div>
-      <h3 class="text-lg font-semibold text-gray-900 mb-4">Preview</h3>
-      {#if generatedBannerUrl}
-        <img
-          src={generatedBannerUrl}
-          alt="Generated Banner"
-          class="w-full rounded-lg shadow-lg border border-gray-200"
-        />
-      {:else}
-        <div class="border-2 border-dashed border-gray-300 rounded-lg p-12 text-center bg-gray-50">
-          <svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-          <p class="text-gray-600">Configure settings and click "Generate Banner"</p>
-        </div>
-      {/if}
-    </div>
+    <BannerPreview {generatedBannerUrl} />
   </div>
 </div>
