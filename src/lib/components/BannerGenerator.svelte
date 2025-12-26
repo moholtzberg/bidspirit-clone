@@ -103,12 +103,14 @@
   
   // Collapsible sections state
   let collapsedSections = $state({
+    lotSelection: true,
     imageSelection: true,
     imageSettings: true,
     layout: true,
     background: true,
     textContent: true,
-    typography: true
+    typography: true,
+    imageShadows: true
   });
 
   // Available fonts
@@ -2258,22 +2260,20 @@
       />
       
       <!-- Typography Settings -->
-      {#if showAdvancedSettings}
-        <TypographySettings
-          bind:bannerSettings
-          {fonts}
-          {hebrewFonts}
-          {convertToHebrewYear}
-          bind:isCollapsed={collapsedSections.typography}
-        />
+      <TypographySettings
+        bind:bannerSettings
+        {fonts}
+        {hebrewFonts}
+        {convertToHebrewYear}
+        bind:isCollapsed={collapsedSections.typography}
+      />
         
-        <!-- Image Shadow Settings -->
-        <ImageShadowSettings
-          bind:bannerSettings
-          bind:isCollapsed={collapsedSections.imageShadows}
-        />
-      {/if}
-      
+      <!-- Image Shadow Settings -->
+      <ImageShadowSettings
+        bind:bannerSettings
+        bind:isCollapsed={collapsedSections.imageShadows}
+      />
+    
       <!-- Actions -->
       <BannerActions
         generatingBanner={generatingBanner}
