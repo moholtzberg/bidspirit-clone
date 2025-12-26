@@ -75,6 +75,20 @@
     textBackground: 'rgba(245, 241, 232, 0.95)',
     textBackgroundOpacity: 0.95,
     
+    // Per-field text settings
+    titleEnglishFontSize: 42,
+    titleEnglishAlign: 'center',
+    titleHebrewFontSize: 42,
+    titleHebrewAlign: 'center',
+    subtitleEnglishFontSize: 20,
+    subtitleEnglishAlign: 'center',
+    subtitleHebrewFontSize: 20,
+    subtitleHebrewAlign: 'center',
+    yearEnglishFontSize: 76,
+    yearEnglishAlign: 'center',
+    yearHebrewFontSize: 76,
+    yearHebrewAlign: 'center',
+    
     // Ribbon
     ribbonColor: '#DC2626', // Default red color for category ribbon
     
@@ -1922,7 +1936,6 @@
     
     // Text settings
     ctx.fillStyle = bannerSettings.textColor;
-    ctx.textAlign = bannerSettings.textAlign;
     ctx.textBaseline = 'top';
     
     const padding = bannerSettings.padding;
@@ -1930,18 +1943,22 @@
     const centerX = textAreaX + textAreaWidth / 2;
     const leftX = textAreaX + padding;
     const rightX = textAreaX + textAreaWidth - padding;
-    const textX = bannerSettings.textAlign === 'center' ? centerX : 
-                  bannerSettings.textAlign === 'right' ? rightX : leftX;
     const maxTextWidth = textAreaWidth - (padding * 2);
     
     // Title (English)
     if (bannerSettings.title) {
-      ctx.font = `bold ${bannerSettings.fontSize * 1.2}px ${bannerSettings.fontFamily}`;
+      const fontSize = bannerSettings.titleEnglishFontSize || bannerSettings.fontSize * 1.2;
+      const textAlign = bannerSettings.titleEnglishAlign || bannerSettings.textAlign;
+      const textX = textAlign === 'center' ? centerX : 
+                    textAlign === 'right' ? rightX : leftX;
+      
+      ctx.font = `bold ${fontSize}px ${bannerSettings.fontFamily}`;
+      ctx.textAlign = textAlign;
       const titleLines = wrapText(ctx, bannerSettings.title, maxTextWidth);
       titleLines.forEach((line, index) => {
-        ctx.fillText(line, textX, currentY + (index * bannerSettings.fontSize * 1.5));
+        ctx.fillText(line, textX, currentY + (index * fontSize * 1.2));
       });
-      currentY += titleLines.length * bannerSettings.fontSize * 1.5 + 20;
+      currentY += titleLines.length * fontSize * 1.2 + 20;
     }
     
     // Decorative line between English and Hebrew
@@ -1961,102 +1978,118 @@
     
     // Title (Hebrew)
     if (bannerSettings.titleHebrew) {
-      ctx.font = `bold ${bannerSettings.fontSize * 1.2}px ${bannerSettings.hebrewFontFamily}`;
+      const fontSize = bannerSettings.titleHebrewFontSize || bannerSettings.fontSize * 1.2;
+      const textAlign = bannerSettings.titleHebrewAlign || bannerSettings.textAlign;
+      const textX = textAlign === 'center' ? centerX : 
+                    textAlign === 'right' ? rightX : leftX;
+      
+      ctx.font = `bold ${fontSize}px ${bannerSettings.hebrewFontFamily}`;
+      ctx.textAlign = textAlign;
       const titleHebrewLines = wrapText(ctx, bannerSettings.titleHebrew, maxTextWidth);
       titleHebrewLines.forEach((line, index) => {
-        ctx.fillText(line, textX, currentY + (index * bannerSettings.fontSize * 1.5));
+        ctx.fillText(line, textX, currentY + (index * fontSize * 1.2));
       });
-      currentY += titleHebrewLines.length * bannerSettings.fontSize * 1.5 + 20;
+      currentY += titleHebrewLines.length * fontSize * 1.2 + 20;
     }
     
     // Year (English and Hebrew) - Larger and more prominent, on same line with separator
     if (bannerSettings.yearEnglish || bannerSettings.yearHebrew) {
-      ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       
-      let yearText = '';
-      let separator = '';
+      const englishFontSize = bannerSettings.yearEnglishFontSize || bannerSettings.fontSize * 1.8;
+      const hebrewFontSize = bannerSettings.yearHebrewFontSize || bannerSettings.fontSize * 1.8;
+      const yearAlign = bannerSettings.yearEnglishAlign || bannerSettings.yearHebrewAlign || 'center';
+      const yearY = currentY + Math.max(englishFontSize, hebrewFontSize) / 2;
       
+      // If both years exist, draw them separately with a decorative separator
       if (bannerSettings.yearEnglish && bannerSettings.yearHebrew) {
-        // Both years - use bullet separator
-        yearText = `${bannerSettings.yearEnglish} | ${bannerSettings.yearHebrew}`;
-        separator = '   •   ';
-      } else if (bannerSettings.yearEnglish) {
-        yearText = bannerSettings.yearEnglish;
-      } else if (bannerSettings.yearHebrew) {
-        yearText = bannerSettings.yearHebrew;
-      }
-      
-      if (yearText) {
-        // Draw year text
-        ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.fontFamily}`;
-        const yearY = currentY + (bannerSettings.fontSize * 1.8) / 2;
+        // Measure text widths
+        ctx.font = `bold ${englishFontSize}px ${bannerSettings.fontFamily}`;
+        const englishWidth = ctx.measureText(bannerSettings.yearEnglish).width;
         
-        // If both years exist, draw them separately with a decorative separator
-        if (bannerSettings.yearEnglish && bannerSettings.yearHebrew) {
-          // Measure text widths - both use same font size
-          ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.fontFamily}`;
-          const englishWidth = ctx.measureText(bannerSettings.yearEnglish).width;
-          
-          ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.hebrewFontFamily}`;
-          const hebrewWidth = ctx.measureText(bannerSettings.yearHebrew).width;
-          
-          // Even spacing on both sides of separator
-          const spacing = bannerSettings.fontSize * 0.6; // Space between text and separator
-          const separatorSize = bannerSettings.fontSize * 0.2; // Size of the separator diamond
-          const totalWidth = englishWidth + spacing + separatorSize + spacing + hebrewWidth;
-          const startX = centerX - totalWidth / 2;
-          
-          // Draw English year (right-aligned to its position)
-          ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.fontFamily}`;
-          ctx.textAlign = 'right';
-          ctx.fillText(bannerSettings.yearEnglish, startX + englishWidth, yearY);
-          
-          // Draw decorative separator (diamond) - centered between the two years
-          const separatorX = startX + englishWidth + spacing + separatorSize / 2;
-          ctx.fillStyle = bannerSettings.textColor;
-          ctx.save();
-          ctx.translate(separatorX, yearY);
-          ctx.rotate(Math.PI / 4); // Rotate 45 degrees for diamond
-          ctx.fillRect(-separatorSize / 2, -separatorSize / 2, separatorSize, separatorSize);
-          ctx.restore();
-          
-          // Draw Hebrew year (left-aligned from separator)
-          ctx.font = `bold ${bannerSettings.fontSize * 1.8}px ${bannerSettings.hebrewFontFamily}`;
-          ctx.textAlign = 'left';
-          ctx.fillText(bannerSettings.yearHebrew, startX + englishWidth + spacing + separatorSize + spacing, yearY);
-          
-          // Reset text alignment for subsequent text
-          ctx.textAlign = 'center';
+        ctx.font = `bold ${hebrewFontSize}px ${bannerSettings.hebrewFontFamily}`;
+        const hebrewWidth = ctx.measureText(bannerSettings.yearHebrew).width;
+        
+        // Even spacing on both sides of separator
+        const spacing = Math.max(englishFontSize, hebrewFontSize) * 0.3;
+        const separatorSize = Math.max(englishFontSize, hebrewFontSize) * 0.15;
+        const totalWidth = englishWidth + spacing + separatorSize + spacing + hebrewWidth;
+        
+        // Calculate start position based on alignment
+        let startX;
+        if (yearAlign === 'center') {
+          startX = centerX - totalWidth / 2;
+        } else if (yearAlign === 'right') {
+          startX = rightX - totalWidth;
         } else {
-          // Single year
-          ctx.fillText(yearText, centerX, yearY);
+          startX = leftX;
         }
         
-        currentY += bannerSettings.fontSize * 2.2;
+        // Draw English year
+        ctx.font = `bold ${englishFontSize}px ${bannerSettings.fontFamily}`;
+        ctx.textAlign = 'right';
+        ctx.fillText(bannerSettings.yearEnglish, startX + englishWidth, yearY);
+        
+        // Draw decorative separator (diamond) - centered between the two years
+        const separatorX = startX + englishWidth + spacing + separatorSize / 2;
+        ctx.fillStyle = bannerSettings.textColor;
+        ctx.save();
+        ctx.translate(separatorX, yearY);
+        ctx.rotate(Math.PI / 4); // Rotate 45 degrees for diamond
+        ctx.fillRect(-separatorSize / 2, -separatorSize / 2, separatorSize, separatorSize);
+        ctx.restore();
+        
+        // Draw Hebrew year
+        ctx.font = `bold ${hebrewFontSize}px ${bannerSettings.hebrewFontFamily}`;
+        ctx.textAlign = 'left';
+        ctx.fillText(bannerSettings.yearHebrew, startX + englishWidth + spacing + separatorSize + spacing, yearY);
+      } else {
+        // Single year
+        const fontSize = bannerSettings.yearEnglish ? englishFontSize : hebrewFontSize;
+        const fontFamily = bannerSettings.yearEnglish ? bannerSettings.fontFamily : bannerSettings.hebrewFontFamily;
+        const yearText = bannerSettings.yearEnglish || bannerSettings.yearHebrew;
+        const textX = yearAlign === 'center' ? centerX : 
+                      yearAlign === 'right' ? rightX : leftX;
+        
+        ctx.font = `bold ${fontSize}px ${fontFamily}`;
+        ctx.textAlign = yearAlign;
+        ctx.fillText(yearText, textX, yearY);
       }
+      
+      currentY += Math.max(englishFontSize, hebrewFontSize) * 1.2;
     }
     
-    // Reset text alignment and baseline
-    ctx.textAlign = bannerSettings.textAlign;
+    // Reset text baseline
     ctx.textBaseline = 'top';
     
     // Subtitle (English)
     if (bannerSettings.subtitle) {
-      ctx.font = `${bannerSettings.fontSize * 0.45}px ${bannerSettings.fontFamily}`;
+      const fontSize = bannerSettings.subtitleEnglishFontSize || bannerSettings.fontSize * 0.45;
+      const textAlign = bannerSettings.subtitleEnglishAlign || bannerSettings.textAlign;
+      const textX = textAlign === 'center' ? centerX : 
+                    textAlign === 'right' ? rightX : leftX;
+      
+      ctx.font = `${fontSize}px ${bannerSettings.fontFamily}`;
+      ctx.textAlign = textAlign;
       const subtitleLines = wrapText(ctx, bannerSettings.subtitle, maxTextWidth);
       subtitleLines.forEach((line, index) => {
-        ctx.fillText(line, textX, currentY + (index * bannerSettings.fontSize * 0.7));
+        ctx.fillText(line, textX, currentY + (index * fontSize * 1.2));
       });
-      currentY += subtitleLines.length * bannerSettings.fontSize * 0.7;
+      currentY += subtitleLines.length * fontSize * 1.2;
     }
     
     // Subtitle (Hebrew)
     if (bannerSettings.subtitleHebrew) {
-      ctx.font = `${bannerSettings.fontSize * 0.45}px ${bannerSettings.hebrewFontFamily}`;
+      const fontSize = bannerSettings.subtitleHebrewFontSize || bannerSettings.fontSize * 0.45;
+      const textAlign = bannerSettings.subtitleHebrewAlign || bannerSettings.textAlign;
+      const textX = textAlign === 'center' ? centerX : 
+                    textAlign === 'right' ? rightX : leftX;
+      
+      ctx.font = `${fontSize}px ${bannerSettings.hebrewFontFamily}`;
+      ctx.textAlign = textAlign;
       const subtitleHebrewLines = wrapText(ctx, bannerSettings.subtitleHebrew, maxTextWidth);
       subtitleHebrewLines.forEach((line, index) => {
-        ctx.fillText(line, textX, currentY + (index * bannerSettings.fontSize * 0.7));
+        ctx.fillText(line, textX, currentY + (index * fontSize * 1.2));
       });
     }
     
@@ -2342,6 +2375,7 @@
       <!-- Text Content -->
       <TextContentSettings
         bind:bannerSettings
+        {convertToHebrewYear}
         bind:isCollapsed={collapsedSections.textContent}
       />
       
