@@ -769,6 +769,57 @@
     }
   }
 
+  let exportingBidSpirit = $state(false);
+
+  async function exportToBidSpirit() {
+    if (exportingBidSpirit) return;
+    
+    exportingBidSpirit = true;
+    try {
+      const response = await fetch(`/api/auctions/${$page.params.id}/export-bidspirit`, {
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Export error:', errorText);
+        throw new Error(errorText || 'Failed to export to BidSpirit');
+      }
+
+      // Get the zip file as blob
+      const blob = await response.blob();
+      
+      if (blob.size === 0) {
+        throw new Error('Export returned empty file');
+      }
+      
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      
+      // Get filename from Content-Disposition header or use default
+      const contentDisposition = response.headers.get('Content-Disposition');
+      let filename = `bidspirit-export-${auction?.title || 'auction'}-${Date.now()}.zip`;
+      if (contentDisposition) {
+        const filenameMatch = contentDisposition.match(/filename="(.+)"/);
+        if (filenameMatch) {
+          filename = filenameMatch[1];
+        }
+      }
+      
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Error exporting to BidSpirit:', err);
+      alert(`Failed to export to BidSpirit: ${err.message || 'Please try again.'}`);
+    } finally {
+      exportingBidSpirit = false;
+    }
+  }
+
   async function deleteLots() {
     if (selectedLots.size === 0) return;
     if (!confirm(`Delete ${selectedLots.size} lot(s)?`)) return;
@@ -842,6 +893,24 @@
               class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
             >
               Add Lot
+            </button>
+            <button
+              onclick={exportToBidSpirit}
+              disabled={lots.length === 0 || exportingBidSpirit}
+              class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+              title="Export all lots and images to BidSpirit format"
+            >
+              {#if exportingBidSpirit}
+                <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Exporting...
+              {:else}
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                Export to BidSpirit
+              {/if}
             </button>
             {#if selectedLots.size > 0}
               <button
