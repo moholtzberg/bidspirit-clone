@@ -111,27 +111,51 @@
       displayHeight
     );
     
-    // Draw crop overlay if cropping
+    ctx.restore();
+    
+    // Draw crop overlay if cropping (draw after transformations, in normal canvas space)
     if (isCropping) {
+      // Convert image coordinates to canvas display coordinates
+      const cropCanvasX = cropX * scale + offsetX;
+      const cropCanvasY = cropY * scale + offsetY;
+      const cropCanvasWidth = cropWidth * scale;
+      const cropCanvasHeight = cropHeight * scale;
+      
+      // Draw dark overlay outside crop area
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      
+      // Clear the crop area (make it transparent to show image)
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fillRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
+      ctx.globalCompositeOperation = 'source-over';
+      
+      // Draw crop border
       ctx.strokeStyle = '#3b82f6';
       ctx.lineWidth = 2;
       ctx.setLineDash([5, 5]);
-      ctx.strokeRect(
-        cropX + offsetX,
-        cropY + offsetY,
-        cropWidth * scale,
-        cropHeight * scale
-      );
-      ctx.fillStyle = 'rgba(59, 130, 246, 0.1)';
-      ctx.fillRect(
-        cropX + offsetX,
-        cropY + offsetY,
-        cropWidth * scale,
-        cropHeight * scale
-      );
+      ctx.strokeRect(cropCanvasX, cropCanvasY, cropCanvasWidth, cropCanvasHeight);
+      
+      // Draw corner handles for better UX
+      const handleSize = 8;
+      ctx.fillStyle = '#3b82f6';
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([]);
+      
+      // Top-left
+      ctx.fillRect(cropCanvasX - handleSize/2, cropCanvasY - handleSize/2, handleSize, handleSize);
+      ctx.strokeRect(cropCanvasX - handleSize/2, cropCanvasY - handleSize/2, handleSize, handleSize);
+      // Top-right
+      ctx.fillRect(cropCanvasX + cropCanvasWidth - handleSize/2, cropCanvasY - handleSize/2, handleSize, handleSize);
+      ctx.strokeRect(cropCanvasX + cropCanvasWidth - handleSize/2, cropCanvasY - handleSize/2, handleSize, handleSize);
+      // Bottom-left
+      ctx.fillRect(cropCanvasX - handleSize/2, cropCanvasY + cropCanvasHeight - handleSize/2, handleSize, handleSize);
+      ctx.strokeRect(cropCanvasX - handleSize/2, cropCanvasY + cropCanvasHeight - handleSize/2, handleSize, handleSize);
+      // Bottom-right
+      ctx.fillRect(cropCanvasX + cropCanvasWidth - handleSize/2, cropCanvasY + cropCanvasHeight - handleSize/2, handleSize, handleSize);
+      ctx.strokeRect(cropCanvasX + cropCanvasWidth - handleSize/2, cropCanvasY + cropCanvasHeight - handleSize/2, handleSize, handleSize);
     }
-    
-    ctx.restore();
   }
 
   function rotate(degrees) {
@@ -150,22 +174,34 @@
   }
 
   function getCanvasToImageCoords(e) {
-    if (!canvas) return { x: 0, y: 0 };
+    if (!canvas || !image) return { x: 0, y: 0 };
+    
     const rect = canvas.getBoundingClientRect();
-    const canvasScale = Math.min(
+    
+    // Calculate the scale used to fit the image in the canvas
+    const scale = Math.min(
       canvas.width / imageWidth,
       canvas.height / imageHeight
     );
-    const displayWidth = imageWidth * canvasScale;
-    const displayHeight = imageHeight * canvasScale;
+    
+    // Calculate the displayed image dimensions
+    const displayWidth = imageWidth * scale;
+    const displayHeight = imageHeight * scale;
+    
+    // Calculate the offset to center the image
     const offsetX = (canvas.width - displayWidth) / 2;
     const offsetY = (canvas.height - displayHeight) / 2;
     
-    const canvasX = ((e.clientX - rect.left) / rect.width) * canvas.width;
-    const canvasY = ((e.clientY - rect.top) / rect.height) * canvas.height;
+    // Get mouse position relative to canvas (accounting for actual canvas size vs displayed size)
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
     
-    const imageX = (canvasX - offsetX) / canvasScale;
-    const imageY = (canvasY - offsetY) / canvasScale;
+    const canvasX = (e.clientX - rect.left) * scaleX;
+    const canvasY = (e.clientY - rect.top) * scaleY;
+    
+    // Convert canvas coordinates to image coordinates
+    const imageX = (canvasX - offsetX) / scale;
+    const imageY = (canvasY - offsetY) / scale;
     
     return {
       x: Math.max(0, Math.min(imageWidth, imageX)),
