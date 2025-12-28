@@ -53,6 +53,8 @@
     // Collage-specific settings
     collageLayout: 'custom', // Use custom positions by default
     collageImagePositions: [], // Custom positions for each image [{x: 0-100%, y: 0-100%, rotation: 0-360}]
+    collageImageSide: 'right', // 'left' or 'right' - which side the collage images are on
+    collageSplitStyle: 'vertical', // 'vertical', 'diagonal-forward', 'diagonal-backward' - split style between text and image
     
     // Background
     backgroundType: 'solid', // 'solid', 'gradient', 'image', 'pattern'
@@ -96,6 +98,9 @@
     // Bottom Border
     showBottomBorder: false, // Show bottom border with auction info
     bottomBorderColor: '#2563EB', // Default blue color
+    bottomBorderPosition: 'bottom', // 'top', 'bottom', 'left', or 'right' - position of border
+    bottomBorderHeight: 70, // Height of the border in pixels
+    bottomBorderTextAlign: 'left', // 'left', 'center', 'right' - text alignment in border
     
     // Image Shadows
     imageShadowEnabled: false, // Enable shadows on images
@@ -690,6 +695,11 @@
     const ribbonPosition = bannerSettings.ribbonPosition;
     const showBottomBorder = bannerSettings.showBottomBorder;
     const bottomBorderColor = bannerSettings.bottomBorderColor;
+    const bottomBorderPosition = bannerSettings.bottomBorderPosition;
+    const bottomBorderHeight = bannerSettings.bottomBorderHeight;
+    const bottomBorderTextAlign = bannerSettings.bottomBorderTextAlign;
+    const collageImageSide = bannerSettings.collageImageSide;
+    const collageSplitStyle = bannerSettings.collageSplitStyle;
     const imageShadowEnabled = bannerSettings.imageShadowEnabled;
     const imageShadowColor = bannerSettings.imageShadowColor;
     const imageShadowBlur = bannerSettings.imageShadowBlur;
@@ -1567,10 +1577,62 @@
     // Sort images by z-index (lower z-index drawn first, so higher z-index appears on top)
     validImages.sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
     
+    // Determine image area based on collage settings
+    const imageSide = bannerSettings.collageImageSide || 'right';
+    const splitStyle = bannerSettings.collageSplitStyle || 'vertical';
     const textAreaWidth = width * bannerSettings.textImageRatio;
     const imgAreaWidth = width - textAreaWidth;
-    const imgAreaX = textAreaWidth;
-    const imgAreaHeight = height;
+    
+    let imgAreaX, imgAreaY, imgAreaHeight;
+    
+    if (splitStyle === 'vertical') {
+      // Vertical split
+      imgAreaX = imageSide === 'right' ? textAreaWidth : 0;
+      imgAreaY = 0;
+      imgAreaHeight = height;
+    } else {
+      // Diagonal split - images fill the non-text area
+      imgAreaX = imageSide === 'right' ? textAreaWidth : 0;
+      imgAreaY = 0;
+      imgAreaHeight = height;
+      
+      // Clip to diagonal shape
+      ctx.save();
+      ctx.beginPath();
+      if (splitStyle === 'diagonal-forward') {
+        // Forward slash: /
+        if (imageSide === 'right') {
+          // Images on right, diagonal from top-left to bottom-right
+          ctx.moveTo(textAreaWidth, 0);
+          ctx.lineTo(width, 0);
+          ctx.lineTo(width, height);
+          ctx.lineTo(width * bannerSettings.textImageRatio, height);
+        } else {
+          // Images on left, diagonal from top-right to bottom-left
+          ctx.moveTo(0, 0);
+          ctx.lineTo(imgAreaWidth, 0);
+          ctx.lineTo(0, height);
+          ctx.lineTo(0, height);
+        }
+      } else if (splitStyle === 'diagonal-backward') {
+        // Backward slash: \
+        if (imageSide === 'right') {
+          // Images on right, diagonal from top-right to bottom-left
+          ctx.moveTo(textAreaWidth, 0);
+          ctx.lineTo(width, 0);
+          ctx.lineTo(width - (width * bannerSettings.textImageRatio), height);
+          ctx.lineTo(textAreaWidth, height);
+        } else {
+          // Images on left, diagonal from top-left to bottom-right
+          ctx.moveTo(0, 0);
+          ctx.lineTo(imgAreaWidth, 0);
+          ctx.lineTo(imgAreaWidth, height);
+          ctx.lineTo(0, height);
+        }
+      }
+      ctx.closePath();
+      ctx.clip();
+    }
     
     // Helper function to calculate alignment offset
     function getAlignmentOffset(alignment, areaWidth, areaHeight, itemWidth, itemHeight) {
@@ -1992,6 +2054,11 @@
         ctx.restore();
       });
     }
+    
+    // Restore context if diagonal split was used
+    if (splitStyle !== 'vertical') {
+      ctx.restore();
+    }
   }
 
   function drawText(ctx, width, height) {
@@ -2015,6 +2082,21 @@
       textAreaWidth = width / 2;
       textAreaX = 0;
       textAreaY = 0;
+    } else if (bannerSettings.imageLayout === 'collage') {
+      // Collage layout - handle left/right positioning and diagonal splits
+      const imageSide = bannerSettings.collageImageSide || 'right';
+      const splitStyle = bannerSettings.collageSplitStyle || 'vertical';
+      
+      if (splitStyle === 'vertical') {
+        textAreaWidth = width * bannerSettings.textImageRatio;
+        textAreaX = imageSide === 'right' ? 0 : width - textAreaWidth;
+        textAreaY = 0;
+      } else {
+        // Diagonal split - calculate based on ratio
+        textAreaWidth = width * bannerSettings.textImageRatio;
+        textAreaX = imageSide === 'right' ? 0 : width - textAreaWidth;
+        textAreaY = 0;
+      }
     } else {
       textAreaWidth = width * bannerSettings.textImageRatio;
       textAreaX = 0;
@@ -2023,23 +2105,141 @@
     
     // Draw text background
     if (bannerSettings.textBackground && bannerSettings.textBackgroundOpacity > 0) {
+      ctx.save();
+      if (bannerSettings.imageLayout === 'collage' && bannerSettings.collageSplitStyle !== 'vertical') {
+        // Diagonal split - use path for diagonal clipping
+        ctx.beginPath();
+        const splitStyle = bannerSettings.collageSplitStyle;
+        const imageSide = bannerSettings.collageImageSide || 'right';
+        
+        if (splitStyle === 'diagonal-forward') {
+          // Forward slash: / (top-left to bottom-right)
+          if (imageSide === 'right') {
+            // Text on left, diagonal from top-left to bottom-right
+            ctx.moveTo(0, 0);
+            ctx.lineTo(textAreaWidth, 0);
+            ctx.lineTo(width * bannerSettings.textImageRatio, height);
+            ctx.lineTo(0, height);
+          } else {
+            // Text on right, diagonal from top-right to bottom-left
+            ctx.moveTo(width - textAreaWidth, 0);
+            ctx.lineTo(width, 0);
+            ctx.lineTo(width, height);
+            ctx.lineTo(width - (width * bannerSettings.textImageRatio), height);
+          }
+        } else if (splitStyle === 'diagonal-backward') {
+          // Backward slash: \ (top-right to bottom-left)
+          if (imageSide === 'right') {
+            // Text on left, diagonal from top-right to bottom-left
+            ctx.moveTo(0, 0);
+            ctx.lineTo(textAreaWidth, 0);
+            ctx.lineTo(0, height);
+            ctx.lineTo(0, height);
+          } else {
+            // Text on right, diagonal from top-left to bottom-right
+            ctx.moveTo(width - textAreaWidth, 0);
+            ctx.lineTo(width, 0);
+            ctx.lineTo(width - (width * bannerSettings.textImageRatio), height);
+            ctx.lineTo(width - textAreaWidth, height);
+          }
+        }
+        ctx.closePath();
+        ctx.clip();
+      }
+      
       ctx.fillStyle = bannerSettings.textBackground;
       ctx.globalAlpha = bannerSettings.textBackgroundOpacity;
-      ctx.fillRect(textAreaX, textAreaY, textAreaWidth, height);
+      if (bannerSettings.imageLayout === 'collage' && bannerSettings.collageSplitStyle !== 'vertical') {
+        ctx.fill();
+      } else {
+        ctx.fillRect(textAreaX, textAreaY, textAreaWidth, height);
+      }
       ctx.globalAlpha = 1.0;
+      ctx.restore();
     }
     
     // Draw background pattern on text area if pattern is enabled
     if (bannerSettings.backgroundType === 'pattern' && bannerSettings.backgroundPattern !== 'none') {
       ctx.save();
       // Clip to text area
-      ctx.beginPath();
-      ctx.rect(textAreaX, textAreaY, textAreaWidth, height);
-      ctx.clip();
+      if (bannerSettings.imageLayout === 'collage' && bannerSettings.collageSplitStyle !== 'vertical') {
+        // Use same diagonal path as above
+        ctx.beginPath();
+        const splitStyle = bannerSettings.collageSplitStyle;
+        const imageSide = bannerSettings.collageImageSide || 'right';
+        
+        if (splitStyle === 'diagonal-forward') {
+          if (imageSide === 'right') {
+            ctx.moveTo(0, 0);
+            ctx.lineTo(textAreaWidth, 0);
+            ctx.lineTo(width * bannerSettings.textImageRatio, height);
+            ctx.lineTo(0, height);
+          } else {
+            ctx.moveTo(width - textAreaWidth, 0);
+            ctx.lineTo(width, 0);
+            ctx.lineTo(width, height);
+            ctx.lineTo(width - (width * bannerSettings.textImageRatio), height);
+          }
+        } else if (splitStyle === 'diagonal-backward') {
+          if (imageSide === 'right') {
+            ctx.moveTo(0, 0);
+            ctx.lineTo(textAreaWidth, 0);
+            ctx.lineTo(0, height);
+            ctx.lineTo(0, height);
+          } else {
+            ctx.moveTo(width - textAreaWidth, 0);
+            ctx.lineTo(width, 0);
+            ctx.lineTo(width - (width * bannerSettings.textImageRatio), height);
+            ctx.lineTo(width - textAreaWidth, height);
+          }
+        }
+        ctx.closePath();
+        ctx.clip();
+      } else {
+        ctx.beginPath();
+        ctx.rect(textAreaX, textAreaY, textAreaWidth, height);
+        ctx.clip();
+      }
       // Translate to text area origin and draw pattern
       ctx.translate(textAreaX, textAreaY);
       drawBackgroundPattern(ctx, textAreaWidth, height, bannerSettings.backgroundPattern);
       ctx.restore();
+    }
+    
+    // Clip text area for diagonal splits
+    if (bannerSettings.imageLayout === 'collage' && bannerSettings.collageSplitStyle !== 'vertical') {
+      ctx.save();
+      ctx.beginPath();
+      const splitStyle = bannerSettings.collageSplitStyle;
+      const imageSide = bannerSettings.collageImageSide || 'right';
+      
+      if (splitStyle === 'diagonal-forward') {
+        if (imageSide === 'right') {
+          ctx.moveTo(0, 0);
+          ctx.lineTo(textAreaWidth, 0);
+          ctx.lineTo(width * bannerSettings.textImageRatio, height);
+          ctx.lineTo(0, height);
+        } else {
+          ctx.moveTo(width - textAreaWidth, 0);
+          ctx.lineTo(width, 0);
+          ctx.lineTo(width, height);
+          ctx.lineTo(width - (width * bannerSettings.textImageRatio), height);
+        }
+      } else if (splitStyle === 'diagonal-backward') {
+        if (imageSide === 'right') {
+          ctx.moveTo(0, 0);
+          ctx.lineTo(textAreaWidth, 0);
+          ctx.lineTo(0, height);
+          ctx.lineTo(0, height);
+        } else {
+          ctx.moveTo(width - textAreaWidth, 0);
+          ctx.lineTo(width, 0);
+          ctx.lineTo(width - (width * bannerSettings.textImageRatio), height);
+          ctx.lineTo(width - textAreaWidth, height);
+        }
+      }
+      ctx.closePath();
+      ctx.clip();
     }
     
     // Text settings
@@ -2327,23 +2527,31 @@
     }
     
     // Bottom Border with Auction Info
-    if (bannerSettings.showBottomBorder && (auction || auctionHouse)) {
+    if (bannerSettings.showBottomBorder) {
       ctx.save();
       
-      const borderHeight = 70; // Increased height
-      const borderY = height - borderHeight;
+      const borderHeight = bannerSettings.bottomBorderHeight || 70;
+      const borderPosition = bannerSettings.bottomBorderPosition || 'bottom';
       
-      // Draw border background
+      // Draw border background based on position
       ctx.fillStyle = bannerSettings.bottomBorderColor || '#2563EB';
-      ctx.fillRect(0, borderY, width, borderHeight);
       
-      // Draw text (white for contrast) - increased font size
+      if (borderPosition === 'top' || borderPosition === 'bottom') {
+        // Horizontal border (top or bottom)
+        const borderY = borderPosition === 'top' ? 0 : height - borderHeight;
+        ctx.fillRect(0, borderY, width, borderHeight);
+      } else {
+        // Vertical border (left or right)
+        const borderWidth = borderHeight; // Use height setting as width for vertical borders
+        const borderX = borderPosition === 'left' ? 0 : width - borderWidth;
+        ctx.fillRect(borderX, 0, borderWidth, height);
+      }
+      
+      // Draw text (white for contrast)
       ctx.fillStyle = '#FFFFFF';
-      ctx.textAlign = 'left';
-      ctx.textBaseline = 'middle';
       ctx.font = `bold ${bannerSettings.fontSize * 0.5}px ${bannerSettings.fontFamily}`;
       
-      // Build text content - ensure auction house name is included
+      // Build text content
       let borderText = '';
       if (auctionHouse && auctionHouse.name) {
         borderText += auctionHouse.name;
@@ -2363,12 +2571,69 @@
         borderText += formattedDate;
       }
       
-      if (borderText) {
-        // Add padding - increased for larger text
-        const padding = 20;
-        ctx.fillText(borderText, padding, borderY + borderHeight / 2);
+      // If no auction/auctionHouse data, use placeholder or banner settings
+      if (!borderText) {
+        borderText = bannerSettings.title || 'Banner';
       }
       
+      if (borderText) {
+        const padding = 20;
+        
+        if (borderPosition === 'top' || borderPosition === 'bottom') {
+          // Horizontal border - text alignment
+          ctx.textAlign = bannerSettings.bottomBorderTextAlign || 'left';
+          ctx.textBaseline = 'middle';
+          
+          const borderY = borderPosition === 'top' ? 0 : height - borderHeight;
+          let textX;
+          if (bannerSettings.bottomBorderTextAlign === 'center') {
+            textX = width / 2;
+          } else if (bannerSettings.bottomBorderTextAlign === 'right') {
+            textX = width - padding;
+          } else {
+            textX = padding;
+          }
+          
+          ctx.fillText(borderText, textX, borderY + borderHeight / 2);
+        } else {
+          // Vertical border - text rotated
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          
+          const borderWidth = borderHeight;
+          const borderX = borderPosition === 'left' ? 0 : width - borderWidth;
+          
+          // Rotate text for vertical borders
+          ctx.save();
+          if (borderPosition === 'left') {
+            ctx.translate(borderX + borderWidth / 2, height / 2);
+            ctx.rotate(-Math.PI / 2); // Rotate -90 degrees
+          } else {
+            ctx.translate(borderX + borderWidth / 2, height / 2);
+            ctx.rotate(Math.PI / 2); // Rotate 90 degrees
+          }
+          
+          // For vertical borders, text alignment affects vertical position along the height
+          // After rotation, Y axis represents the vertical position along the banner height
+          let textY = 0;
+          if (bannerSettings.bottomBorderTextAlign === 'center') {
+            textY = 0; // Centered vertically
+          } else if (bannerSettings.bottomBorderTextAlign === 'right') {
+            textY = height / 2 - padding; // Near bottom (after rotation)
+          } else {
+            textY = -height / 2 + padding; // Near top (after rotation)
+          }
+          
+          ctx.fillText(borderText, 0, textY);
+          ctx.restore();
+        }
+      }
+      
+      ctx.restore();
+    }
+    
+    // Restore clipping context if diagonal split was used
+    if (bannerSettings.imageLayout === 'collage' && bannerSettings.collageSplitStyle !== 'vertical') {
       ctx.restore();
     }
   }

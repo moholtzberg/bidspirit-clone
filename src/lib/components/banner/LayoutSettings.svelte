@@ -62,6 +62,38 @@
       </div>
     {/if}
     
+    {#if bannerSettings.imageLayout === 'collage'}
+      <div>
+        <label for="collage-image-side" class="block text-xs font-medium text-gray-700 mb-1">
+          Image Side
+        </label>
+        <select
+          id="collage-image-side"
+          bind:value={bannerSettings.collageImageSide}
+          class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+        >
+          <option value="left">Left</option>
+          <option value="right">Right</option>
+        </select>
+      </div>
+      
+      <div>
+        <label for="collage-split-style" class="block text-xs font-medium text-gray-700 mb-1">
+          Split Style
+        </label>
+        <select
+          id="collage-split-style"
+          bind:value={bannerSettings.collageSplitStyle}
+          class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+        >
+          <option value="vertical">Vertical</option>
+          <!-- <option value="diagonal-forward">Diagonal Forward (/)</option> -->
+          <!-- <option value="diagonal-backward">Diagonal Backward (\)</option> -->
+        </select>
+        <p class="text-xs text-gray-500 mt-1">Style of split between text and image areas</p>
+      </div>
+    {/if}
+    
     {#if bannerSettings.imageLayout !== 'collage'}
       <div>
         <label for="image-opacity" class="block text-xs font-medium text-gray-700 mb-1">

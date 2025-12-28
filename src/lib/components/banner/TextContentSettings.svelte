@@ -321,23 +321,81 @@
         </div>
 
         {#if bannerSettings.showBottomBorder}
-          <div>
-            <label for="bottom-border-color" class="block text-xs font-medium text-gray-700 mb-1">
-              Bottom Border Color
-            </label>
-            <div class="flex gap-2">
+          <div class="space-y-2">
+            <div>
+              <label for="bottom-border-color" class="block text-xs font-medium text-gray-700 mb-1">
+                Border Color
+              </label>
+              <div class="flex gap-2">
+                <input
+                  id="bottom-border-color"
+                  type="color"
+                  bind:value={bannerSettings.bottomBorderColor}
+                  class="h-10 w-20 border border-gray-300 rounded-lg cursor-pointer"
+                />
+                <input
+                  type="text"
+                  bind:value={bannerSettings.bottomBorderColor}
+                  placeholder="#2563EB"
+                  class="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+            
+            <div>
+              <label for="bottom-border-position" class="block text-xs font-medium text-gray-700 mb-1">
+                Border Position
+              </label>
+              <select
+                id="bottom-border-position"
+                bind:value={bannerSettings.bottomBorderPosition}
+                class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="top">Top</option>
+                <option value="bottom">Bottom</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+              </select>
+            </div>
+            
+            <div>
+              <label for="bottom-border-width" class="block text-xs font-medium text-gray-700 mb-1">
+                Border {bannerSettings.bottomBorderPosition === 'left' || bannerSettings.bottomBorderPosition === 'right' ? 'Width' : 'Height'}: {bannerSettings.bottomBorderHeight}px
+              </label>
               <input
-                id="bottom-border-color"
-                type="color"
-                bind:value={bannerSettings.bottomBorderColor}
-                class="h-10 w-20 border border-gray-300 rounded-lg cursor-pointer"
+                id="bottom-border-width"
+                type="range"
+                min="30"
+                max="150"
+                step="5"
+                bind:value={bannerSettings.bottomBorderHeight}
+                class="w-full"
               />
-              <input
-                type="text"
-                bind:value={bannerSettings.bottomBorderColor}
-                placeholder="#2563EB"
-                class="flex-1 px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
+              <p class="text-xs text-gray-500 mt-1">
+                {bannerSettings.bottomBorderPosition === 'left' || bannerSettings.bottomBorderPosition === 'right' 
+                  ? 'Width of the vertical border' 
+                  : 'Height of the horizontal border'}
+              </p>
+            </div>
+            
+            <div>
+              <label for="bottom-border-text-align" class="block text-xs font-medium text-gray-700 mb-1">
+                Text Alignment
+              </label>
+              <select
+                id="bottom-border-text-align"
+                bind:value={bannerSettings.bottomBorderTextAlign}
+                class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+              </select>
+              <p class="text-xs text-gray-500 mt-1">
+                {bannerSettings.bottomBorderPosition === 'left' || bannerSettings.bottomBorderPosition === 'right'
+                  ? 'Vertical alignment for rotated text'
+                  : 'Horizontal alignment for text'}
+              </p>
             </div>
           </div>
         {/if}
