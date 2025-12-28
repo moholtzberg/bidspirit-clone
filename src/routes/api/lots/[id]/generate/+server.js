@@ -1,39 +1,49 @@
 import { json, error } from '@sveltejs/kit';
 import prisma from '$lib/prisma.js';
+import { env } from '$env/dynamic/private';
 
-// This is a placeholder - you'll need to integrate with an AI service
 async function generateWithAI(prompt, contextPrompt = '') {
-  // TODO: Implement actual AI generation
-  // Example with OpenAI:
-  /*
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: 'gpt-4',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a helpful assistant that generates auction lot titles and descriptions. ${contextPrompt}`
-        },
-        {
-          role: 'user',
-          content: prompt
-        }
-      ],
-      max_tokens: 500
-    })
-  });
+  const apiKey = env.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
   
-  const data = await response.json();
-  return data.choices[0].message.content;
-  */
-  
-  // Placeholder
-  return 'AI generation service not configured. Please set up OpenAI API or another service.';
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY environment variable is not set. Please add it to your .env file.');
+  }
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', // Using gpt-4o-mini for cost efficiency, can be changed to gpt-4
+        messages: [
+          {
+            role: 'system',
+            content: `You are a helpful assistant that generates auction lot titles and descriptions for fine art, antiques, and collectibles. ${contextPrompt ? `Additional context: ${contextPrompt}` : ''}`
+          },
+          {
+            role: 'user',
+            content: prompt
+          }
+        ],
+        max_tokens: 500,
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+      throw new Error(`OpenAI API error: ${errorData.error?.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+  } catch (err) {
+    console.error('OpenAI API error:', err);
+    throw err;
+  }
 }
 
 export async function POST({ params, request, locals }) {

@@ -1,41 +1,49 @@
 import { json, error } from '@sveltejs/kit';
 import prisma from '$lib/prisma.js';
+import { env } from '$env/dynamic/private';
 
-// This is a placeholder - you'll need to integrate with an AI service
-// Options: OpenAI GPT, Anthropic Claude, etc.
 async function summarizeText(text, contextPrompt = '') {
-  // TODO: Implement actual AI summarization
-  // Example with OpenAI:
-  /*
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`
-    },
-    body: JSON.stringify({
-      model: 'gpt-4',
-      messages: [
-        {
-          role: 'system',
-          content: `You are a helpful assistant that summarizes notes about auction lots. ${contextPrompt}`
-        },
-        {
-          role: 'user',
-          content: `Please summarize the following note in 2-3 sentences:\n\n${text}`
-        }
-      ],
-      max_tokens: 200
-    })
-  });
+  const apiKey = env.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
   
-  const data = await response.json();
-  return data.choices[0].message.content;
-  */
-  
-  // Placeholder: simple truncation
-  if (text.length <= 200) return text;
-  return text.substring(0, 200) + '...';
+  if (!apiKey) {
+    throw new Error('OPENAI_API_KEY environment variable is not set. Please add it to your .env file.');
+  }
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiKey}`
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini', // Using gpt-4o-mini for cost efficiency
+        messages: [
+          {
+            role: 'system',
+            content: `You are a helpful assistant that summarizes notes about auction lots. ${contextPrompt ? `Additional context: ${contextPrompt}` : ''} Provide concise, informative summaries.`
+          },
+          {
+            role: 'user',
+            content: `Please summarize the following note in 2-3 sentences, focusing on key details:\n\n${text}`
+          }
+        ],
+        max_tokens: 200,
+        temperature: 0.5
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }));
+      throw new Error(`OpenAI API error: ${errorData.error?.message || response.statusText}`);
+    }
+
+    const data = await response.json();
+    return data.choices[0].message.content;
+  } catch (err) {
+    console.error('OpenAI API error:', err);
+    throw err;
+  }
 }
 
 export async function POST({ params, locals }) {
