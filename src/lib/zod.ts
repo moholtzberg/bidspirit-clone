@@ -112,6 +112,9 @@ export const auctionHouseSettingsSchema = z.object({
   additionalTextForConsignorStatementsInEnglish: z.string().optional().nullable(),
   taxNumber: z.string().optional().nullable(),
   invoiceProvider: z.string().optional().nullable(),
+  
+  // AI Settings
+  aiPrompt: z.string().optional().nullable(), // Base prompt for AI services (tone, style, context about auction house)
 })
 
 // Auction settings schema (nested within each auction)
@@ -175,4 +178,7 @@ export const auctionSettingsSchema = z.object({
     masonryColumns: z.coerce.number().min(2).max(5).optional().default(4),
     masonryVaryHeights: z.boolean().optional().default(true),
   }).optional().default({}),
+  
+  // AI Settings
+  aiPrompt: z.string().optional().nullable(), // Additional prompt for this specific auction (tone, style, context)
 })

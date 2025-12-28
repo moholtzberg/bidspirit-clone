@@ -108,11 +108,21 @@ async function uploadToS3(buffer, filename, folder) {
     const ext = filename.split('.').pop() || 'jpg';
     const key = `${folder}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
 
+    // Determine content type based on file extension
+    let contentType;
+    if (folder === 'voice-notes' || ['mp3', 'wav', 'webm', 'ogg', 'm4a', 'aac'].includes(ext.toLowerCase())) {
+      // Audio files
+      contentType = `audio/${ext === 'mp3' ? 'mpeg' : ext === 'm4a' ? 'mp4' : ext}`;
+    } else {
+      // Image files (default)
+      contentType = `image/${ext === 'jpg' ? 'jpeg' : ext}`;
+    }
+
     await s3Client.send(new PutObjectCommand({
       Bucket: bucket,
       Key: key,
       Body: buffer,
-      ContentType: `image/${ext === 'jpg' ? 'jpeg' : ext}`
+      ContentType: contentType
       // Note: ACL is deprecated. Use bucket policy for public access or presigned URLs for private access
     }));
 

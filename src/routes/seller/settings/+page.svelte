@@ -93,7 +93,10 @@
     additionalTextForConsignorStatementsInEnglish: '',
     taxNumber: '',
     invoiceProvider: 'None',
-    categoryMetaFields: {}
+    categoryMetaFields: {},
+    
+    // AI Settings
+    aiPrompt: ''
   });
   
   let editingCategory = $state(null);
@@ -356,6 +359,12 @@
               class="px-6 py-4 text-sm font-medium border-b-2 transition-colors {activeTab === 'advanced' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
             >
               Advanced
+            </button>
+            <button
+              onclick={() => activeTab = 'ai'}
+              class="px-6 py-4 text-sm font-medium border-b-2 transition-colors {activeTab === 'ai' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'}"
+            >
+              AI Settings
             </button>
             <button
               onclick={() => activeTab = 'banner'}
@@ -891,6 +900,28 @@
                     <p class="text-sm mt-2">Add a category above to get started.</p>
                   </div>
                 {/if}
+              </div>
+            {/if}
+            
+            {#if activeTab === 'ai'}
+              <div class="p-6 space-y-4">
+                <div>
+                  <h3 class="text-lg font-semibold text-gray-900 mb-4">AI Settings</h3>
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      AI Prompt (Base Prompt for All Auctions)
+                    </label>
+                    <textarea
+                      bind:value={settings.aiPrompt}
+                      rows="6"
+                      placeholder="Enter base context, tone, style guidelines, or information about your auction house that should be included in all AI-generated content. This will be combined with auction-specific prompts."
+                      class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    ></textarea>
+                    <p class="text-xs text-gray-500 mt-1">
+                      This base prompt will be added to all AI requests for generating titles, descriptions, and summarizing notes across all auctions in this auction house. Individual auctions can add their own prompts that will be combined with this one.
+                    </p>
+                  </div>
+                </div>
               </div>
             {/if}
             

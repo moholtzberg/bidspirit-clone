@@ -2,6 +2,8 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
+  import LotNotesManager from '$lib/components/lots/LotNotesManager.svelte';
+  import AIGenerator from '$lib/components/lots/AIGenerator.svelte';
 
   let auction = $state(null);
   let lots = $state([]);
@@ -21,6 +23,7 @@
   let draggedLot = $state(null);
   let reordering = $state(false);
   let expandedImageRows = $state(new Set()); // Track which lots have expanded image management
+  let expandedNotesRows = $state(new Set()); // Track which lots have expanded notes/AI management
 
   // Color coding rules for problematic lots
   function getLotStatus(lot) {
@@ -554,6 +557,22 @@
     }
     expandedImageRows = new Set(expandedImageRows); // Trigger reactivity
   }
+
+  function toggleNotesRow(lotId) {
+    if (expandedNotesRows.has(lotId)) {
+      expandedNotesRows.delete(lotId);
+    } else {
+      expandedNotesRows.add(lotId);
+    }
+    expandedNotesRows = new Set(expandedNotesRows); // Trigger reactivity
+  }
+
+  async function handleAIGenerated(lotId, updates) {
+    // Apply AI-generated content to the lot
+    for (const [field, value] of Object.entries(updates)) {
+      await saveCell(lotId, field, value);
+    }
+  }
   
   async function reorderImages(lotId, draggedImageId, targetImageId) {
     try {
@@ -1008,16 +1027,30 @@
                             autofocus
                           />
                         {:else}
-                          <span
-                            ondblclick={() => startEdit(lot.id, 'title', lot.title)}
-                            class="cursor-pointer hover:bg-blue-50 px-1 py-0.5 rounded block text-xs font-medium"
-                          >
-                            {#if lot.title}
-                              {lot.title}
-                            {:else}
-                              <span class="text-gray-400 italic">Double-click to edit</span>
-                            {/if}
-                          </span>
+                          <div class="flex items-center gap-2">
+                            <span
+                              ondblclick={() => startEdit(lot.id, 'title', lot.title)}
+                              class="cursor-pointer hover:bg-blue-50 px-1 py-0.5 rounded flex-1 text-xs font-medium"
+                            >
+                              {#if lot.title}
+                                {lot.title}
+                              {:else}
+                                <span class="text-gray-400 italic">Double-click to edit</span>
+                              {/if}
+                            </span>
+                            <button
+                              type="button"
+                              onclick={(e) => { 
+                                e.preventDefault();
+                                e.stopPropagation(); 
+                                toggleNotesRow(lot.id); 
+                              }}
+                              class="px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 font-medium whitespace-nowrap"
+                              title="Open Notes & AI Tools"
+                            >
+                              📝 AI
+                            </button>
+                          </div>
                         {/if}
                       </div>
                       <!-- Description -->
@@ -1335,6 +1368,52 @@
                     {/if}
                   </td>
                 </tr>
+                
+                <!-- Expandable Notes & AI Management Row -->
+                {#if expandedNotesRows.has(lot.id)}
+                  <tr class="bg-purple-50">
+                    <td colspan="11" class="px-4 py-4">
+                      <div class="bg-white rounded-lg border border-purple-200 p-4">
+                        <div class="flex items-center justify-between mb-4">
+                          <h3 class="text-lg font-semibold text-gray-900">Notes & AI Tools - Lot #{lot.lotNumber}</h3>
+                          <button
+                            onclick={() => toggleNotesRow(lot.id)}
+                            class="text-gray-500 hover:text-gray-700 text-sm"
+                          >
+                            Collapse
+                          </button>
+                        </div>
+                        
+                        <div class="grid grid-cols-2 gap-4">
+                          <!-- Notes Section -->
+                          <div>
+                            <LotNotesManager
+                              lotId={lot.id}
+                              notes={[]}
+                              onRefresh={async () => {
+                                await loadData();
+                              }}
+                            />
+                          </div>
+                          
+                          <!-- AI Generator Section -->
+                          <div>
+                            <AIGenerator
+                              lotId={lot.id}
+                              lot={{
+                                title: lot.title,
+                                description: lot.description,
+                                images: lot.images || [],
+                                notes: lot.notes || []
+                              }}
+                              onGenerated={(updates) => handleAIGenerated(lot.id, updates)}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                {/if}
                 
                 <!-- Expandable Image Management Row -->
                 {#if expandedImageRows.has(lot.id)}

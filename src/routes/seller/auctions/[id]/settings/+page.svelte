@@ -43,6 +43,9 @@
     // Currency
     currency: 'USD',
     
+    // AI Settings
+    aiPrompt: '',
+    
     // Gallery Template Settings
     galleryTemplate: 'card-grid', // 'card-grid', 'image-slider', 'overlay-text', 'minimal-grid', 'masonry', 'carousel-hover'
     galleryTemplateSettings: {
@@ -581,6 +584,38 @@
                     <option value="JPY">JPY - Japanese Yen</option>
                     <option value="CHF">CHF - Swiss Franc</option>
                   </select>
+                </div>
+              {/if}
+            </div>
+
+            <!-- AI Settings -->
+            <div class="border border-gray-200 rounded-lg">
+              <button
+                type="button"
+                onclick={() => toggleSection('ai')}
+                class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <span class="font-medium text-gray-900">AI Settings</span>
+                <svg class="w-5 h-5 text-gray-500 transform transition-transform {expandedSections.ai ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {#if expandedSections.ai}
+                <div class="p-4 space-y-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">
+                      AI Prompt (for this auction)
+                    </label>
+                    <textarea
+                      bind:value={settings.aiPrompt}
+                      rows="4"
+                      placeholder="Enter additional context, tone, or style guidelines for AI-generated content. This will be combined with the auction house AI prompt."
+                      class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    ></textarea>
+                    <p class="text-xs text-gray-500 mt-1">
+                      This prompt will be added to AI requests for generating titles, descriptions, and summarizing notes for lots in this auction.
+                    </p>
+                  </div>
                 </div>
               {/if}
             </div>

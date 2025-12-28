@@ -119,6 +119,7 @@ model Lot {
   auction Auction     @relation(fields: [auctionId], references: [id], onDelete: Cascade)
   bids    Bid[]
   images  LotImage[]  // Multiple images per lot
+  notes   LotNote[]   // Notes associated with this lot
 
   @@unique([auctionId, lotNumber])
   @@index([auctionId])
@@ -172,4 +173,23 @@ model Bid {
   @@index([userId])
   @@index([timestamp])
   @@map("bids")
+}
+
+// LotNote model - represents notes (voice or text) associated with a lot
+model LotNote {
+  id              String   @id @default(cuid())
+  lotId           String   @map("lot_id")
+  content         String?  // Transcribed or text note content
+  summary         String?  // AI-generated summary
+  audioUrl        String?  @map("audio_url") // URL to uploaded audio file
+  transcription   String?  // Raw transcription from speech-to-text
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  lot Lot @relation(fields: [lotId], references: [id], onDelete: Cascade)
+
+  @@index([lotId])
+  @@index([createdAt])
+  @@map("lot_notes")
 }

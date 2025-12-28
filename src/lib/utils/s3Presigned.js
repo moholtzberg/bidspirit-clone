@@ -19,7 +19,7 @@ function isS3Url(url) {
 /**
  * Extract S3 key from various URL formats
  */
-function extractS3Key(url) {
+export function extractS3Key(url) {
   if (!url) return null;
   
   // s3://bucket/key format
