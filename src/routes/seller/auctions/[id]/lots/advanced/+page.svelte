@@ -288,6 +288,8 @@
         updateValue = parseInt(value) || 1;
       } else if (field === 'endTime') {
         updateValue = value || null;
+      } else if (field === 'isReady') {
+        updateValue = value === true || value === 'true';
       } else if (field === 'tags') {
         // Tags come as JSON string from editingCell, parse to array for API
         if (typeof value === 'string') {
@@ -1340,6 +1342,47 @@
                         class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded text-xs font-semibold {lot.status === 'ACTIVE' ? 'text-green-600' : lot.status === 'SOLD' ? 'text-blue-600' : 'text-gray-600'}"
                       >
                         {lot.status}
+                      </span>
+                    {/if}
+                  </td>
+                  
+                  <!-- Watchers -->
+                  <td class="px-2 py-1 whitespace-nowrap text-center">
+                    <span class="px-1 py-0.5 rounded text-xs font-medium text-gray-700">
+                      {lot.watchersCount || 0}
+                    </span>
+                  </td>
+                  
+                  <!-- Ready Status -->
+                  <td class="px-2 py-1 whitespace-nowrap">
+                    {#if editingCell?.lotId === lot.id && editingCell?.field === 'isReady'}
+                      <select
+                        bind:value={editingCell.value}
+                        onblur={() => saveCell(lot.id, 'isReady', editingCell.value === 'true')}
+                        onkeydown={(e) => { if (e.key === 'Escape') cancelEdit(); }}
+                        class="w-full px-1 py-0.5 text-xs border-2 border-blue-500 rounded focus:outline-none"
+                        autofocus
+                      >
+                        <option value="false">Not Ready</option>
+                        <option value="true">Ready</option>
+                      </select>
+                    {:else}
+                      <span
+                        ondblclick={() => startEdit(lot.id, 'isReady', lot.isReady ? 'true' : 'false')}
+                        class="cursor-pointer hover:bg-blue-50 px-2 py-1 rounded text-xs font-semibold flex items-center justify-center {lot.isReady ? 'text-green-600 bg-green-50' : 'text-gray-600 bg-gray-50'}"
+                        title={lot.isReady ? 'Approved and ready to go' : 'Not yet approved'}
+                      >
+                        {#if lot.isReady}
+                          <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+                          </svg>
+                          Ready
+                        {:else}
+                          <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+                          </svg>
+                          Not Ready
+                        {/if}
                       </span>
                     {/if}
                   </td>

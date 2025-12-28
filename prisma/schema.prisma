@@ -112,6 +112,8 @@ model Lot {
   endTime           DateTime?  @map("end_time")
   highestBidderId   String?    @map("highest_bidder_id")
   highestBidderName String?    @map("highest_bidder_name")
+  isReady           Boolean    @default(false) @map("is_ready")
+  watchersCount     Int        @default(0) @map("watchers_count")
   createdAt         DateTime   @default(now()) @map("created_at")
   updatedAt         DateTime   @updatedAt @map("updated_at")
 
