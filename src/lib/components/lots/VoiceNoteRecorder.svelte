@@ -64,6 +64,7 @@
 
       const uploadResponse = await fetch(`/api/lots/${lotId}/notes/upload`, {
         method: 'POST',
+        credentials: 'include',
         body: formData
       });
 
@@ -75,7 +76,8 @@
 
       // Then transcribe
       const transcribeResponse = await fetch(`/api/lots/${lotId}/notes/${noteId}/transcribe`, {
-        method: 'POST'
+        method: 'POST',
+        credentials: 'include'
       });
 
       if (!transcribeResponse.ok) {
@@ -109,7 +111,8 @@
   async function summarizeNote(noteId) {
     try {
       const response = await fetch(`/api/lots/${lotId}/notes/${noteId}/summarize`, {
-        method: 'POST'
+        method: 'POST',
+        credentials: 'include'
       });
 
       if (!response.ok) {

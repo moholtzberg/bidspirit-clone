@@ -4,6 +4,7 @@
   import { goto } from '$app/navigation';
   import LotNotesManager from '$lib/components/lots/LotNotesManager.svelte';
   import AIGenerator from '$lib/components/lots/AIGenerator.svelte';
+  import QuickVoiceRecorder from '$lib/components/lots/QuickVoiceRecorder.svelte';
 
   let auction = $state(null);
   let lots = $state([]);
@@ -23,7 +24,8 @@
   let draggedLot = $state(null);
   let reordering = $state(false);
   let expandedImageRows = $state(new Set()); // Track which lots have expanded image management
-  let expandedNotesRows = $state(new Set()); // Track which lots have expanded notes/AI management
+  let expandedNotesRows = $state(new Set()); // Track which lots have expanded notes
+  let expandedAIRows = $state(new Set()); // Track which lots have expanded AI tools
 
   // Color coding rules for problematic lots
   function getLotStatus(lot) {
@@ -567,6 +569,15 @@
     expandedNotesRows = new Set(expandedNotesRows); // Trigger reactivity
   }
 
+  function toggleAIRow(lotId) {
+    if (expandedAIRows.has(lotId)) {
+      expandedAIRows.delete(lotId);
+    } else {
+      expandedAIRows.add(lotId);
+    }
+    expandedAIRows = new Set(expandedAIRows); // Trigger reactivity
+  }
+
   async function handleAIGenerated(lotId, updates) {
     // Apply AI-generated content to the lot
     for (const [field, value] of Object.entries(updates)) {
@@ -887,16 +898,18 @@
                     class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                   />
                 </th>
-                <th class="px-1 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">Pos</th>
-                <th class="px-1 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">Lot #</th>
-                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Images</th>
+                <th class="px-1 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-8">Pos</th>
+                <th class="px-1 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-8">Lot</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Images</th>
                 <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[250px]">Title & Description</th>
                 <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-40">Category</th>
-                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Start Bid</th>
-                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Current Bid</th>
-                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Increment</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28">Bids</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-28 {editingCell && (editingCell.field === 'startingBid' || editingCell.field === 'currentBid' || editingCell.field === 'bidIncrement') ? '' : 'hidden'}">Increment</th>
                 <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Status</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-20">Watchers</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">Ready</th>
                 <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-32">End Time</th>
+                <th class="px-2 py-1 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Actions</th>
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
@@ -967,47 +980,33 @@
                   
                   <!-- Images -->
                   <td class="px-2 py-1">
-                    <div class="relative">
-                      <div class="grid grid-cols-2 gap-1 w-20">
-                        {#each (lot._images || []).slice(0, 2) as image, i}
+                    <div class="flex items-center gap-1">
+                      <div class="flex items-center gap-1 overflow-x-auto max-w-[80px]">
+                        {#each (lot._images || []).slice(0, 1) as image, i}
                           <img
                             src={image}
                             alt="Lot image {i + 1}"
-                            class="w-10 h-10 object-cover rounded border border-gray-300 cursor-pointer hover:opacity-75"
+                            class="w-8 h-8 object-cover rounded border border-gray-300 cursor-pointer hover:opacity-75 flex-shrink-0"
                             onclick={() => toggleImageRow(lot.id)}
                           />
                         {/each}
                         {#if (lot._images || []).length === 0}
-                          <div class="w-10 h-10 bg-gray-100 rounded border border-gray-300 flex items-center justify-center text-xs text-gray-400">
+                          <div class="w-8 h-8 bg-gray-100 rounded border border-gray-300 flex items-center justify-center text-[10px] text-gray-400 flex-shrink-0">
                             -
                           </div>
                         {/if}
-                      </div>
-                      {#if (lot._images || []).length > 4}
-                        <div class="absolute top-0 right-0 w-10 h-10 bg-gray-800 bg-opacity-75 rounded border border-gray-300 flex items-center justify-center text-xs text-white cursor-pointer hover:bg-opacity-90 group">
-                          +{(lot._images || []).length - 4}
-                          <!-- Hover tooltip showing additional images -->
-                          <div class="absolute bottom-full right-0 mb-2 hidden group-hover:block z-50">
-                            <div class="bg-white rounded-lg shadow-xl border border-gray-200 p-2 max-w-xs">
-                              <div class="grid grid-cols-4 gap-1">
-                                {#each (lot._images || []).slice(4) as image, i}
-                                  <img
-                                    src={image}
-                                    alt="Lot image {i + 5}"
-                                    class="w-12 h-12 object-cover rounded border border-gray-300"
-                                  />
-                                {/each}
-                              </div>
-                            </div>
+                        {#if (lot._images || []).length > 2}
+                          <div class="w-8 h-8 bg-gray-800 bg-opacity-75 rounded border border-gray-300 flex items-center justify-center text-[10px] text-white flex-shrink-0" title="+{(lot._images || []).length - 2} more">
+                            +{(lot._images || []).length - 2}
                           </div>
-                        </div>
-                      {/if}
+                        {/if}
+                      </div>
                       <button
                         onclick={() => toggleImageRow(lot.id)}
-                        class="mt-1 text-xs text-gray-600 hover:text-gray-700"
+                        class="ml-1 text-[10px] text-gray-600 hover:text-gray-700 whitespace-nowrap"
                         title="Manage images"
                       >
-                        {expandedImageRows.has(lot.id) ? 'Hide' : 'Manage'} images
+                        {expandedImageRows.has(lot.id) ? '✕' : '⋯'}
                       </button>
                     </div>
                   </td>
@@ -1027,30 +1026,16 @@
                             autofocus
                           />
                         {:else}
-                          <div class="flex items-center gap-2">
-                            <span
-                              ondblclick={() => startEdit(lot.id, 'title', lot.title)}
-                              class="cursor-pointer hover:bg-blue-50 px-1 py-0.5 rounded flex-1 text-xs font-medium"
-                            >
-                              {#if lot.title}
-                                {lot.title}
-                              {:else}
-                                <span class="text-gray-400 italic">Double-click to edit</span>
-                              {/if}
-                            </span>
-                            <button
-                              type="button"
-                              onclick={(e) => { 
-                                e.preventDefault();
-                                e.stopPropagation(); 
-                                toggleNotesRow(lot.id); 
-                              }}
-                              class="px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 font-medium whitespace-nowrap"
-                              title="Open Notes & AI Tools"
-                            >
-                              📝 AI
-                            </button>
-                          </div>
+                          <span
+                            ondblclick={() => startEdit(lot.id, 'title', lot.title)}
+                            class="cursor-pointer hover:bg-blue-50 px-1 py-0.5 rounded block text-xs font-medium"
+                          >
+                            {#if lot.title}
+                              {lot.title}
+                            {:else}
+                              <span class="text-gray-400 italic">Double-click to edit</span>
+                            {/if}
+                          </span>
                         {/if}
                       </div>
                       <!-- Description -->
@@ -1264,37 +1249,56 @@
                     </div>
                   </td>
                   
-                  <!-- Starting Bid -->
-                  <td class="px-2 py-1 whitespace-nowrap">
-                    {#if editingCell?.lotId === lot.id && editingCell?.field === 'startingBid'}
-                      <input
-                        type="number"
-                        step="0.01"
-                        bind:value={editingCell.value}
-                        onblur={() => saveCell(lot.id, 'startingBid', editingCell.value)}
-                        onkeydown={(e) => handleKeydown(e, lot.id, 'startingBid', editingCell.value)}
-                        class="w-full px-1 py-0.5 text-xs border-2 border-blue-500 rounded focus:outline-none"
-                        autofocus
-                      />
-                    {:else}
-                      <span
-                        ondblclick={() => startEdit(lot.id, 'startingBid', lot.startingBid)}
-                        class="cursor-pointer hover:bg-blue-50 px-1 py-0.5 rounded text-xs"
-                      >
-                        ${lot.startingBid?.toFixed(2) || '0.00'}
-                      </span>
-                    {/if}
+                  <!-- Bids (Start & Current stacked) -->
+                  <td class="px-2 py-1">
+                    <div class="space-y-0.5">
+                      <!-- Starting Bid -->
+                      <div>
+                        {#if editingCell?.lotId === lot.id && editingCell?.field === 'startingBid'}
+                          <input
+                            type="number"
+                            step="0.01"
+                            bind:value={editingCell.value}
+                            onblur={() => saveCell(lot.id, 'startingBid', editingCell.value)}
+                            onkeydown={(e) => handleKeydown(e, lot.id, 'startingBid', editingCell.value)}
+                            class="w-full px-1 py-0.5 text-xs border-2 border-blue-500 rounded focus:outline-none"
+                            autofocus
+                          />
+                        {:else}
+                          <span
+                            ondblclick={() => startEdit(lot.id, 'startingBid', lot.startingBid)}
+                            class="cursor-pointer hover:bg-blue-50 px-1 py-0.5 rounded text-xs"
+                          >
+                            Start: ${lot.startingBid?.toFixed(2) || '0.00'}
+                          </span>
+                        {/if}
+                      </div>
+                      <!-- Current Bid -->
+                      <div>
+                        {#if editingCell?.lotId === lot.id && editingCell?.field === 'currentBid'}
+                          <input
+                            type="number"
+                            step="0.01"
+                            bind:value={editingCell.value}
+                            onblur={() => saveCell(lot.id, 'currentBid', editingCell.value)}
+                            onkeydown={(e) => handleKeydown(e, lot.id, 'currentBid', editingCell.value)}
+                            class="w-full px-1 py-0.5 text-xs border-2 border-blue-500 rounded focus:outline-none"
+                            autofocus
+                          />
+                        {:else}
+                          <span
+                            ondblclick={() => startEdit(lot.id, 'currentBid', lot.currentBid)}
+                            class="cursor-pointer hover:bg-blue-50 px-1 py-0.5 rounded text-xs font-semibold"
+                          >
+                            Current: ${lot.currentBid?.toFixed(2) || '0.00'}
+                          </span>
+                        {/if}
+                      </div>
+                    </div>
                   </td>
                   
-                  <!-- Current Bid -->
-                  <td class="px-2 py-1 whitespace-nowrap">
-                    <span class="px-1 py-0.5 rounded text-xs font-semibold">
-                      ${lot.currentBid?.toFixed(2) || '0.00'}
-                    </span>
-                  </td>
-                  
-                  <!-- Bid Increment -->
-                  <td class="px-2 py-1 whitespace-nowrap">
+                  <!-- Bid Increment (hidden unless editing pricing) -->
+                  <td class="px-2 py-1 whitespace-nowrap {editingCell?.lotId === lot.id && (editingCell?.field === 'startingBid' || editingCell?.field === 'currentBid' || editingCell?.field === 'bidIncrement') ? '' : 'hidden'}">
                     {#if editingCell?.lotId === lot.id && editingCell?.field === 'bidIncrement'}
                       <input
                         type="number"
@@ -1367,15 +1371,47 @@
                       </span>
                     {/if}
                   </td>
+                  
+                  <!-- Actions -->
+                  <td class="px-2 py-1">
+                    <div class="flex items-center gap-1">
+                      <QuickVoiceRecorder
+                        lotId={lot.id}
+                        onNoteSaved={async (result) => {
+                          await loadData();
+                        }}
+                        onRecordingComplete={() => {
+                          // Optionally open notes panel after recording
+                          if (!expandedNotesRows.has(lot.id)) {
+                            toggleNotesRow(lot.id);
+                          }
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onclick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleAIRow(lot.id);
+                        }}
+                        class="p-1.5 text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded transition-colors"
+                        title="AI Tools"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                        </svg>
+                      </button>
+                    </div>
+                  </td>
                 </tr>
                 
-                <!-- Expandable Notes & AI Management Row -->
+                <!-- Expandable Notes Row -->
                 {#if expandedNotesRows.has(lot.id)}
-                  <tr class="bg-purple-50">
-                    <td colspan="11" class="px-4 py-4">
-                      <div class="bg-white rounded-lg border border-purple-200 p-4">
+                  <tr class="bg-blue-50">
+                    <td colspan="12" class="px-4 py-4">
+                      <div class="bg-white rounded-lg border border-blue-200 p-4">
                         <div class="flex items-center justify-between mb-4">
-                          <h3 class="text-lg font-semibold text-gray-900">Notes & AI Tools - Lot #{lot.lotNumber}</h3>
+                          <h3 class="text-lg font-semibold text-gray-900">Voice Notes - Lot #{lot.lotNumber}</h3>
                           <button
                             onclick={() => toggleNotesRow(lot.id)}
                             class="text-gray-500 hover:text-gray-700 text-sm"
@@ -1384,32 +1420,43 @@
                           </button>
                         </div>
                         
-                        <div class="grid grid-cols-2 gap-4">
-                          <!-- Notes Section -->
-                          <div>
-                            <LotNotesManager
-                              lotId={lot.id}
-                              notes={[]}
-                              onRefresh={async () => {
-                                await loadData();
-                              }}
-                            />
-                          </div>
-                          
-                          <!-- AI Generator Section -->
-                          <div>
-                            <AIGenerator
-                              lotId={lot.id}
-                              lot={{
-                                title: lot.title,
-                                description: lot.description,
-                                images: lot.images || [],
-                                notes: lot.notes || []
-                              }}
-                              onGenerated={(updates) => handleAIGenerated(lot.id, updates)}
-                            />
-                          </div>
+                        <LotNotesManager
+                          lotId={lot.id}
+                          notes={[]}
+                          onRefresh={async () => {
+                            await loadData();
+                          }}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                {/if}
+                
+                <!-- Expandable AI Tools Row -->
+                {#if expandedAIRows.has(lot.id)}
+                  <tr class="bg-purple-50">
+                    <td colspan="12" class="px-4 py-4">
+                      <div class="bg-white rounded-lg border border-purple-200 p-4">
+                        <div class="flex items-center justify-between mb-4">
+                          <h3 class="text-lg font-semibold text-gray-900">AI Tools - Lot #{lot.lotNumber}</h3>
+                          <button
+                            onclick={() => toggleAIRow(lot.id)}
+                            class="text-gray-500 hover:text-gray-700 text-sm"
+                          >
+                            Collapse
+                          </button>
                         </div>
+                        
+                        <AIGenerator
+                          lotId={lot.id}
+                          lot={{
+                            title: lot.title,
+                            description: lot.description,
+                            images: lot.images || [],
+                            notes: lot.notes || []
+                          }}
+                          onGenerated={(updates) => handleAIGenerated(lot.id, updates)}
+                        />
                       </div>
                     </td>
                   </tr>
@@ -1418,7 +1465,7 @@
                 <!-- Expandable Image Management Row -->
                 {#if expandedImageRows.has(lot.id)}
                   <tr class="bg-gray-50">
-                    <td colspan="11" class="px-4 py-4">
+                    <td colspan="12" class="px-4 py-4">
                       <div class="bg-white rounded-lg border border-gray-200 p-4">
                         <div class="flex items-center justify-between mb-4">
                           <h3 class="text-lg font-semibold text-gray-900">Image Management - Lot #{lot.lotNumber}</h3>
@@ -1438,10 +1485,10 @@
                             if (!a.isPrimary && b.isPrimary) return 1;
                             return (a.displayOrder || 0) - (b.displayOrder || 0);
                           })}
-                          <div class="space-y-2 mb-4">
+                          <div class="flex flex-wrap gap-2 mb-4">
                             {#each sortedImages as imageObj, index}
                               <div
-                                class="flex items-center gap-3 p-2 bg-white rounded border border-gray-200 hover:border-blue-400 transition-all"
+                                class="flex items-center gap-2 p-2 bg-white rounded border border-gray-200 hover:border-blue-400 transition-all flex-shrink-0"
                                 draggable="true"
                                 role="listitem"
                                 ondragstart={(e) => {

@@ -15,7 +15,9 @@
     loading = true;
     error = null;
     try {
-      const response = await fetch(`/api/lots/${lotId}/notes`);
+      const response = await fetch(`/api/lots/${lotId}/notes`, {
+        credentials: 'include'
+      });
       if (!response.ok) {
         throw new Error('Failed to load notes');
       }
@@ -38,7 +40,8 @@
 
     try {
       const response = await fetch(`/api/lots/${lotId}/notes/${noteId}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        credentials: 'include'
       });
 
       if (!response.ok) {
@@ -55,7 +58,8 @@
   async function summarizeNote(noteId) {
     try {
       const response = await fetch(`/api/lots/${lotId}/notes/${noteId}/summarize`, {
-        method: 'POST'
+        method: 'POST',
+        credentials: 'include'
       });
 
       if (!response.ok) {

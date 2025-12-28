@@ -18,6 +18,7 @@
     try {
       const response = await fetch(`/api/lots/${lotId}/generate`, {
         method: 'POST',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json'
         },
