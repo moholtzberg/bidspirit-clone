@@ -2,9 +2,10 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-  import LotNotesManager from '$lib/components/lots/LotNotesManager.svelte';
-  import AIGenerator from '$lib/components/lots/AIGenerator.svelte';
-  import QuickVoiceRecorder from '$lib/components/lots/QuickVoiceRecorder.svelte';
+import LotNotesManager from '$lib/components/lots/LotNotesManager.svelte';
+import AIGenerator from '$lib/components/lots/AIGenerator.svelte';
+import QuickVoiceRecorder from '$lib/components/lots/QuickVoiceRecorder.svelte';
+import ImageEditor from '$lib/components/lots/ImageEditor.svelte';
 
   let auction = $state(null);
   let lots = $state([]);
@@ -26,6 +27,7 @@
   let expandedImageRows = $state(new Set()); // Track which lots have expanded image management
   let expandedNotesRows = $state(new Set()); // Track which lots have expanded notes
   let expandedAIRows = $state(new Set()); // Track which lots have expanded AI tools
+  let editingImage = $state(null); // { lotId, imageId, imageUrl }
 
   // Color coding rules for problematic lots
   function getLotStatus(lot) {
@@ -1670,11 +1672,27 @@
                                 <!-- Position Number -->
                                 <span class="text-sm font-medium text-gray-700 w-8">#{index + 1}</span>
                                 
+                                <!-- Edit Button -->
+                                <button
+                                  type="button"
+                                  onclick={() => {
+                                    editingImage = {
+                                      lotId: lot.id,
+                                      imageId: imageObj.id,
+                                      imageUrl: imageObj.url
+                                    };
+                                  }}
+                                  class="px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600"
+                                  title="Edit image"
+                                >
+                                  ✎ Edit
+                                </button>
+                                
                                 <!-- Featured/Default Toggle -->
                                 <button
                                   type="button"
                                   onclick={() => setFeaturedImage(lot.id, imageObj.id)}
-                                  class="ml-auto px-3 py-1 text-xs rounded transition-colors {imageObj.isPrimary ? 'bg-yellow-500 text-white hover:bg-yellow-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
+                                  class="px-3 py-1 text-xs rounded transition-colors {imageObj.isPrimary ? 'bg-yellow-500 text-white hover:bg-yellow-600' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}"
                                   title={imageObj.isPrimary ? 'Featured Image (click to unset)' : 'Set as Featured Image'}
                                 >
                                   {imageObj.isPrimary ? '⭐ Featured' : 'Set Featured'}
@@ -1788,6 +1806,22 @@
             </div>
           </div>
         </div>
+      {/if}
+
+      <!-- Image Editor Modal -->
+      {#if editingImage}
+        <ImageEditor
+          imageUrl={editingImage.imageUrl}
+          imageId={editingImage.imageId}
+          lotId={editingImage.lotId}
+          onSave={async (result) => {
+            editingImage = null;
+            await loadData();
+          }}
+          onCancel={() => {
+            editingImage = null;
+          }}
+        />
       {/if}
     {/if}
   </div>
