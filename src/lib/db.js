@@ -132,9 +132,14 @@ function mapUser(prismaUser) {
   return {
     id: prismaUser.id,
     email: prismaUser.email,
+    password: prismaUser.password, // Include password for auth verification
     name: prismaUser.name,
     firstName: prismaUser.firstName,
     lastName: prismaUser.lastName,
+    phone: prismaUser.phone,
+    address: prismaUser.address,
+    isVerifiedBuyer: prismaUser.isVerifiedBuyer,
+    isVerifiedBidder: prismaUser.isVerifiedBidder,
     role: prismaUser.role.toLowerCase(),
     auctionHouseId: prismaUser.auctionHouseId,
     createdAt: prismaUser.createdAt,

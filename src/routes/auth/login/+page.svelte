@@ -60,9 +60,13 @@
         Sign in to your account
       </h2>
       <p class="mt-2 text-center text-sm text-gray-600">
-        Or
+        Don't have an account?
+        <a href="/auth/register" class="font-medium text-blue-600 hover:text-blue-500">
+          Register here
+        </a>
+        <span class="mx-2">|</span>
         <a href="/auction-houses/signup" class="font-medium text-blue-600 hover:text-blue-500">
-          register a new auction house
+          Register auction house
         </a>
       </p>
     </div>
@@ -105,6 +109,14 @@
             class="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
             placeholder="Password"
           />
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end">
+        <div class="text-sm">
+          <a href="/auth/forgot-password" class="font-medium text-blue-600 hover:text-blue-500">
+            Forgot your password?
+          </a>
         </div>
       </div>
 

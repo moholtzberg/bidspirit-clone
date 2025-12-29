@@ -110,6 +110,34 @@
         <div class="space-y-2">
           <p><span class="font-semibold">Name:</span> {currentUser.name}</p>
           <p><span class="font-semibold">Email:</span> {currentUser.email}</p>
+          {#if currentUser.phone}
+            <p><span class="font-semibold">Phone:</span> {currentUser.phone}</p>
+          {/if}
+          {#if currentUser.address}
+            <p><span class="font-semibold">Address:</span> {currentUser.address}</p>
+          {/if}
+          <div class="flex items-center gap-4 mt-4">
+            {#if currentUser.isVerifiedBuyer}
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-green-100 text-green-800">
+                <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                Verified Buyer
+              </span>
+            {:else}
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-800">
+                Not Verified
+              </span>
+            {/if}
+            {#if currentUser.isVerifiedBidder}
+              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-800">
+                <svg class="w-4 h-4 mr-1" fill="currentColor" viewBox="0 0 20 20">
+                  <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                </svg>
+                Verified Bidder
+              </span>
+            {/if}
+          </div>
         </div>
       </div>
 
