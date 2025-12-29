@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import CountdownTimer from '$lib/components/CountdownTimer.svelte';
   
   let auctions = $state([]);
   let loading = $state(true);
@@ -59,6 +60,14 @@
       auction.description.toLowerCase().includes(query) ||
       auction.sellerName.toLowerCase().includes(query)
     );
+  }
+  
+  function shouldShowCountdown(auction) {
+    if (!auction.startDate || auction.status !== 'upcoming') return false;
+    const startDate = new Date(auction.startDate);
+    const now = new Date();
+    const daysUntilStart = (startDate - now) / (1000 * 60 * 60 * 24);
+    return daysUntilStart > 0 && daysUntilStart <= 30;
   }
   
   $effect(() => {
@@ -147,13 +156,17 @@
               <h3 class="text-xl font-bold text-gray-900 mb-2">{auction.title}</h3>
               <p class="text-gray-600 text-sm mb-4 line-clamp-2">{auction.description}</p>
               <div class="flex items-center justify-between text-sm text-gray-500 mb-4">
-                <span>By {auction.sellerName}</span>
+                <span>By {auction.auctionHouse?.name || 'N/A'}</span>
                 <span>{auction.totalLots} lots</span>
               </div>
               <div class="flex items-center justify-between text-sm">
                 <div>
-                  <p class="text-gray-500">Starts</p>
-                  <p class="font-semibold">{formatDate(auction.startDate)}</p>
+                  {#if shouldShowCountdown(auction)}
+                    <CountdownTimer targetDate={auction.startDate} label="Starting in" />
+                  {:else}
+                    <p class="text-gray-500">Starts</p>
+                    <p class="font-semibold">{formatDate(auction.startDate)}</p>
+                  {/if}
                 </div>
                 <div class="text-right">
                   <p class="text-gray-500">Ends</p>

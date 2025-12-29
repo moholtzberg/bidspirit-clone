@@ -4,11 +4,6 @@ import prisma from '$lib/prisma.js';
 
 export async function GET({ params, locals }) {
   try {
-    const session = await locals.auth?.();
-    if (!session?.user) {
-      throw error(401, 'Unauthorized');
-    }
-
     const auction = await prisma.auction.findUnique({
       where: { id: params.id },
       include: { seller: true }
@@ -18,19 +13,34 @@ export async function GET({ params, locals }) {
       throw error(404, 'Auction not found');
     }
 
-    // Check if user has access to this auction
+    // Parse settings JSON or return empty object
+    const settings = auction.settings ? JSON.parse(auction.settings) : {};
+
+    // For public access (non-logged-in users), only return gallery-related settings
+    const session = await locals.auth?.();
+    if (!session?.user) {
+      // Public access - only return gallery template settings
+      return json({
+        galleryTemplate: settings.galleryTemplate || 'card-grid',
+        galleryTemplateSettings: settings.galleryTemplateSettings || {}
+      });
+    }
+
+    // For authenticated users, check permissions for full settings access
     const user = await prisma.user.findUnique({
       where: { email: session.user.email }
     });
 
-    if (!user || (user.id !== auction.sellerId && user.auctionHouseId !== auction.auctionHouseId)) {
-      throw error(403, 'Forbidden');
+    // If user is seller or belongs to auction house, return full settings
+    if (user && (user.id === auction.sellerId || user.auctionHouseId === auction.auctionHouseId)) {
+      return json(settings);
     }
 
-    // Parse settings JSON or return empty object
-    const settings = auction.settings ? JSON.parse(auction.settings) : {};
-
-    return json(settings);
+    // Otherwise, return only gallery settings (public access)
+    return json({
+      galleryTemplate: settings.galleryTemplate || 'card-grid',
+      galleryTemplateSettings: settings.galleryTemplateSettings || {}
+    });
   } catch (err) {
     if (err.status) {
       throw err;

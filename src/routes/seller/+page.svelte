@@ -2,7 +2,12 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   
-  let session = $state(null);
+  let {
+    data
+  } = $props();
+  
+  // Session is passed from layout via slot props
+  let session = $state(data?.session);
   let currentUser = $state(null);
   let auctionHouse = $state(null);
   let myAuctions = $state([]);
@@ -20,24 +25,13 @@
   });
   
   onMount(async () => {
-    await loadSession();
-    if (session?.user) {
-      await loadUserData();
-    } else {
-      // Redirect to login if not authenticated
+    // Session is already checked server-side, but verify client-side as well
+    if (!session?.user) {
       goto('/auth/login');
+      return;
     }
+    await loadUserData();
   });
-  
-  async function loadSession() {
-    try {
-      const res = await fetch('/auth/session');
-      const data = await res.json();
-      session = data;
-    } catch (error) {
-      console.error('Error loading session:', error);
-    }
-  }
   
   async function loadUserData() {
     try {

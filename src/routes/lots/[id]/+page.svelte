@@ -9,12 +9,14 @@
   let bidAmount = $state('');
   let bidError = $state('');
   let bidSuccess = $state(false);
-  let currentUser = $state({ id: 'user1', name: 'David Cohen' }); // Mock user - replace with real auth
+  let session = $state(null);
+  let currentUser = $state(null);
   
   let pollInterval = null;
   
   $effect(() => {
     if ($page.params.id) {
+      loadSession();
       loadLot();
       // Poll for updates every 5 seconds
       pollInterval = setInterval(() => {
@@ -27,6 +29,47 @@
       if (pollInterval) clearInterval(pollInterval);
     };
   });
+  
+  async function loadSession() {
+    try {
+      const res = await fetch('/auth/session', { credentials: 'include' });
+      if (res.ok) {
+        session = await res.json();
+        if (session?.user) {
+          await loadUserData();
+        }
+      }
+    } catch (error) {
+      console.error('Error loading session:', error);
+    }
+  }
+  
+  async function loadUserData() {
+    try {
+      // Get or create user in our database
+      let userResponse = await fetch(`/api/users?email=${encodeURIComponent(session.user.email)}`, {
+        credentials: 'include'
+      });
+      if (!userResponse.ok) {
+        // User doesn't exist in our DB yet - create them
+        userResponse = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+          body: JSON.stringify({
+            email: session.user.email,
+            name: session.user.name || `${session.user.first_name || ''} ${session.user.last_name || ''}`.trim(),
+            firstName: session.user.first_name || null,
+            lastName: session.user.last_name || null,
+            role: 'BUYER'
+          })
+        });
+      }
+      currentUser = await userResponse.json();
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  }
   
   async function loadLot() {
     try {
@@ -52,6 +95,12 @@
   }
   
   async function placeBid() {
+    if (!session?.user || !currentUser) {
+      bidError = 'You must be logged in to place a bid';
+      goto(`/auth/login?redirect=${encodeURIComponent($page.url.pathname)}`);
+      return;
+    }
+    
     bidError = '';
     bidSuccess = false;
     
@@ -73,16 +122,20 @@
         headers: {
           'Content-Type': 'application/json'
         },
+        credentials: 'include',
         body: JSON.stringify({
           lotId: lot.id,
-          userId: currentUser.id,
-          userName: currentUser.name,
           amount: amount
         })
       });
       
       if (!response.ok) {
         const error = await response.json();
+        if (response.status === 401) {
+          // Unauthorized - redirect to login
+          goto(`/auth/login?redirect=${encodeURIComponent($page.url.pathname)}`);
+          return;
+        }
         throw new Error(error.message || 'Failed to place bid');
       }
       
@@ -202,7 +255,7 @@
               <p class="text-sm text-gray-500 mb-2">Current Highest Bid</p>
               <p class="text-4xl font-bold text-blue-600 mb-4">{formatCurrency(lot.currentBid)}</p>
               
-              {#if lot.highestBidderId === currentUser.id}
+              {#if currentUser && lot.highestBidderId === currentUser.id}
                 <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
                   <p class="font-semibold">You are the highest bidder!</p>
                 </div>
@@ -211,54 +264,66 @@
               {/if}
             </div>
 
-            <div class="mb-6">
-              <label for="bidAmount" class="block text-sm font-medium text-gray-700 mb-2">
-                Your Bid Amount
-              </label>
-              <div class="relative">
-                <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
-                <input
-                  id="bidAmount"
-                  type="number"
-                  bind:value={bidAmount}
-                  min={lot.currentBid + lot.bidIncrement}
-                  step={lot.bidIncrement}
-                  class="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder={String(lot.currentBid + lot.bidIncrement)}
-                />
+            {#if !session?.user || !currentUser}
+              <div class="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p class="text-sm text-yellow-800 mb-4">You must be logged in to place a bid.</p>
+                <a
+                  href="/auth/login?redirect={encodeURIComponent($page.url.pathname)}"
+                  class="block w-full text-center bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+                >
+                  Login to Bid
+                </a>
               </div>
-              <p class="mt-2 text-sm text-gray-500">
-                Minimum bid: {formatCurrency(lot.currentBid + lot.bidIncrement)}
-              </p>
-            </div>
+            {:else}
+              <div class="mb-6">
+                <label for="bidAmount" class="block text-sm font-medium text-gray-700 mb-2">
+                  Your Bid Amount
+                </label>
+                <div class="relative">
+                  <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">$</span>
+                  <input
+                    id="bidAmount"
+                    type="number"
+                    bind:value={bidAmount}
+                    min={lot.currentBid + lot.bidIncrement}
+                    step={lot.bidIncrement}
+                    class="w-full pl-8 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder={String(lot.currentBid + lot.bidIncrement)}
+                  />
+                </div>
+                <p class="mt-2 text-sm text-gray-500">
+                  Minimum bid: {formatCurrency(lot.currentBid + lot.bidIncrement)}
+                </p>
+              </div>
 
-            {#if bidError}
-              <div class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-                <p>{bidError}</p>
-              </div>
+              {#if bidError}
+                <div class="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+                  <p>{bidError}</p>
+                </div>
+              {/if}
+
+              {#if bidSuccess}
+                <div class="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
+                  <p class="font-semibold">Bid placed successfully!</p>
+                </div>
+              {/if}
+
+              <button
+                onclick={placeBid}
+                class="w-full bg-blue-600 text-white py-4 rounded-lg hover:bg-blue-700 transition-colors font-bold text-lg mb-4"
+              >
+                Place Bid
+              </button>
+
+              <button
+                onclick={() => {
+                  bidAmount = String(lot.currentBid + lot.bidIncrement);
+                }}
+                class="w-full bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition-colors"
+              >
+                Quick Bid: {formatCurrency(lot.currentBid + lot.bidIncrement)}
+              </button>
             {/if}
-
-            {#if bidSuccess}
-              <div class="mb-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded">
-                <p class="font-semibold">Bid placed successfully!</p>
-              </div>
-            {/if}
-
-            <button
-              onclick={placeBid}
-              class="w-full bg-blue-600 text-white py-4 rounded-lg hover:bg-blue-700 transition-colors font-bold text-lg mb-4"
-            >
-              Place Bid
-            </button>
-
-            <button
-              onclick={() => {
-                bidAmount = String(lot.currentBid + lot.bidIncrement);
-              }}
-              class="w-full bg-gray-200 text-gray-700 py-2 rounded-lg hover:bg-gray-300 transition-colors"
-            >
-              Quick Bid: {formatCurrency(lot.currentBid + lot.bidIncrement)}
-            </button>
 
             <div class="mt-6 pt-6 border-t">
               <p class="text-sm text-gray-600 mb-2">Lot ends:</p>

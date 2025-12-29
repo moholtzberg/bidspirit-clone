@@ -3,6 +3,7 @@
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import LotGalleryTemplate from '$lib/components/LotGalleryTemplate.svelte';
+  import CountdownTimer from '$lib/components/CountdownTimer.svelte';
   
   let auction = $state(null);
   let lots = $state([]);
@@ -28,11 +29,15 @@
       auction = await auctionRes.json();
       lots = await lotsRes.json();
       
-      // Load gallery template settings
+      // Load gallery template settings (public access, works for non-logged-in users)
       if (settingsRes.ok) {
         const settings = await settingsRes.json();
         galleryTemplate = settings.galleryTemplate || 'card-grid';
         galleryTemplateSettings = settings.galleryTemplateSettings || {};
+      } else {
+        // Fallback to defaults if settings can't be loaded
+        galleryTemplate = 'card-grid';
+        galleryTemplateSettings = {};
       }
     } catch (error) {
       console.error('Error loading auction:', error);
@@ -56,6 +61,14 @@
       style: 'currency',
       currency: 'USD'
     }).format(amount);
+  }
+  
+  function shouldShowCountdown(auction) {
+    if (!auction?.startDate || auction.status !== 'upcoming') return false;
+    const startDate = new Date(auction.startDate);
+    const now = new Date();
+    const daysUntilStart = (startDate - now) / (1000 * 60 * 60 * 24);
+    return daysUntilStart > 0 && daysUntilStart <= 30;
   }
 </script>
 
@@ -89,13 +102,22 @@
             <p class="text-gray-600 text-lg mb-6">{auction.description}</p>
             <div class="space-y-3 mb-6">
               <div class="flex items-center text-gray-700">
-                <span class="font-semibold mr-2">Seller:</span>
-                <span>{auction.sellerName}</span>
+                <span class="font-semibold mr-2">Auction House:</span>
+                <span>{auction.auctionHouse?.name || 'N/A'}</span>
               </div>
-              <div class="flex items-center text-gray-700">
-                <span class="font-semibold mr-2">Start Date:</span>
-                <span>{formatDate(auction.startDate)}</span>
-              </div>
+              {#if shouldShowCountdown(auction)}
+                <div class="flex items-center text-gray-700">
+                  <span class="font-semibold mr-2">Starting in:</span>
+                  <span class="text-blue-600 font-semibold">
+                    <CountdownTimer targetDate={auction.startDate} label="" />
+                  </span>
+                </div>
+              {:else}
+                <div class="flex items-center text-gray-700">
+                  <span class="font-semibold mr-2">Start Date:</span>
+                  <span>{formatDate(auction.startDate)}</span>
+                </div>
+              {/if}
               <div class="flex items-center text-gray-700">
                 <span class="font-semibold mr-2">End Date:</span>
                 <span>{formatDate(auction.endDate)}</span>

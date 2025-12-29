@@ -5,12 +5,28 @@
     
     let isMenuOpen = $state(false);
     let session = $state(null);
+    let hasAuctionHouse = $state(false);
     
     $effect(async () => {
       try {
         const res = await fetch('/auth/session');
         const data = await res.json();
         session = data;
+        
+        // Check if user has an auction house
+        if (session?.user?.email) {
+          try {
+            const userRes = await fetch(`/api/users?email=${encodeURIComponent(session.user.email)}`, {
+              credentials: 'include'
+            });
+            if (userRes.ok) {
+              const user = await userRes.json();
+              hasAuctionHouse = !!user.auctionHouseId;
+            }
+          } catch (err) {
+            console.error('Error checking auction house:', err);
+          }
+        }
       } catch (error) {
         console.error('Error loading session:', error);
       }
@@ -57,14 +73,16 @@
             Seller Portal
           </a>
         </li>
-        <li>
-          <a 
-            href="/auction-houses/signup" 
-            class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname === '/auction-houses/signup') ? 'text-blue-600 font-semibold' : ''}"
-          >
-            Register Auction House
-          </a>
-        </li>
+        {#if !hasAuctionHouse}
+          <li>
+            <a 
+              href="/auction-houses/signup" 
+              class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname === '/auction-houses/signup') ? 'text-blue-600 font-semibold' : ''}"
+            >
+              Register Auction House
+            </a>
+          </li>
+        {/if}
         {#if session?.user}
           <li>
             <a 
@@ -140,14 +158,16 @@
               Seller Portal
             </a>
           </li>
-          <li>
-            <a 
-              href="/auction-houses/signup" 
-              class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname === '/auction-houses/signup') ? 'text-blue-600 font-semibold' : ''}"
-            >
-              Register Auction House
-            </a>
-          </li>
+          {#if !hasAuctionHouse}
+            <li>
+              <a 
+                href="/auction-houses/signup" 
+                class="text-gray-700 hover:text-blue-600 transition-colors {($page.url.pathname === '/auction-houses/signup') ? 'text-blue-600 font-semibold' : ''}"
+              >
+                Register Auction House
+              </a>
+            </li>
+          {/if}
           {#if session?.user}
             <li>
               <a 
