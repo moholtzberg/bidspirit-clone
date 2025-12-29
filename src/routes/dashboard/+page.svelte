@@ -125,9 +125,28 @@
                 Verified Buyer
               </span>
             {:else}
-              <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-gray-100 text-gray-800">
-                Not Verified
-              </span>
+              <div class="flex items-center gap-2">
+                <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-yellow-100 text-yellow-800">
+                  Not Verified
+                </span>
+                <div class="text-sm text-gray-600">
+                  <p class="mb-2">To become a verified buyer, please complete your profile:</p>
+                  <ul class="list-disc list-inside space-y-1 text-xs">
+                    {#if !currentUser.firstName || !currentUser.lastName}
+                      <li>Add your first and last name</li>
+                    {/if}
+                    {#if !currentUser.phone}
+                      <li>Add your phone number</li>
+                    {/if}
+                    {#if !currentUser.address}
+                      <li>Add your address</li>
+                    {/if}
+                  </ul>
+                  {#if currentUser.firstName && currentUser.lastName && currentUser.phone && currentUser.address}
+                    <p class="mt-2 text-xs text-gray-500">Your profile is complete. Verification is pending review by an auction house administrator.</p>
+                  {/if}
+                </div>
+              </div>
             {/if}
             {#if currentUser.isVerifiedBidder}
               <span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-semibold bg-blue-100 text-blue-800">
@@ -136,8 +155,25 @@
                 </svg>
                 Verified Bidder
               </span>
+            {:else if currentUser.isVerifiedBuyer}
+              <div class="text-sm text-gray-600">
+                <p>You are a verified buyer. To become a verified bidder, contact the auction house administrator.</p>
+              </div>
             {/if}
           </div>
+          
+          {#if !currentUser.isVerifiedBuyer}
+            <div class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <h3 class="font-semibold text-yellow-900 mb-2">Complete Your Profile</h3>
+              <p class="text-sm text-yellow-800 mb-3">To become a verified buyer and participate in auctions, please complete your profile information.</p>
+              <a
+                href="/dashboard/profile"
+                class="inline-block px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 text-sm font-medium"
+              >
+                Edit Profile
+              </a>
+            </div>
+          {/if}
         </div>
       </div>
 

@@ -51,6 +51,7 @@ model User {
   auctionHouse AuctionHouse? @relation(fields: [auctionHouseId], references: [id], onDelete: SetNull)
   auctions     Auction[]     // Auctions created by this user (if seller)
   bids         Bid[]
+  auctionRegistrations AuctionRegistration[] // Auctions this user registered for
 
   @@index([auctionHouseId])
   @@index([role])
@@ -85,6 +86,7 @@ model Auction {
   auctionHouse AuctionHouse @relation(fields: [auctionHouseId], references: [id], onDelete: Cascade)
   seller       User        @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   lots         Lot[]
+  registrations AuctionRegistration[] // Users registered for this auction
 
   @@index([auctionHouseId])
   @@index([sellerId])
@@ -203,4 +205,22 @@ model LotNote {
   @@index([lotId])
   @@index([createdAt])
   @@map("lot_notes")
+}
+
+// AuctionRegistration model - tracks which users registered for which auctions
+model AuctionRegistration {
+  id        String   @id @default(cuid())
+  auctionId String   @map("auction_id")
+  userId    String   @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // Relations
+  auction Auction @relation(fields: [auctionId], references: [id], onDelete: Cascade)
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([auctionId, userId])
+  @@index([auctionId])
+  @@index([userId])
+  @@map("auction_registrations")
 }

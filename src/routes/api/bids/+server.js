@@ -1,5 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import { db } from '$lib/db.js';
+import prisma from '$lib/prisma.js';
 
 export async function GET({ url }) {
   const lotId = url.searchParams.get('lotId');
@@ -46,10 +47,58 @@ export async function POST({ request, locals }) {
     throw error(400, 'Lot ID and bid amount are required');
   }
   
-  // Get the lot to validate bid
-  const lot = await db.lots.getById(lotId);
+  // Get the lot with auction information
+  const lot = await prisma.lot.findUnique({
+    where: { id: lotId },
+    include: {
+      auction: {
+        include: {
+          seller: true
+        }
+      }
+    }
+  });
+  
   if (!lot) {
     throw error(404, 'Lot not found');
+  }
+  
+  const auction = lot.auction;
+  const userId = user.id;
+  
+  // Check 1: User cannot bid if they are already the highest bidder
+  if (lot.highestBidderId === userId) {
+    throw error(400, 'You are already the highest bidder on this lot');
+  }
+  
+  // Check 2: User cannot bid on their own auction
+  if (auction.sellerId === userId) {
+    throw error(403, 'You cannot bid on your own auction');
+  }
+  
+  // Check 3: User must be registered for the auction (if registration is required)
+  let auctionSettings = {};
+  if (auction.settings) {
+    try {
+      auctionSettings = JSON.parse(auction.settings);
+    } catch (e) {
+      console.error('Error parsing auction settings:', e);
+    }
+  }
+  
+  if (auctionSettings.requireRegistrationToBid) {
+    const registration = await prisma.auctionRegistration.findUnique({
+      where: {
+        auctionId_userId: {
+          auctionId: auction.id,
+          userId: userId
+        }
+      }
+    });
+    
+    if (!registration) {
+      throw error(403, 'You must register for this auction before placing bids. Please register first.');
+    }
   }
   
   // Validate bid amount
@@ -58,7 +107,6 @@ export async function POST({ request, locals }) {
   }
   
   // Use authenticated user's ID and name
-  const userId = user.id;
   const userName = user.name || user.email;
   
   // Create the bid

@@ -11,6 +11,10 @@
   let bidSuccess = $state(false);
   let session = $state(null);
   let currentUser = $state(null);
+  let auctionSettings = $state(null);
+  let isRegistered = $state(false);
+  let checkingRegistration = $state(false);
+  let registering = $state(false);
   
   let pollInterval = null;
   
@@ -77,11 +81,72 @@
       lot = await response.json();
       if (lot) {
         bidAmount = String(lot.currentBid + lot.bidIncrement);
+        // Load auction settings
+        await loadAuctionSettings();
+        // Check registration status if user is logged in
+        if (currentUser && lot.auctionId) {
+          await checkRegistration();
+        }
       }
     } catch (error) {
       console.error('Error loading lot:', error);
     } finally {
       loading = false;
+    }
+  }
+  
+  async function loadAuctionSettings() {
+    if (!lot?.auctionId) return;
+    try {
+      const response = await fetch(`/api/auctions/${lot.auctionId}/settings`, {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const settings = await response.json();
+        auctionSettings = settings;
+      }
+    } catch (error) {
+      console.error('Error loading auction settings:', error);
+    }
+  }
+  
+  async function checkRegistration() {
+    if (!lot?.auctionId || !currentUser) return;
+    try {
+      checkingRegistration = true;
+      const response = await fetch(`/api/auctions/${lot.auctionId}/register`, {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        const data = await response.json();
+        isRegistered = data.registered;
+      }
+    } catch (error) {
+      console.error('Error checking registration:', error);
+    } finally {
+      checkingRegistration = false;
+    }
+  }
+  
+  async function registerForAuction() {
+    if (!lot?.auctionId || !currentUser) return;
+    try {
+      registering = true;
+      const response = await fetch(`/api/auctions/${lot.auctionId}/register`, {
+        method: 'POST',
+        credentials: 'include'
+      });
+      if (response.ok) {
+        isRegistered = true;
+      } else {
+        const error = await response.json();
+        bidError = error.message || 'Failed to register for auction';
+      }
+    } catch (error) {
+      console.error('Error registering for auction:', error);
+      bidError = 'Failed to register for auction';
+    } finally {
+      registering = false;
     }
   }
   
@@ -269,10 +334,41 @@
                 <p class="text-sm text-yellow-800 mb-4">You must be logged in to place a bid.</p>
                 <a
                   href="/auth/login?redirect={encodeURIComponent($page.url.pathname)}"
-                  class="block w-full text-center bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 transition-colors font-semibold"
+                  class="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
                 >
                   Login to Bid
                 </a>
+              </div>
+            {:else if !currentUser.isVerifiedBuyer}
+              <div class="mb-6 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                <p class="text-sm text-yellow-800 mb-2 font-semibold">Verification Required</p>
+                <p class="text-sm text-yellow-700 mb-4">You must be a verified buyer to place bids. Please complete your profile and get verified.</p>
+                <a
+                  href="/dashboard/profile"
+                  class="inline-block bg-yellow-600 text-white px-4 py-2 rounded-lg hover:bg-yellow-700 transition-colors text-sm"
+                >
+                  Complete Profile
+                </a>
+              </div>
+            {:else if auctionSettings?.requireRegistrationToBid && !isRegistered}
+              <div class="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <p class="text-sm text-blue-800 mb-2 font-semibold">Registration Required</p>
+                <p class="text-sm text-blue-700 mb-4">You must register for this auction before placing bids.</p>
+                <button
+                  onclick={registerForAuction}
+                  disabled={registering}
+                  class="inline-block bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {#if registering}
+                    Registering...
+                  {:else}
+                    Register for Auction
+                  {/if}
+                </button>
+              </div>
+            {:else if currentUser && lot.highestBidderId === currentUser.id}
+              <div class="mb-6 bg-green-50 border border-green-200 rounded-lg p-4">
+                <p class="text-sm text-green-800 font-semibold">You are already the highest bidder on this lot.</p>
               </div>
             {:else}
               <div class="mb-6">

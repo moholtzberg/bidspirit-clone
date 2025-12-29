@@ -377,6 +377,13 @@ export const db = {
         data: user
       });
       return mapUser(created);
+    },
+    update: async (id, updates) => {
+      const updated = await prisma.user.update({
+        where: { id },
+        data: updates
+      });
+      return mapUser(updated);
     }
   }
 };
