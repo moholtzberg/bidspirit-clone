@@ -13,11 +13,41 @@
   let isTranscribing = $state(false);
   let error = $state(null);
   let showModal = $state(false);
+  let showNotes = $state(false);
+  let notes = $state([]);
+  let loadingNotes = $state(false);
+
+  async function loadNotes() {
+    if (!lotId) return;
+    loadingNotes = true;
+    try {
+      const response = await fetch(`/api/lots/${lotId}/notes`, {
+        credentials: 'include'
+      });
+      if (response.ok) {
+        notes = await response.json();
+      }
+    } catch (err) {
+      console.error('Error loading notes:', err);
+    } finally {
+      loadingNotes = false;
+    }
+  }
+
+  function openModal() {
+    showModal = true;
+    showNotes = true;
+    loadNotes();
+  }
+
+  function startNewRecording() {
+    showNotes = false;
+    startRecording();
+  }
 
   async function startRecording() {
     try {
       error = null;
-      showModal = true;
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaRecorder = new MediaRecorder(stream);
       audioChunks = [];
@@ -114,7 +144,10 @@
       
       // Reset state
       audioBlob = null;
-      showModal = false;
+      
+      // Reload notes and show notes view
+      await loadNotes();
+      showNotes = true;
 
       // Notify parent
       onNoteSaved(result);
@@ -155,16 +188,29 @@
       stopRecording();
     }
     audioBlob = null;
-    showModal = false;
     error = null;
+    // If we're in recording mode, go back to notes view, otherwise close modal
+    if (isRecording || isUploading || isTranscribing) {
+      showNotes = false;
+    } else {
+      showModal = false;
+      showNotes = false;
+    }
+  }
+
+  function closeModal() {
+    if (!isRecording && !isUploading && !isTranscribing) {
+      showModal = false;
+      showNotes = false;
+    }
   }
 </script>
 
 <button
   type="button"
-  onclick={startRecording}
+  onclick={openModal}
   class="p-1.5 text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
-  title="Record voice note"
+  title="Voice notes"
   disabled={isRecording || isUploading || isTranscribing}
 >
   {#if isRecording}
@@ -202,24 +248,86 @@
       }
     }}
   >
-    <div class="bg-white rounded-lg p-6 max-w-sm w-full mx-4">
-      <div class="text-center">
-        {#if isRecording}
-          <div class="mb-4">
-            <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <div class="w-8 h-8 bg-red-600 rounded-full animate-pulse"></div>
-            </div>
-            <p class="text-lg font-medium text-gray-900">Recording...</p>
-            <p class="text-sm text-gray-500 mt-1">Click stop when finished</p>
-          </div>
+    <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-[80vh] overflow-y-auto">
+      <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-gray-900">Voice Notes</h3>
+        <button
+          type="button"
+          onclick={closeModal}
+          class="text-gray-400 hover:text-gray-600"
+          disabled={isRecording || isUploading || isTranscribing}
+          aria-label="Close"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      {#if showNotes && !isRecording && !isUploading && !isTranscribing}
+        <!-- Notes List View -->
+        <div class="space-y-3">
           <button
             type="button"
-            onclick={stopRecording}
-            class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
+            onclick={startNewRecording}
+            class="w-full px-4 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium flex items-center justify-center gap-2"
           >
-            Stop Recording
+            <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M7 4a3 3 0 016 0v4a3 3 0 11-6 0V4zm4 10.93A7.001 7.001 0 0017 8a1 1 0 10-2 0A5 5 0 015 8a1 1 0 00-2 0 7.001 7.001 0 006 6.93V17H6a1 1 0 100 2h8a1 1 0 100-2h-3v-2.07z" clip-rule="evenodd" />
+            </svg>
+            New Recording
           </button>
-        {:else if isUploading}
+
+          {#if loadingNotes}
+            <div class="text-center py-4 text-sm text-gray-500">Loading notes...</div>
+          {:else if notes.length === 0}
+            <div class="text-center py-4 text-sm text-gray-500">No voice notes yet. Click "New Recording" to get started.</div>
+          {:else}
+            <div class="space-y-2 max-h-64 overflow-y-auto">
+              {#each notes as note}
+                <div class="border border-gray-200 rounded-lg p-3">
+                  <div class="flex items-start justify-between gap-2">
+                    <div class="flex-1 min-w-0">
+                      {#if note.audioUrl}
+                        <audio src={note.audioUrl} controls class="w-full mb-2" preload="metadata"></audio>
+                      {/if}
+                      {#if note.summary}
+                        <p class="text-sm text-gray-700 font-medium mb-1">{note.summary}</p>
+                      {/if}
+                      {#if note.transcription}
+                        <p class="text-xs text-gray-600">{note.transcription}</p>
+                      {:else if note.content}
+                        <p class="text-xs text-gray-600">{note.content}</p>
+                      {/if}
+                      <p class="text-xs text-gray-400 mt-1">
+                        {new Date(note.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              {/each}
+            </div>
+          {/if}
+        </div>
+      {:else}
+        <!-- Recording/Processing View -->
+        <div class="text-center">
+          {#if isRecording}
+            <div class="mb-4">
+              <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <div class="w-8 h-8 bg-red-600 rounded-full animate-pulse"></div>
+              </div>
+              <p class="text-lg font-medium text-gray-900">Recording...</p>
+              <p class="text-sm text-gray-500 mt-1">Click stop when finished</p>
+            </div>
+            <button
+              type="button"
+              onclick={stopRecording}
+              class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 font-medium"
+            >
+              Stop Recording
+            </button>
+          {:else if isUploading}
           <div class="mb-4">
             <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <svg class="w-8 h-8 text-blue-600 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -245,16 +353,17 @@
           </div>
         {/if}
         
-        {#if !isRecording && !isUploading && !isTranscribing}
-          <button
-            type="button"
-            onclick={cancelRecording}
-            class="mt-4 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
-          >
-            Close
-          </button>
-        {/if}
-      </div>
+          {#if !isRecording && !isUploading && !isTranscribing}
+            <button
+              type="button"
+              onclick={cancelRecording}
+              class="mt-4 px-4 py-2 text-sm text-gray-700 bg-gray-200 rounded-lg hover:bg-gray-300"
+            >
+              Close
+            </button>
+          {/if}
+        </div>
+      {/if}
     </div>
   </div>
 {/if}
