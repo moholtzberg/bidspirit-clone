@@ -1,0 +1,16 @@
+{
+    "manifest_version": 3,
+    "name": "BidSpirit Lot Image Saver",
+    "version": "0.1.0",
+    "description": "Download BidSpirit lot images with lot-numbered filenames.",
+    "permissions": ["downloads", "scripting", "activeTab"],
+    "host_permissions": ["*://*.bidspirit.com/*"],
+    "background": { "service_worker": "background.js" },
+    "content_scripts": [
+      {
+        "matches": ["*://*.bidspirit.com/*"],
+        "js": ["content.js"],
+        "run_at": "document_idle"
+      }
+    ]
+  }
