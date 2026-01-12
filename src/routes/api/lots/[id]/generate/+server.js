@@ -2,7 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import prisma from '$lib/prisma.js';
 import { env } from '$env/dynamic/private';
 
-async function generateWithAI(prompt, contextPrompt = '') {
+async function generateWithAI({ prompt, contextPrompt = '', images = [] }) {
   const apiKey = env.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
   
   if (!apiKey) {
@@ -10,6 +10,31 @@ async function generateWithAI(prompt, contextPrompt = '') {
   }
 
   try {
+    const imageAttachments = (images || [])
+      .filter(url => typeof url === 'string' && /^https?:\/\//i.test(url))
+      .slice(0, 6) // cap to keep prompt size reasonable
+      .map(url => ({
+        type: 'image_url',
+        image_url: { url }
+      }));
+
+    const systemContent = [
+      {
+        type: 'text',
+        text: `You are a helpful assistant that generates auction lot titles and descriptions for fine art, antiques, and collectibles. ${contextPrompt ? `Additional context: ${contextPrompt}` : ''}`
+      }
+    ];
+
+    const userContent = [
+      {
+        type: 'text',
+        text: imageAttachments.length
+          ? `${prompt}\n\nImages are attached. Use them to extract visual details and OCR any visible text, maker marks, labels, or signatures. If description fields are empty, rely on what you see. Call out condition issues, materials, style/period, and anything written in the images.`
+          : prompt
+      },
+      ...imageAttachments
+    ];
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -21,11 +46,11 @@ async function generateWithAI(prompt, contextPrompt = '') {
         messages: [
           {
             role: 'system',
-            content: `You are a helpful assistant that generates auction lot titles and descriptions for fine art, antiques, and collectibles. ${contextPrompt ? `Additional context: ${contextPrompt}` : ''}`
+            content: systemContent
           },
           {
             role: 'user',
-            content: prompt
+            content: userContent
           }
         ],
         max_tokens: 500,
@@ -83,7 +108,7 @@ export async function POST({ params, request, locals }) {
       throw error(403, 'Forbidden');
     }
 
-    const { type, context } = await request.json();
+    const { type, context, includeImages = false } = await request.json();
 
     // Get AI prompts from settings
     const auctionHousePrompt = lot.auction.auctionHouse.settings 
@@ -101,31 +126,44 @@ export async function POST({ params, request, locals }) {
     const currentTitle = context?.currentTitle || lot.title || '';
     const currentDescription = context?.currentDescription || lot.description || '';
     const hasImages = (lot.images?.length || 0) > 0;
+    const selectedImages = includeImages && hasImages
+      ? Array.from(
+          new Set(
+            (lot.images || [])
+              .map(img => img?.url)
+              .filter(url => typeof url === 'string' && url.trim() !== '')
+          )
+        )
+      : [];
 
     if (type === 'title') {
       userPrompt = `Generate a compelling auction lot title based on the following information:\n\n`;
       if (notes) userPrompt += `Notes:\n${notes}\n\n`;
       if (currentTitle) userPrompt += `Current title: ${currentTitle}\n\n`;
-      if (hasImages) userPrompt += `This lot has images available.\n\n`;
+      if (selectedImages.length > 0) userPrompt += `Images are attached. Use what you see (including OCR) to improve the title.\n\n`;
       userPrompt += `Generate a concise, professional title (max 100 characters).`;
     } else if (type === 'description') {
       userPrompt = `Generate a detailed auction lot description based on the following information:\n\n`;
       if (notes) userPrompt += `Notes:\n${notes}\n\n`;
       if (currentTitle) userPrompt += `Title: ${currentTitle}\n\n`;
       if (currentDescription) userPrompt += `Current description: ${currentDescription}\n\n`;
-      if (hasImages) userPrompt += `This lot has images available.\n\n`;
+      if (selectedImages.length > 0) userPrompt += `Images are attached. Use visual cues and OCR to extract maker marks, labels, signatures, and condition details.\n\n`;
       userPrompt += `Generate a comprehensive, professional description (2-4 paragraphs).`;
     } else if (type === 'both') {
       userPrompt = `Generate both a title and description for an auction lot based on the following information:\n\n`;
       if (notes) userPrompt += `Notes:\n${notes}\n\n`;
       if (currentTitle) userPrompt += `Current title: ${currentTitle}\n\n`;
       if (currentDescription) userPrompt += `Current description: ${currentDescription}\n\n`;
-      if (hasImages) userPrompt += `This lot has images available.\n\n`;
+      if (selectedImages.length > 0) userPrompt += `Images are attached. Use them (plus OCR) to inform both the title and description.\n\n`;
       userPrompt += `Generate:\n1. A concise title (max 100 characters)\n2. A comprehensive description (2-4 paragraphs)\n\nFormat as JSON: {"title": "...", "description": "..."}`;
     }
 
     // Generate with AI
-    const result = await generateWithAI(userPrompt, contextPrompt);
+    const result = await generateWithAI({
+      prompt: userPrompt,
+      contextPrompt,
+      images: selectedImages
+    });
 
     // Parse result
     let title, description;

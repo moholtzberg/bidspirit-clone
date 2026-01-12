@@ -2,10 +2,11 @@
   import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
-import LotNotesManager from '$lib/components/lots/LotNotesManager.svelte';
-import AIGenerator from '$lib/components/lots/AIGenerator.svelte';
-import QuickVoiceRecorder from '$lib/components/lots/QuickVoiceRecorder.svelte';
-import ImageEditor from '$lib/components/lots/ImageEditor.svelte';
+  import LotNotesManager from '$lib/components/lots/LotNotesManager.svelte';
+  import AIGenerator from '$lib/components/lots/AIGenerator.svelte';
+  import QuickVoiceRecorder from '$lib/components/lots/QuickVoiceRecorder.svelte';
+  import ImageEditor from '$lib/components/lots/ImageEditor.svelte';
+  import BannerGenerator from '$lib/components/BannerGenerator.svelte';
 
   let auction = $state(null);
   let lots = $state([]);
@@ -28,6 +29,32 @@ import ImageEditor from '$lib/components/lots/ImageEditor.svelte';
   let expandedNotesRows = $state(new Set()); // Track which lots have expanded notes
   let expandedAIRows = $state(new Set()); // Track which lots have expanded AI tools
   let editingImage = $state(null); // { lotId, imageId, imageUrl }
+
+  // Importer state
+  const importFields = [
+    { key: 'lotNumber', label: 'Lot Number', required: true },
+    { key: 'title', label: 'Title', required: true },
+    { key: 'description', label: 'Description' },
+    { key: 'hebrewTitle', label: 'Hebrew Title' },
+    { key: 'hebrewDescription', label: 'Hebrew Description' },
+    { key: 'category', label: 'Category' },
+    { key: 'tags', label: 'Tags (comma / semicolon separated)' },
+    { key: 'startingBid', label: 'Starting Bid' },
+    { key: 'currentBid', label: 'Current Bid' },
+    { key: 'bidIncrement', label: 'Bid Increment' },
+    { key: 'endTime', label: 'End Time' },
+    { key: 'status', label: 'Status' },
+    { key: 'imageUrl', label: 'Primary Image URL' },
+    { key: 'imageUrls', label: 'Additional Image URLs' },
+    { key: 'position', label: 'Position' }
+  ];
+  let showImportModal = $state(false);
+  let importFile = $state(null);
+  let importPreview = $state(null); // { columns, sampleRows }
+  let columnMapping = $state({});
+  let importResult = $state(null);
+  let importError = $state('');
+  let importing = $state(false);
 
   // Color coding rules for problematic lots
   function getLotStatus(lot) {
@@ -166,6 +193,148 @@ import ImageEditor from '$lib/components/lots/ImageEditor.svelte';
       alert('Failed to load lots. Please refresh the page.');
     } finally {
       loading = false;
+    }
+  }
+
+  function resetImportState() {
+    importFile = null;
+    importPreview = null;
+    columnMapping = {};
+    importResult = null;
+    importError = '';
+    importing = false;
+  }
+
+  function openImportModal() {
+    resetImportState();
+    showImportModal = true;
+  }
+
+  function closeImportModal() {
+    showImportModal = false;
+  }
+
+  function normalizeColumn(value) {
+    return (value || '').toString().toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  function guessMapping(columns = []) {
+    const normalizedColumns = columns.map((c) => ({
+      original: c,
+      norm: normalizeColumn(c)
+    }));
+
+    const findMatch = (candidates) => {
+      const normCandidates = candidates.map(normalizeColumn);
+      const match = normalizedColumns.find((col) =>
+        normCandidates.some((cand) => col.norm === cand || col.norm.includes(cand))
+      );
+      return match?.original || '';
+    };
+
+    return {
+      lotNumber: findMatch(['lot number', 'lot', 'lot no', 'lot#', 'lotnum']),
+      title: findMatch(['title', 'name', 'item title']),
+      description: findMatch(['description', 'desc', 'details']),
+      hebrewTitle: findMatch(['hebrew title']),
+      hebrewDescription: findMatch(['hebrew description']),
+      category: findMatch(['category', 'group']),
+      tags: findMatch(['tags', 'keywords', 'labels']),
+      startingBid: findMatch(['starting bid', 'start bid', 'opening price', 'start price', 'minimum bid']),
+      currentBid: findMatch(['current bid', 'bid', 'reserve']),
+      bidIncrement: findMatch(['bid increment', 'increment', 'step']),
+      endTime: findMatch(['end time', 'end date', 'closing', 'close time']),
+      status: findMatch(['status', 'state']),
+      imageUrl: findMatch(['primary image', 'image', 'photo', 'picture']),
+      imageUrls: findMatch(['images', 'additional images', 'extra images']),
+      position: findMatch(['position', 'order', 'sort'])
+    };
+  }
+
+  async function requestImportPreview(file) {
+    importError = '';
+    importPreview = null;
+    importResult = null;
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('action', 'preview');
+
+    const response = await fetch(`/api/auctions/${$page.params.id}/lots/import`, {
+      method: 'POST',
+      body: formData
+    });
+
+    if (!response.ok) {
+      const errData = await response.json().catch(() => ({}));
+      throw new Error(errData.error || 'Failed to preview file');
+    }
+
+    const preview = await response.json();
+    importPreview = preview;
+    columnMapping = guessMapping(preview.columns || []);
+  }
+
+  async function handleImportFileChange(event) {
+    const file = event.target?.files?.[0];
+    if (!file) return;
+    importFile = file;
+
+    try {
+      await requestImportPreview(file);
+    } catch (err) {
+      console.error('Import preview failed:', err);
+      importError = err.message || 'Failed to preview file';
+    }
+  }
+
+  function mappingIsValid() {
+    return (
+      columnMapping?.lotNumber &&
+      columnMapping.lotNumber !== '__skip__' &&
+      columnMapping?.title &&
+      columnMapping.title !== '__skip__'
+    );
+  }
+
+  async function runImport() {
+    if (!importFile) {
+      importError = 'Please choose a CSV or Excel file first.';
+      return;
+    }
+
+    if (!mappingIsValid()) {
+      importError = 'Map at least Lot Number and Title.';
+      return;
+    }
+
+    importing = true;
+    importError = '';
+
+    try {
+      const formData = new FormData();
+      formData.append('file', importFile);
+      formData.append('action', 'import');
+      formData.append('mapping', JSON.stringify(columnMapping));
+
+      const response = await fetch(`/api/auctions/${$page.params.id}/lots/import`, {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData.error || 'Import failed');
+      }
+
+      const result = await response.json();
+      importResult = result;
+      await loadData();
+    } catch (err) {
+      console.error('Import failed:', err);
+      importError = err.message || 'Failed to import lots';
+    } finally {
+      importing = false;
     }
   }
 
@@ -772,6 +941,207 @@ import ImageEditor from '$lib/components/lots/ImageEditor.svelte';
   }
 
   let exportingBidSpirit = $state(false);
+  let uploadingImages = $state(false);
+
+  async function handleBulkImageUpload() {
+    // Create file input
+    const fileInput = document.createElement('input');
+    fileInput.type = 'file';
+    fileInput.multiple = true;
+    fileInput.accept = 'image/*';
+    
+    fileInput.onchange = async (e) => {
+      const files = Array.from(e.target.files);
+      if (files.length === 0) return;
+
+      uploadingImages = true;
+      
+      try {
+        // Parse filenames: format is "lotNumber-imageNumber.ext" (e.g., "4-1.jpg")
+        const imagesByLot = {};
+        
+        files.forEach(file => {
+          const match = file.name.match(/^(\d+)-(\d+)\.(jpg|jpeg|png|gif|webp)$/i);
+          if (match) {
+            const lotNumber = parseInt(match[1], 10);
+            const imageNumber = parseInt(match[2], 10);
+            
+            if (!imagesByLot[lotNumber]) {
+              imagesByLot[lotNumber] = [];
+            }
+            imagesByLot[lotNumber].push({
+              file,
+              imageNumber,
+              lotNumber
+            });
+          } else {
+            console.warn(`Skipping file with invalid name format: ${file.name}. Expected format: lotNumber-imageNumber.ext (e.g., 4-1.jpg)`);
+          }
+        });
+
+        const lotNumbers = Object.keys(imagesByLot).map(Number).sort((a, b) => a - b);
+        console.log(`Found images for ${lotNumbers.length} lots:`, lotNumbers);
+        
+        if (lotNumbers.length === 0) {
+          alert('No valid files found. Please use the format: lotNumber-imageNumber.ext (e.g., 4-1.jpg)');
+          uploadingImages = false;
+          return;
+        }
+
+        let uploadedCount = 0;
+        let errorCount = 0;
+        const errors = [];
+
+        // Process each lot
+        for (const lotNumber of lotNumbers) {
+          const lotImages = imagesByLot[lotNumber].sort((a, b) => a.imageNumber - b.imageNumber);
+          
+          try {
+            // Find the lot by lot number
+            const lot = lots.find(l => l.lotNumber === lotNumber);
+            
+            if (!lot) {
+              console.error(`Lot ${lotNumber} not found`);
+              errors.push(`Lot ${lotNumber} not found`);
+              errorCount += lotImages.length;
+              continue;
+            }
+
+            // Upload images for this lot
+            const formData = new FormData();
+            console.log(`[Upload] Preparing to upload ${lotImages.length} images for lot ${lotNumber}:`, lotImages.map(i => i.file.name));
+            
+            // Validate all files before adding
+            const validFiles = lotImages.filter(item => {
+              if (!(item.file instanceof File)) {
+                console.warn(`[Upload] Skipping invalid file object:`, item.file);
+                return false;
+              }
+              if (item.file.size === 0) {
+                console.warn(`[Upload] Skipping empty file: ${item.file.name}`);
+                return false;
+              }
+              return true;
+            });
+            
+            if (validFiles.length === 0) {
+              throw new Error(`No valid files to upload for lot ${lotNumber}`);
+            }
+            
+            if (validFiles.length !== lotImages.length) {
+              console.warn(`[Upload] Filtered out ${lotImages.length - validFiles.length} invalid files for lot ${lotNumber}`);
+            }
+            
+            // Add all valid files to FormData
+            validFiles.forEach((item, idx) => {
+              formData.append('files', item.file);
+              console.log(`[Upload] Added file ${idx + 1}/${validFiles.length} to FormData: ${item.file.name} (${item.file.size} bytes, type: ${item.file.type})`);
+            });
+            
+            // Verify all files are in FormData
+            const filesInFormData = formData.getAll('files');
+            console.log(`[Upload] FormData contains ${filesInFormData.length} files (expected ${validFiles.length})`);
+            
+            if (filesInFormData.length !== validFiles.length) {
+              console.error(`[Upload] Mismatch: FormData has ${filesInFormData.length} files but expected ${validFiles.length}`);
+              throw new Error(`FormData mismatch: expected ${validFiles.length} files but got ${filesInFormData.length}`);
+            }
+            
+            formData.append('lotId', lot.id);
+
+            console.log(`[Upload] Sending ${lotImages.length} files to /api/upload/image`);
+            const uploadResponse = await fetch('/api/upload/image', {
+              method: 'POST',
+              body: formData
+            });
+
+            if (!uploadResponse.ok) {
+              const errorText = await uploadResponse.text();
+              console.error(`[Upload] Upload failed for lot ${lotNumber}:`, errorText);
+              throw new Error(`Failed to upload images for lot ${lotNumber}: ${errorText}`);
+            }
+
+            const uploadResult = await uploadResponse.json();
+            console.log(`[Upload] Upload response for lot ${lotNumber}:`, uploadResult);
+            const uploadedImages = uploadResult.images || [];
+            console.log(`[Upload] Received ${uploadedImages.length} uploaded images for lot ${lotNumber}`);
+
+            if (uploadedImages.length === 0) {
+              throw new Error(`No images were uploaded for lot ${lotNumber}`);
+            }
+
+            if (uploadedImages.length !== lotImages.length) {
+              console.warn(`[Upload] Warning: Expected ${lotImages.length} images but got ${uploadedImages.length} for lot ${lotNumber}`);
+            }
+
+            // Associate images with lot
+            // Get current image count to set displayOrder correctly
+            const currentImageCount = (lot.images && Array.isArray(lot.images) ? lot.images.length : 0) || 
+                                     (lot._images && Array.isArray(lot._images) ? lot._images.length : 0) || 0;
+            
+            console.log(`[Upload] Lot ${lotNumber} currently has ${currentImageCount} images`);
+            
+            const imagesToAssociate = uploadedImages.map((img, index) => ({
+              url: img.url,
+              key: img.key,
+              displayOrder: currentImageCount + index, // Continue from existing images
+              isPrimary: index === 0 && currentImageCount === 0 // Only set primary if no existing images
+            }));
+            
+            console.log(`[Upload] Associating ${imagesToAssociate.length} images with lot ${lotNumber}:`, imagesToAssociate.map(img => ({ url: img.url.substring(0, 50) + '...', displayOrder: img.displayOrder, isPrimary: img.isPrimary })));
+            
+            const imageResponse = await fetch(`/api/lots/${lot.id}/images`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                images: imagesToAssociate
+              })
+            });
+
+            if (!imageResponse.ok) {
+              const errorText = await imageResponse.text();
+              console.error(`[Upload] Failed to associate images with lot ${lotNumber}:`, errorText);
+              throw new Error(`Failed to associate images with lot ${lotNumber}: ${errorText}`);
+            }
+
+            const associatedResult = await imageResponse.json();
+            console.log(`[Upload] Successfully associated ${associatedResult.length || imagesToAssociate.length} images with lot ${lotNumber}`);
+            console.log(`[Upload] Associated images details:`, associatedResult.map(img => ({ id: img.id, url: img.url?.substring(0, 50) + '...', displayOrder: img.displayOrder })));
+
+            if (!imageResponse.ok) {
+              throw new Error(`Failed to associate images with lot ${lotNumber}`);
+            }
+
+            uploadedCount += uploadedImages.length;
+            console.log(`✓ Uploaded ${uploadedImages.length} images for lot ${lotNumber}`);
+
+          } catch (error) {
+            console.error(`Error uploading images for lot ${lotNumber}:`, error);
+            errors.push(`Lot ${lotNumber}: ${error.message}`);
+            errorCount += lotImages.length;
+          }
+        }
+
+        // Reload data to show new images
+        await loadData();
+
+        if (errorCount > 0) {
+          alert(`Upload complete: ${uploadedCount} images uploaded, ${errorCount} failed.\n\nErrors:\n${errors.join('\n')}`);
+        } else {
+          alert(`Successfully uploaded ${uploadedCount} images to ${lotNumbers.length} lots!`);
+        }
+      } catch (error) {
+        console.error('Error in bulk image upload:', error);
+        alert(`Failed to upload images: ${error.message}`);
+      } finally {
+        uploadingImages = false;
+      }
+    };
+
+    fileInput.click();
+  }
 
   async function exportToBidSpirit() {
     if (exportingBidSpirit) return;
@@ -895,6 +1265,30 @@ import ImageEditor from '$lib/components/lots/ImageEditor.svelte';
               class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700"
             >
               Add Lot
+            </button>
+            <button
+              onclick={openImportModal}
+              class="px-4 py-2 text-sm font-medium text-white bg-purple-600 rounded-lg hover:bg-purple-700"
+            >
+              Import Lots
+            </button>
+            <button
+              onclick={handleBulkImageUpload}
+              disabled={lots.length === 0 || uploadingImages}
+              class="px-4 py-2 text-sm font-medium text-white bg-green-600 rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+              title="Upload images named like '4-1.jpg' (lot 4, image 1)"
+            >
+              {#if uploadingImages}
+                <svg class="w-4 h-4 animate-spin" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                Uploading...
+              {:else}
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Upload Images to Lots
+              {/if}
             </button>
             <button
               onclick={exportToBidSpirit}
@@ -1803,6 +2197,166 @@ import ImageEditor from '$lib/components/lots/ImageEditor.svelte';
                   class="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                 />
               </label>
+            </div>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Import Lots Modal -->
+      {#if showImportModal}
+        <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div class="bg-white rounded-lg shadow-2xl max-w-5xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-4">
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <h3 class="text-xl font-semibold text-gray-900">Import Lots (CSV / Excel)</h3>
+                <p class="text-gray-600 text-sm">
+                  Upload a BidSpirit export or any spreadsheet, then map columns to fields.
+                </p>
+              </div>
+              <button
+                class="text-gray-500 hover:text-gray-700"
+                aria-label="Close import modal"
+                onclick={() => {
+                  showImportModal = false;
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {#if importError}
+              <div class="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded text-sm">
+                {importError}
+              </div>
+            {/if}
+
+            <div class="space-y-3">
+              <div class="border border-gray-200 rounded-lg p-4 space-y-3">
+                <label class="block text-sm font-medium text-gray-700">Upload file</label>
+                <input
+                  type="file"
+                  accept=".csv, application/vnd.ms-excel, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  onchange={handleImportFileChange}
+                  class="block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                />
+                {#if importFile}
+                  <div class="text-xs text-gray-600">Selected: {importFile.name}</div>
+                {/if}
+              </div>
+
+              {#if importPreview}
+                <div class="border border-gray-200 rounded-lg p-4 space-y-4">
+                  <div class="flex items-center justify-between">
+                    <div>
+                      <div class="font-semibold text-gray-900">Map columns</div>
+                      <p class="text-sm text-gray-600">
+                        Required: Lot Number, Title. Others are optional.
+                      </p>
+                    </div>
+                    <button
+                      class="text-sm text-blue-600 hover:underline"
+                      onclick={() => (columnMapping = guessMapping(importPreview.columns || []))}
+                    >
+                      Auto-map again
+                    </button>
+                  </div>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {#each importFields as field}
+                      <div class="space-y-1">
+                        <label class="text-xs font-medium text-gray-700 flex items-center gap-1">
+                          {field.label}
+                          {#if field.required}
+                            <span class="text-red-500">*</span>
+                          {/if}
+                        </label>
+                        <select
+                          class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          value={columnMapping[field.key] || '__skip__'}
+                          onchange={(e) => {
+                            columnMapping = { ...columnMapping, [field.key]: e.target.value };
+                          }}
+                        >
+                          <option value="__skip__">Skip</option>
+                          {#each importPreview.columns || [] as column}
+                            <option value={column}>{column}</option>
+                          {/each}
+                        </select>
+                      </div>
+                    {/each}
+                  </div>
+
+                  {#if importPreview.sampleRows?.length}
+                    <div class="space-y-2">
+                      <div class="text-xs font-semibold text-gray-700">Preview (first rows)</div>
+                      <div class="overflow-auto border border-gray-200 rounded">
+                        <table class="min-w-full divide-y divide-gray-200 text-xs">
+                          <thead class="bg-gray-50">
+                            <tr>
+                              {#each importPreview.columns || [] as col}
+                                <th class="px-2 py-2 text-left font-semibold text-gray-700 whitespace-nowrap">
+                                  {col}
+                                </th>
+                              {/each}
+                            </tr>
+                          </thead>
+                          <tbody class="divide-y divide-gray-100">
+                            {#each importPreview.sampleRows.slice(0, 5) as row}
+                              <tr class="bg-white">
+                                {#each importPreview.columns || [] as col}
+                                  <td class="px-2 py-1 text-gray-700 whitespace-nowrap">
+                                    {row[col]}
+                                  </td>
+                                {/each}
+                              </tr>
+                            {/each}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+
+              {#if importResult}
+                <div class="border border-green-200 bg-green-50 rounded-lg p-4 space-y-2 text-sm text-green-900">
+                  <div class="font-semibold">Import complete</div>
+                  <div>Created: {importResult.created || 0}</div>
+                  <div>Updated: {importResult.updated || 0}</div>
+                  {#if importResult.errors?.length}
+                    <div class="text-red-700">
+                      Errors ({importResult.errors.length}): {importResult.errors.slice(0, 5).map(e => `Row ${e.row}: ${e.message}`).join('; ')}
+                      {#if importResult.errors.length > 5}
+                        ...and {importResult.errors.length - 5} more
+                      {/if}
+                    </div>
+                  {/if}
+                </div>
+              {/if}
+            </div>
+
+            <div class="flex items-center justify-between">
+              <div class="text-xs text-gray-500">
+                Tip: Use BidSpirit export as a template — columns will auto-map.
+              </div>
+              <div class="flex items-center gap-2">
+                <button
+                  class="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded hover:bg-gray-200"
+                  onclick={() => {
+                    resetImportState();
+                    showImportModal = false;
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  class="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                  disabled={importing || !importPreview || !mappingIsValid()}
+                  onclick={runImport}
+                >
+                  {importing ? 'Importing...' : 'Import Lots'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

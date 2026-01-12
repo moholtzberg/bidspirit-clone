@@ -5,6 +5,8 @@
     onGenerated = () => {}
   } = $props();
 
+  const lotHasImages = (lot?.images?.length || 0) > 0;
+  let includeImages = $state(lotHasImages);
   let generating = $state(false);
   let error = $state(null);
   let result = $state(null);
@@ -24,6 +26,7 @@
         },
         body: JSON.stringify({
           type: generateType,
+          includeImages: includeImages && lotHasImages,
           context: {
             currentTitle: lot?.title || '',
             currentDescription: lot?.description || '',
@@ -73,6 +76,24 @@
         <option value="description">Description Only</option>
         <option value="both">Title & Description</option>
       </select>
+    </div>
+
+    <div class="flex items-start gap-2 text-xs text-gray-700">
+      <input
+        id="include-images"
+        type="checkbox"
+        bind:checked={includeImages}
+        disabled={!lotHasImages || generating}
+        class="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+      />
+      <label for="include-images" class="space-y-0.5">
+        <div class="font-medium">Let AI analyze lot images</div>
+        <div class="text-gray-500">
+          {lotHasImages
+            ? 'Sends images for vision + OCR to improve empty listings.'
+            : 'No images available for this lot yet.'}
+        </div>
+      </label>
     </div>
 
     <button
