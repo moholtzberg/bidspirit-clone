@@ -30,6 +30,8 @@
   let expandedAIRows = $state(new Set()); // Track which lots have expanded AI tools
   let expandedBannerRows = $state(new Set()); // Track which lots have expanded banner generator
   let editingImage = $state(null); // { lotId, imageId, imageUrl }
+  let removingBackground = $state({}); // { imageId: boolean } - track which images are being processed
+  let hoveredImage = $state(null); // { url, x, y } - track which image is being hovered for preview
 
   // Importer state
   const importFields = [
@@ -716,6 +718,123 @@
     } catch (error) {
       console.error('Error deleting image:', error);
       alert('Failed to delete image. Please try again.');
+    }
+  }
+
+  async function removeBackgroundFromImage(lotId, imageId, imageUrl) {
+    try {
+      removingBackground[imageId] = true;
+      removingBackground = { ...removingBackground };
+
+      // Get the lot to access image data
+      const lot = lots.find(l => l.id === lotId);
+      if (!lot) {
+        throw new Error('Lot not found');
+      }
+
+      // If imageUrl is an S3 key (not a full URL), get presigned URL
+      let actualImageUrl = imageUrl;
+      if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
+        // It's likely an S3 key, get presigned URL
+        try {
+          const presignedResponse = await fetch('/api/images/presigned', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ keys: [imageUrl] })
+          });
+          if (presignedResponse.ok) {
+            const { urls } = await presignedResponse.json();
+            actualImageUrl = urls[imageUrl] || imageUrl;
+          }
+        } catch (e) {
+          console.warn('Failed to get presigned URL, using original:', e);
+        }
+      }
+
+      // Call background removal API
+      const formData = new FormData();
+      formData.append('url', actualImageUrl);
+
+      const response = await fetch('/api/images/remove-background', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to remove background');
+      }
+
+      const result = await response.json();
+      
+      if (!result.success || !result.image) {
+        throw new Error('Background removal failed: No image returned');
+      }
+
+      // Convert base64 to Blob
+      // The API returns base64 data, which may or may not include the data URL prefix
+      let base64Data = result.image;
+      if (base64Data.includes(',')) {
+        base64Data = base64Data.split(',')[1]; // Remove data:image/png;base64, prefix if present
+      }
+      
+      // Convert base64 string to binary
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'image/png' });
+      
+      // Create a File from the Blob
+      const file = new File([blob], `no-background-${Date.now()}.png`, { type: 'image/png' });
+
+      // Upload the processed image as a new image to the lot
+      const uploadFormData = new FormData();
+      uploadFormData.append('files', file);
+      uploadFormData.append('lotId', lotId);
+
+      const uploadResponse = await fetch('/api/upload/image', {
+        method: 'POST',
+        body: uploadFormData
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload processed image');
+      }
+
+      const { images: uploadedImages } = await uploadResponse.json();
+      
+      // Create image record in database
+      const imageResponse = await fetch(`/api/lots/${lotId}/images`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          images: uploadedImages.map((img, index) => ({
+            url: img.url,
+            key: img.key,
+            displayOrder: (lot?.images?.length || 0) + index,
+            isPrimary: false
+          }))
+        })
+      });
+
+      if (!imageResponse.ok) {
+        throw new Error('Failed to save image record');
+      }
+
+      // Reload lot data to show the new image
+      await loadData();
+      
+      alert('Background removed successfully! New image added to lot.');
+    } catch (error) {
+      console.error('Error removing background:', error);
+      alert(`Failed to remove background: ${error.message}`);
+    } finally {
+      removingBackground[imageId] = false;
+      removingBackground = { ...removingBackground };
     }
   }
 
@@ -2083,11 +2202,28 @@
                                 </div>
                                 
                                 <!-- Image Thumbnail -->
-                                <img
-                                  src={imageObj.url} 
-                                  alt="Image {index + 1}" 
-                                  class="w-16 h-16 object-cover rounded border border-gray-300"
-                                />
+                                <div
+                                  class="relative"
+                                  role="button"
+                                  tabindex="0"
+                                  onmouseenter={(e) => {
+                                    const rect = e.currentTarget.getBoundingClientRect();
+                                    hoveredImage = {
+                                      url: imageObj.url,
+                                      x: rect.right + 10,
+                                      y: rect.top
+                                    };
+                                  }}
+                                  onmouseleave={() => {
+                                    hoveredImage = null;
+                                  }}
+                                >
+                                  <img
+                                    src={imageObj.url} 
+                                    alt="Image {index + 1}" 
+                                    class="w-16 h-16 object-cover rounded border border-gray-300 cursor-pointer"
+                                  />
+                                </div>
                                 
                                 <!-- Position Number -->
                                 <span class="text-sm font-medium text-gray-700 w-8">#{index + 1}</span>
@@ -2106,6 +2242,17 @@
                                   title="Edit image"
                                 >
                                   ✎ Edit
+                                </button>
+                                
+                                <!-- Remove Background Button -->
+                                <button
+                                  type="button"
+                                  onclick={() => removeBackgroundFromImage(lot.id, imageObj.id, imageObj.url)}
+                                  disabled={removingBackground[imageObj.id]}
+                                  class="px-2 py-1 text-xs bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Remove background and save as new image"
+                                >
+                                  {removingBackground[imageObj.id] ? '⏳ Processing...' : '🎨 Remove BG'}
                                 </button>
                                 
                                 <!-- Featured/Default Toggle -->
@@ -2196,15 +2343,49 @@
                   {@const lot = lots.find(l => l.id === showImageModal.lotId)}
                   {@const imageObj = lot?.images?.[index] || (typeof image === 'string' ? { url: image } : image)}
                   {@const imageId = imageObj.id || (imageObj.url ? null : imageObj)}
-                  <div class="relative">
-                    <img src={imageObj.url || image} alt="Image {index + 1}" class="w-full h-32 object-cover rounded border border-gray-300" />
+                  {@const imageUrl = imageObj.url || image}
+                  <div class="relative border border-gray-300 rounded p-2 bg-white">
+                    <div
+                      class="relative"
+                      role="button"
+                      tabindex="0"
+                      onmouseenter={(e) => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        hoveredImage = {
+                          url: imageUrl,
+                          x: rect.left + rect.width / 2,
+                          y: rect.top - 10
+                        };
+                      }}
+                      onmouseleave={() => {
+                        hoveredImage = null;
+                      }}
+                    >
+                      <img src={imageUrl} alt="Image {index + 1}" class="w-full h-32 object-cover rounded mb-2 cursor-pointer" />
+                    </div>
                     {#if imageId}
-                      <button
-                        onclick={() => removeImage(showImageModal.lotId, imageId)}
-                        class="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs hover:bg-red-700"
-                      >
-                        ×
-                      </button>
+                      <div class="flex flex-col gap-2">
+                        <button
+                          onclick={() => removeBackgroundFromImage(showImageModal.lotId, imageId, imageUrl)}
+                          disabled={removingBackground[imageId]}
+                          class="w-full px-2 py-1 text-xs bg-purple-500 text-white rounded hover:bg-purple-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          title="Remove background and save as new image"
+                        >
+                          {removingBackground[imageId] ? '⏳ Processing...' : '🎨 Remove Background'}
+                        </button>
+                        <button
+                          onclick={() => removeImage(showImageModal.lotId, imageId)}
+                          class="w-full px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 transition-colors"
+                          title="Delete image"
+                        >
+                          ✕ Delete
+                        </button>
+                      </div>
+                    {/if}
+                    {#if removingBackground[imageId]}
+                      <div class="absolute inset-0 bg-black bg-opacity-50 rounded flex items-center justify-center">
+                        <div class="text-white text-sm font-semibold">Processing...</div>
+                      </div>
                     {/if}
                   </div>
                 {/each}
@@ -2224,6 +2405,23 @@
                 />
               </label>
             </div>
+          </div>
+        </div>
+      {/if}
+
+      <!-- Image Hover Preview -->
+      {#if hoveredImage}
+        <div
+          class="fixed z-[100] pointer-events-none"
+          style="left: {hoveredImage.x}px; top: {hoveredImage.y}px; transform: translate(-50%, -100%); margin-top: -10px;"
+        >
+          <div class="bg-white rounded-lg shadow-2xl border-2 border-gray-300 p-2 max-w-md">
+            <img
+              src={hoveredImage.url}
+              alt="Preview"
+              class="max-w-sm max-h-96 object-contain rounded"
+              style="max-width: 400px; max-height: 400px;"
+            />
           </div>
         </div>
       {/if}
