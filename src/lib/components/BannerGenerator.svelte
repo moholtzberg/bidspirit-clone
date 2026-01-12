@@ -26,6 +26,8 @@
   let selectedBannerLotId = $state('');
   let selectedLotImages = $state([]);
   let selectedBannerImages = $state([]);
+  let setAsPrimaryImage = $state(false); // Checkbox to set banner as primary image
+  let savingToLot = $state(false); // Track if saving banner to lot
   let bannerSettings = $state({
     // Content
     title: '',
@@ -42,8 +44,11 @@
     backgroundImageUrl: '',
     
     // Layout
-    width: 1200,
-    height: 630,
+    // width: 1200,
+    // height: 630,
+    // bidspirit 1559 x 945
+    width: 1559,
+    height: 945,
     imageLayout: 'collage', // 'right', 'left', 'center', 'full', 'collage', 'split'
     imagePosition: 'cover', // 'cover', 'contain', 'repeat'
     imageOpacity: 1.0,
@@ -2947,6 +2952,81 @@
     link.click();
   }
 
+  async function saveBannerToLot() {
+    if (!generatedBannerUrl || !selectedBannerLotId) {
+      alert('Please generate a banner and select a lot first.');
+      return;
+    }
+
+    try {
+      savingToLot = true;
+
+      // Convert base64 to Blob
+      const base64Data = generatedBannerUrl.split(',')[1]; // Remove data:image/png;base64, prefix
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const blob = new Blob([bytes], { type: 'image/png' });
+      
+      // Create a File from the Blob
+      const file = new File([blob], `banner-${selectedBannerLotId}-${Date.now()}.png`, { type: 'image/png' });
+
+      // Upload the banner image
+      const uploadFormData = new FormData();
+      uploadFormData.append('files', file);
+      uploadFormData.append('lotId', selectedBannerLotId);
+
+      const uploadResponse = await fetch('/api/upload/image', {
+        method: 'POST',
+        body: uploadFormData
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload banner image');
+      }
+
+      const { images: uploadedImages } = await uploadResponse.json();
+      
+      if (!uploadedImages || uploadedImages.length === 0) {
+        throw new Error('No images returned from upload');
+      }
+
+      // Create image record in database (API will handle unsetting existing primary if needed)
+      const imageResponse = await fetch(`/api/lots/${selectedBannerLotId}/images`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          images: uploadedImages.map((img, index) => ({
+            url: img.url,
+            key: img.key,
+            displayOrder: 0, // Banner should be first
+            isPrimary: setAsPrimaryImage
+          }))
+        })
+      });
+
+      if (!imageResponse.ok) {
+        throw new Error('Failed to save image record');
+      }
+
+      alert('Banner saved to lot successfully!');
+      
+      // Call onSave callback if provided
+      if (onSave) {
+        onSave(generatedBannerUrl);
+      }
+    } catch (error) {
+      console.error('Error saving banner to lot:', error);
+      alert(`Failed to save banner to lot: ${error.message}`);
+    } finally {
+      savingToLot = false;
+    }
+  }
+
   function updateGradientColor(index, color) {
     const colors = [...bannerSettings.backgroundGradient.colors];
     colors[index] = color;
@@ -3446,6 +3526,30 @@
         onDownload={downloadBanner}
         canGenerate={!!bannerSettings.title}
       />
+
+      <!-- Save to Lot (only for lot type) -->
+      {#if type === 'lot' && generatedBannerUrl && selectedBannerLotId}
+        <div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+          <div class="flex items-center">
+            <input
+              type="checkbox"
+              id="set-as-primary"
+              bind:checked={setAsPrimaryImage}
+              class="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+            />
+            <label for="set-as-primary" class="text-sm font-medium text-gray-700 cursor-pointer">
+              Set as primary/default image
+            </label>
+          </div>
+          <button
+            onclick={saveBannerToLot}
+            disabled={savingToLot}
+            class="w-full bg-blue-600 text-white py-2 text-sm rounded hover:bg-blue-700 transition-colors font-semibold disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            {savingToLot ? 'Saving...' : '💾 Save Banner to Lot'}
+          </button>
+        </div>
+      {/if}
     </div>
     
     <!-- Right: Preview -->
