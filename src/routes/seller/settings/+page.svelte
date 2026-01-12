@@ -2,10 +2,12 @@
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
   import BannerGenerator from '$lib/components/BannerGenerator.svelte';
+  import { getImageUrl } from '$lib/utils/imageUrl.js';
 
   let session = $state(null);
   let currentUser = $state(null);
   let auctionHouse = $state(null);
+  let auctionHouseLogoUrl = $state(null);
   let loading = $state(true);
   let saving = $state(false);
   let errorMessage = $state('');
@@ -193,6 +195,10 @@
       const auctionHouseResponse = await fetch(`/api/auction-houses?id=${currentUser.auctionHouseId}`);
       if (auctionHouseResponse.ok) {
         auctionHouse = await auctionHouseResponse.json();
+        // Convert logo URL to presigned URL if it's an S3 key
+        if (auctionHouse?.logoUrl) {
+          auctionHouseLogoUrl = await getImageUrl(auctionHouse.logoUrl);
+        }
         
         // Load existing settings
         const settingsResponse = await fetch(`/api/auction-houses/${auctionHouse.id}/settings`);
@@ -412,6 +418,219 @@
                         <textarea bind:value={settings.disclaimerInEnglish} rows="2" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"></textarea>
                       </div>
                     </div>
+                  </div>
+                {/if}
+              </div>
+
+              <!-- Logo -->
+              <div class="border border-gray-200 rounded-lg">
+                <button
+                  type="button"
+                  onclick={() => toggleSection('logo')}
+                  class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+                >
+                  <span class="font-medium text-gray-900">Logo</span>
+                  <svg class="w-5 h-5 text-gray-500 transform transition-transform {expandedSections.logo ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </button>
+                {#if expandedSections.logo}
+                  <div class="p-4 space-y-4">
+                    {#if auctionHouse?.logoUrl}
+                      <div class="flex items-center gap-4">
+                        <div>
+                          <p class="text-sm font-medium text-gray-700 mb-2">Current Logo</p>
+                          <img src={auctionHouseLogoUrl || auctionHouse.logoUrl} alt="Auction House Logo" class="h-24 w-24 object-contain border border-gray-200 rounded-lg p-2 bg-white" />
+                        </div>
+                        <div class="flex-1">
+                          <p class="text-sm text-gray-600 mb-2">Logo URL:</p>
+                          <input 
+                            type="text" 
+                            value={auctionHouse.logoUrl} 
+                            readonly
+                            class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-gray-50 text-gray-600"
+                          />
+                        </div>
+                      </div>
+                    {:else}
+                      <p class="text-sm text-gray-600">No logo uploaded yet.</p>
+                    {/if}
+                    
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">Upload New Logo</label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        onchange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          
+                          try {
+                            const formData = new FormData();
+                            formData.append('files', file);
+                            
+                            const uploadResponse = await fetch('/api/upload/image', {
+                              method: 'POST',
+                              body: formData
+                            });
+                            
+                            if (!uploadResponse.ok) {
+                              throw new Error('Failed to upload logo');
+                            }
+                            
+                            const { images } = await uploadResponse.json();
+                            if (images && images.length > 0) {
+                              // Store the S3 key (not a presigned URL, as those expire)
+                              const logoUrl = images[0].url;
+                              
+                              // Update auction house logo URL
+                              const updateResponse = await fetch(`/api/auction-houses/${auctionHouse.id}`, {
+                                method: 'PATCH',
+                                headers: {
+                                  'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ logoUrl })
+                              });
+                              
+                              if (updateResponse.ok) {
+                                const updated = await updateResponse.json();
+                                if (updated.auctionHouse) {
+                                  auctionHouse.logoUrl = updated.auctionHouse.logoUrl;
+                                  // Convert to presigned URL for display
+                                  if (updated.auctionHouse.logoUrl) {
+                                    auctionHouseLogoUrl = await getImageUrl(updated.auctionHouse.logoUrl);
+                                  } else {
+                                    auctionHouseLogoUrl = null;
+                                  }
+                                  successMessage = 'Logo uploaded successfully!';
+                                  setTimeout(() => {
+                                    successMessage = '';
+                                  }, 3000);
+                                }
+                              } else {
+                                throw new Error('Failed to save logo URL');
+                              }
+                            }
+                            
+                            e.target.value = '';
+                          } catch (error) {
+                            console.error('Error uploading logo:', error);
+                            errorMessage = error.message || 'Failed to upload logo. Please try again.';
+                            setTimeout(() => {
+                              errorMessage = '';
+                            }, 5000);
+                          }
+                        }}
+                      />
+                      <p class="mt-1 text-xs text-gray-500">Upload an image file (PNG, JPG, SVG, etc.) to use as your auction house logo.</p>
+                    </div>
+                    
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-2">Or Enter Logo URL</label>
+                      <div class="flex gap-2">
+                        <input
+                          type="url"
+                          id="logo-url-input"
+                          placeholder="https://example.com/logo.png"
+                          class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onclick={async () => {
+                            const input = document.getElementById('logo-url-input');
+                            const logoUrl = input?.value?.trim();
+                            if (!logoUrl) {
+                              errorMessage = 'Please enter a logo URL';
+                              setTimeout(() => {
+                                errorMessage = '';
+                              }, 3000);
+                              return;
+                            }
+                            
+                            try {
+                              const updateResponse = await fetch(`/api/auction-houses/${auctionHouse.id}`, {
+                                method: 'PATCH',
+                                headers: {
+                                  'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ logoUrl })
+                              });
+                              
+                              if (updateResponse.ok) {
+                                const updated = await updateResponse.json();
+                                if (updated.auctionHouse) {
+                                  auctionHouse.logoUrl = updated.auctionHouse.logoUrl;
+                                  // Convert to presigned URL for display
+                                  if (updated.auctionHouse.logoUrl) {
+                                    auctionHouseLogoUrl = await getImageUrl(updated.auctionHouse.logoUrl);
+                                  } else {
+                                    auctionHouseLogoUrl = null;
+                                  }
+                                  if (input) input.value = '';
+                                  successMessage = 'Logo URL saved successfully!';
+                                  setTimeout(() => {
+                                    successMessage = '';
+                                  }, 3000);
+                                }
+                              } else {
+                                throw new Error('Failed to save logo URL');
+                              }
+                            } catch (error) {
+                              console.error('Error saving logo URL:', error);
+                              errorMessage = error.message || 'Failed to save logo URL. Please try again.';
+                              setTimeout(() => {
+                                errorMessage = '';
+                              }, 5000);
+                            }
+                          }}
+                          class="px-4 py-2 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors"
+                        >
+                          Save URL
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {#if auctionHouse?.logoUrl}
+                      <div>
+                        <button
+                          type="button"
+                          onclick={async () => {
+                            if (!confirm('Are you sure you want to remove the logo?')) return;
+                            
+                            try {
+                              const updateResponse = await fetch(`/api/auction-houses/${auctionHouse.id}`, {
+                                method: 'PATCH',
+                                headers: {
+                                  'Content-Type': 'application/json'
+                                },
+                                body: JSON.stringify({ logoUrl: null })
+                              });
+                              
+                              if (updateResponse.ok) {
+                                auctionHouse.logoUrl = null;
+                                auctionHouseLogoUrl = null;
+                                successMessage = 'Logo removed successfully!';
+                                setTimeout(() => {
+                                  successMessage = '';
+                                }, 3000);
+                              } else {
+                                throw new Error('Failed to remove logo');
+                              }
+                            } catch (error) {
+                              console.error('Error removing logo:', error);
+                              errorMessage = error.message || 'Failed to remove logo. Please try again.';
+                              setTimeout(() => {
+                                errorMessage = '';
+                              }, 5000);
+                            }
+                          }}
+                          class="px-4 py-2 bg-red-600 text-white text-sm rounded-md hover:bg-red-700 transition-colors"
+                        >
+                          Remove Logo
+                        </button>
+                      </div>
+                    {/if}
                   </div>
                 {/if}
               </div>

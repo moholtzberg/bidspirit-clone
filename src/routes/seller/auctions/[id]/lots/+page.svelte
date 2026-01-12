@@ -522,7 +522,7 @@
       <!-- Banner Tool Section -->
       {#if showBannerTool}
         <div class="mb-8">
-          <BannerGenerator {lots} {auction} />
+          <BannerGenerator {lots} {auction} auctionHouse={auction?.auctionHouse} />
         </div>
       {/if}
       

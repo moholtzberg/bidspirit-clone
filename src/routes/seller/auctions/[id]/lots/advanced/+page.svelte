@@ -1,5 +1,5 @@
 <script>
-  import { onMount } from 'svelte';
+  // import { onMount } from 'svelte';
   import { page } from '$app/stores';
   import { goto } from '$app/navigation';
   import LotNotesManager from '$lib/components/lots/LotNotesManager.svelte';
@@ -28,6 +28,7 @@
   let expandedImageRows = $state(new Set()); // Track which lots have expanded image management
   let expandedNotesRows = $state(new Set()); // Track which lots have expanded notes
   let expandedAIRows = $state(new Set()); // Track which lots have expanded AI tools
+  let expandedBannerRows = $state(new Set()); // Track which lots have expanded banner generator
   let editingImage = $state(null); // { lotId, imageId, imageUrl }
 
   // Importer state
@@ -134,7 +135,7 @@
 
   let currentAuctionId = $state(null);
   
-  onMount(() => {
+  $effect(() => {
     if ($page.params.id) {
       currentAuctionId = $page.params.id;
       loadData();
@@ -749,6 +750,15 @@
       expandedAIRows.add(lotId);
     }
     expandedAIRows = new Set(expandedAIRows); // Trigger reactivity
+  }
+
+  function toggleBannerRow(lotId) {
+    if (expandedBannerRows.has(lotId)) {
+      expandedBannerRows.delete(lotId);
+    } else {
+      expandedBannerRows.add(lotId);
+    }
+    expandedBannerRows = new Set(expandedBannerRows); // Trigger reactivity
   }
 
   async function handleAIGenerated(lotId, updates) {
@@ -1880,6 +1890,20 @@
                           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                         </svg>
                       </button>
+                      <button
+                        type="button"
+                        onclick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          toggleBannerRow(lot.id);
+                        }}
+                        class="p-1.5 text-green-600 hover:text-green-700 hover:bg-green-50 rounded transition-colors"
+                        title="Create Banner Image"
+                      >
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -1935,6 +1959,37 @@
                             notes: lot.notes || []
                           }}
                           onGenerated={(updates) => handleAIGenerated(lot.id, updates)}
+                        />
+                      </div>
+                    </td>
+                  </tr>
+                {/if}
+                
+                <!-- Expandable Banner Generator Row -->
+                {#if expandedBannerRows.has(lot.id)}
+                  <tr class="bg-green-50">
+                    <td colspan="12" class="px-4 py-4">
+                      <div class="bg-white rounded-lg border border-green-200 p-4">
+                        <div class="flex items-center justify-between mb-4">
+                          <h3 class="text-lg font-semibold text-gray-900">Banner Generator - Lot #{lot.lotNumber}</h3>
+                          <button
+                            onclick={() => toggleBannerRow(lot.id)}
+                            class="text-gray-500 hover:text-gray-700 text-sm"
+                          >
+                            Collapse
+                          </button>
+                        </div>
+                        
+                        <BannerGenerator
+                          lots={lots}
+                          auction={auction}
+                          auctionHouse={auction?.auctionHouse}
+                          type="lot"
+                          initialLotId={lot.id}
+                          onSave={async () => {
+                            // Reload data after banner is saved
+                            await loadData();
+                          }}
                         />
                       </div>
                     </td>

@@ -1,6 +1,7 @@
 <script>
   import { onMount } from 'svelte';
   import { goto } from '$app/navigation';
+  import { getImageUrl } from '$lib/utils/imageUrl.js';
   
   let {
     data
@@ -10,6 +11,7 @@
   let session = $state(data?.session);
   let currentUser = $state(null);
   let auctionHouse = $state(null);
+  let auctionHouseLogoUrl = $state(null);
   let myAuctions = $state([]);
   let loading = $state(true);
   let showCreateModal = $state(false);
@@ -59,6 +61,10 @@
       const auctionHouseResponse = await fetch(`/api/auction-houses?id=${currentUser.auctionHouseId}`);
       if (auctionHouseResponse.ok) {
         auctionHouse = await auctionHouseResponse.json();
+        // Convert logo URL to presigned URL if it's an S3 key
+        if (auctionHouse?.logoUrl) {
+          auctionHouseLogoUrl = await getImageUrl(auctionHouse.logoUrl);
+        }
       }
       
       // Load auctions for this auction house
@@ -257,8 +263,8 @@
               <p class="text-gray-600 mt-1">{auctionHouse.description}</p>
             {/if}
           </div>
-          {#if auctionHouse.logoUrl}
-            <img src={auctionHouse.logoUrl} alt={auctionHouse.name} class="h-16 w-16 object-contain" />
+          {#if auctionHouseLogoUrl}
+            <img src={auctionHouseLogoUrl} alt={auctionHouse.name} class="h-16 w-16 object-contain" />
           {/if}
         </div>
       </div>

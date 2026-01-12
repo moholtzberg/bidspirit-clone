@@ -8,6 +8,7 @@
   import ImageShadowSettings from './banner/ImageShadowSettings.svelte';
   import BannerPreview from './banner/BannerPreview.svelte';
   import BannerActions from './banner/BannerActions.svelte';
+  import CollapsibleSection from './banner/CollapsibleSection.svelte';
   
   // Props
   let {
@@ -17,6 +18,9 @@
     type = 'lot', // 'lot', 'auction', 'auctionHouse'
     onSave = null // Callback when banner is saved
   } = $props();
+
+  console.log('auctionHouse', auctionHouse);
+  console.log('lots', lots);
 
   // Banner tool state
   let selectedBannerLotId = $state('');
@@ -112,6 +116,15 @@
     // Spacing
     padding: 30,
     textImageRatio: 0.4, // 0.4 = 40% text, 60% image
+    
+    // Logo settings
+    showLogo: false,
+    useCustomLogo: false, // If false, use auction house logo; if true, use custom URL
+    logoUrl: '', // Custom logo URL (only used if useCustomLogo is true)
+    logoPosition: 'top-right', // 'top-left', 'top-center', 'top-right', 'bottom-left', 'bottom-center', 'bottom-right'
+    logoSize: 100, // Logo size in pixels (width, height will maintain aspect ratio)
+    logoOpacity: 1.0, // Logo opacity (0.0 to 1.0)
+    logoMargin: 20, // Margin from edges in pixels
   });
   
   let generatedBannerUrl = $state(null);
@@ -137,7 +150,8 @@
     background: true,
     textContent: true,
     typography: true,
-    imageShadows: true
+    imageShadows: true,
+    logo: true
   });
 
   // Available fonts
@@ -670,6 +684,22 @@
         bannerSettings.subtitle = auctionHouse.description ? auctionHouse.description.substring(0, 150) : '';
         bannerSettings.primaryImageUrl = auctionHouse.logoUrl || '';
         bannerSettings.backgroundImageUrl = auctionHouse.logoUrl || '';
+        // Initialize logo URL from auction house if available
+        if (auctionHouse.logoUrl && !bannerSettings.logoUrl) {
+          bannerSettings.logoUrl = auctionHouse.logoUrl;
+        }
+      }
+    }
+  });
+  
+  // Initialize logo from auctionHouse if available (for lot/auction types too)
+  $effect(() => {
+    if (auctionHouse?.logoUrl && !showTemplateSelector) {
+      // Auto-enable logo and use auction house logo by default
+      if (!bannerSettings.logoUrl || !bannerSettings.useCustomLogo) {
+        bannerSettings.showLogo = true;
+        bannerSettings.useCustomLogo = false;
+        // Don't set logoUrl - we'll use auctionHouse.logoUrl directly in drawLogo
       }
     }
   });
@@ -739,6 +769,15 @@
     const imageShadowOffsetY = bannerSettings.imageShadowOffsetY;
     const collageImagePositions = bannerSettings.collageImagePositions;
     
+    // Track logo settings
+    const showLogo = bannerSettings.showLogo;
+    const useCustomLogo = bannerSettings.useCustomLogo;
+    const logoUrl = bannerSettings.logoUrl;
+    const logoPosition = bannerSettings.logoPosition;
+    const logoSize = bannerSettings.logoSize;
+    const logoOpacity = bannerSettings.logoOpacity;
+    const logoMargin = bannerSettings.logoMargin;
+    
     // Track per-field text settings
     const titleEnglishFontSize = bannerSettings.titleEnglishFontSize;
     const titleEnglishAlign = bannerSettings.titleEnglishAlign;
@@ -769,8 +808,8 @@
     }
     
     // Debounce preview generation to avoid excessive regenerations
-    // Only generate if we have at least a title or images
-    const shouldGenerate = title || imageCount > 0 || backgroundImageUrl || (type === 'auction' && auction) || (type === 'auctionHouse' && auctionHouse);
+    // Only generate if we have at least a title or images or logo enabled
+    const shouldGenerate = title || imageCount > 0 || backgroundImageUrl || showLogo || (type === 'auction' && auction) || (type === 'auctionHouse' && auctionHouse);
     
     if (shouldGenerate) {
       previewGenerationTimeout = setTimeout(() => {
@@ -1002,6 +1041,11 @@
       
       // Draw text based on layout
       drawText(ctx, canvas.width, canvas.height);
+      
+      // Draw logo if enabled (draw last so it appears on top)
+      if (bannerSettings.showLogo) {
+        await drawLogo(ctx, canvas.width, canvas.height);
+      }
       
       generatedBannerUrl = canvas.toDataURL('image/png');
       
@@ -1563,6 +1607,230 @@
         resolve();
       };
       console.log('Loading split image:', imageUrl);
+      img.src = srcUrl;
+    });
+  }
+
+  // Helper function to get image URL (handles S3 keys)
+  async function getLogoImageUrl(logoUrl) {
+    if (!logoUrl) {
+      console.log('[Logo] getLogoImageUrl: No logoUrl provided');
+      return null;
+    }
+    
+    console.log('[Logo] getLogoImageUrl: Input URL:', logoUrl);
+    
+    // If it's already a full HTTP/HTTPS URL, return as-is
+    if (logoUrl.startsWith('http://') || logoUrl.startsWith('https://')) {
+      // Check if it's an S3 URL that needs presigning
+      if (logoUrl.includes('.s3.') || logoUrl.includes('s3.amazonaws.com')) {
+        const match = logoUrl.match(/s3[^/]*\.amazonaws\.com\/(.+?)(?:\?|$)/);
+        if (match) {
+          const key = match[1];
+          console.log('[Logo] Extracted S3 key from URL:', key);
+          try {
+            const response = await fetch('/api/images/presigned', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ keys: [key] })
+            });
+            if (response.ok) {
+              const { urls } = await response.json();
+              const presignedUrl = urls[key] || logoUrl;
+              console.log('[Logo] Got presigned URL:', presignedUrl);
+              return presignedUrl;
+            } else {
+              console.warn('[Logo] Failed to get presigned URL, status:', response.status);
+            }
+          } catch (error) {
+            console.warn('[Logo] Error getting presigned URL:', error);
+          }
+        }
+      }
+      console.log('[Logo] Using URL as-is (already HTTP/HTTPS):', logoUrl);
+      return logoUrl;
+    }
+    
+    // If it's an S3 key (e.g., "lots/image.jpg"), get presigned URL
+    if (logoUrl.includes('/') && !logoUrl.startsWith('/')) {
+      console.log('[Logo] Detected S3 key, fetching presigned URL for:', logoUrl);
+      try {
+        const response = await fetch('/api/images/presigned', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keys: [logoUrl] })
+        });
+        if (response.ok) {
+          const { urls } = await response.json();
+          const presignedUrl = urls[logoUrl] || logoUrl;
+          console.log('[Logo] Got presigned URL for key:', presignedUrl);
+          return presignedUrl;
+        } else {
+          console.warn('[Logo] Failed to get presigned URL, status:', response.status);
+          const errorText = await response.text();
+          console.warn('[Logo] Error response:', errorText);
+        }
+      } catch (error) {
+        console.error('[Logo] Error getting presigned URL for logo:', error);
+      }
+    }
+    
+    // Fallback: assume it's a local URL
+    const fallbackUrl = logoUrl.startsWith('/') ? logoUrl : `/${logoUrl}`;
+    console.log('[Logo] Using fallback URL:', fallbackUrl);
+    return fallbackUrl;
+  }
+
+  // Draw logo on banner
+  async function drawLogo(ctx, width, height) {
+    if (!bannerSettings.showLogo) {
+      console.log('[Logo] showLogo is false, skipping');
+      return;
+    }
+    
+    // Use custom logo URL if specified, otherwise use auction house logo
+    const logoUrl = bannerSettings.useCustomLogo && bannerSettings.logoUrl 
+      ? bannerSettings.logoUrl 
+      : (auctionHouse?.logoUrl);
+    
+    console.log('[Logo] Logo URL from settings:', logoUrl);
+    console.log('[Logo] useCustomLogo:', bannerSettings.useCustomLogo);
+    console.log('[Logo] bannerSettings.logoUrl:', bannerSettings.logoUrl);
+    console.log('[Logo] auctionHouse?.logoUrl:', auctionHouse?.logoUrl);
+    
+    if (!logoUrl) {
+      console.warn('[Logo] No logo URL available');
+      return;
+    }
+    
+    // Get the actual image URL (handles S3 keys)
+    const imageUrl = await getLogoImageUrl(logoUrl);
+    console.log('[Logo] Resolved image URL:', imageUrl);
+    
+    if (!imageUrl) {
+      console.warn('[Logo] Failed to resolve image URL');
+      return;
+    }
+    
+    return new Promise(async (resolve) => {
+      // Use the same image loading approach as other images (with proxy for CORS)
+      let srcUrl = imageUrl;
+      
+      // For S3 URLs, use proxy to avoid CORS issues (same as loadImageForCanvas)
+      if (imageUrl.includes('.s3.') || imageUrl.includes('s3.amazonaws.com') || imageUrl.includes('?X-Amz-')) {
+        try {
+          const proxyUrl = `/api/images/proxy?url=${encodeURIComponent(imageUrl)}`;
+          console.log('[Logo] Using proxy URL for CORS:', proxyUrl);
+          const response = await fetch(proxyUrl);
+          if (response.ok) {
+            const blob = await response.blob();
+            srcUrl = URL.createObjectURL(blob);
+            console.log('[Logo] Created blob URL from proxy');
+          } else {
+            console.warn('[Logo] Proxy failed, using direct URL');
+          }
+        } catch (error) {
+          console.warn('[Logo] Error using proxy, trying direct URL:', error);
+        }
+      }
+      
+      const img = new Image();
+      // Don't set crossOrigin when using proxy or blob URLs
+      if (!srcUrl.startsWith('blob:') && !srcUrl.includes('/api/images/proxy')) {
+        img.crossOrigin = 'anonymous';
+      }
+      
+      img.onload = () => {
+        console.log('[Logo] Image loaded successfully, dimensions:', img.width, 'x', img.height);
+        ctx.save();
+        
+        // Calculate logo size maintaining aspect ratio
+        const maxSize = bannerSettings.logoSize || 100;
+        const aspectRatio = img.width / img.height;
+        let logoWidth = maxSize;
+        let logoHeight = maxSize / aspectRatio;
+        
+        // If height would be too large, scale down
+        if (logoHeight > maxSize) {
+          logoHeight = maxSize;
+          logoWidth = maxSize * aspectRatio;
+        }
+        
+        console.log('[Logo] Calculated size:', logoWidth, 'x', logoHeight);
+        
+        // Calculate position based on logoPosition setting
+        const margin = bannerSettings.logoMargin || 20;
+        let x = 0;
+        let y = 0;
+        
+        switch (bannerSettings.logoPosition) {
+          case 'top-left':
+            x = margin;
+            y = margin;
+            break;
+          case 'top-center':
+            x = (width - logoWidth) / 2;
+            y = margin;
+            break;
+          case 'top-right':
+            x = width - logoWidth - margin;
+            y = margin;
+            break;
+          case 'bottom-left':
+            x = margin;
+            y = height - logoHeight - margin;
+            break;
+          case 'bottom-center':
+            x = (width - logoWidth) / 2;
+            y = height - logoHeight - margin;
+            break;
+          case 'bottom-right':
+            x = width - logoWidth - margin;
+            y = height - logoHeight - margin;
+            break;
+          default:
+            x = width - logoWidth - margin;
+            y = margin;
+        }
+        
+        console.log('[Logo] Drawing at position:', x, y, 'with size:', logoWidth, logoHeight);
+        
+        // Set opacity
+        ctx.globalAlpha = bannerSettings.logoOpacity !== undefined ? bannerSettings.logoOpacity : 1.0;
+        console.log('[Logo] Opacity:', ctx.globalAlpha);
+        
+        // Draw logo
+        ctx.drawImage(img, x, y, logoWidth, logoHeight);
+        console.log('[Logo] Logo drawn successfully');
+        
+        // Clean up blob URL if it was created
+        if (srcUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(srcUrl);
+        }
+        
+        ctx.restore();
+        resolve();
+      };
+      
+      img.onerror = (error) => {
+        console.error('[Logo] Failed to load logo image:', imageUrl, error);
+        console.error('[Logo] Image error details:', {
+          src: img.src,
+          complete: img.complete,
+          naturalWidth: img.naturalWidth,
+          naturalHeight: img.naturalHeight,
+          srcUrl: srcUrl
+        });
+        
+        // Clean up blob URL if it was created
+        if (srcUrl.startsWith('blob:')) {
+          URL.revokeObjectURL(srcUrl);
+        }
+        
+        resolve(); // Continue even if logo fails to load
+      };
+      
+      console.log('[Logo] Setting image source to:', srcUrl);
       img.src = srcUrl;
     });
   }
@@ -2927,6 +3195,248 @@
         bind:bannerSettings
         bind:isCollapsed={collapsedSections.imageShadows}
       />
+      
+      <!-- Logo Settings -->
+      <CollapsibleSection
+        title="Logo"
+        bind:isCollapsed={collapsedSections.logo}
+        bgColor="bg-gray-50"
+        borderColor="border-gray-200"
+        hoverColor="hover:bg-gray-100"
+      >
+        <div class="space-y-3">
+          <div>
+            <label class="flex items-center gap-2">
+              <input
+                type="checkbox"
+                bind:checked={bannerSettings.showLogo}
+                class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+              />
+              <span class="text-xs font-medium text-gray-700">Show Logo</span>
+            </label>
+          </div>
+          
+          {#if bannerSettings.showLogo}
+            {#if auctionHouse?.logoUrl && !bannerSettings.useCustomLogo}
+              <div class="p-3 bg-blue-50 border border-blue-200 rounded">
+                <p class="text-xs font-medium text-gray-700 mb-2">
+                  Using Auction House Logo
+                </p>
+                <div class="flex items-center gap-3 mb-3">
+                  <div class="flex-shrink-0">
+                    <img 
+                      src={auctionHouse.logoUrl} 
+                      alt="Auction House Logo" 
+                      class="h-16 w-16 object-contain border border-gray-200 rounded bg-white p-2"
+                      onerror={async (e) => {
+                        // If image fails to load (e.g., S3 key), try to get presigned URL
+                        if (auctionHouse.logoUrl && !auctionHouse.logoUrl.startsWith('http')) {
+                          try {
+                            const res = await fetch('/api/images/presigned', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ keys: [auctionHouse.logoUrl] })
+                            });
+                            if (res.ok) {
+                              const { urls } = await res.json();
+                              if (urls[auctionHouse.logoUrl]) {
+                                e.target.src = urls[auctionHouse.logoUrl];
+                              }
+                            }
+                          } catch (err) {
+                            console.warn('Error loading logo preview:', err);
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                  <div class="flex-1 min-w-0">
+                    <p class="text-xs text-gray-600 break-all">{auctionHouse.logoUrl}</p>
+                  </div>
+                </div>
+                <label class="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    bind:checked={bannerSettings.useCustomLogo}
+                    class="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                  />
+                  <span class="text-xs font-medium text-gray-700">Use Custom Logo URL Instead</span>
+                </label>
+              </div>
+            {/if}
+            
+            {#if bannerSettings.useCustomLogo || !auctionHouse?.logoUrl}
+              <div>
+                <label for="logo-url" class="block text-xs font-medium text-gray-700 mb-1">
+                  Custom Logo URL
+                </label>
+                <input
+                  id="logo-url"
+                  type="text"
+                  bind:value={bannerSettings.logoUrl}
+                  placeholder="Enter logo URL"
+                  class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+                {#if bannerSettings.logoUrl}
+                  <div class="mt-2 p-2 bg-gray-50 border border-gray-200 rounded">
+                    <p class="text-xs font-medium text-gray-700 mb-2">Preview:</p>
+                    <img 
+                      src={bannerSettings.logoUrl} 
+                      alt="Custom Logo Preview" 
+                      class="h-16 w-16 object-contain border border-gray-200 rounded bg-white p-2"
+                      onerror={async (e) => {
+                        // If image fails to load (e.g., S3 key), try to get presigned URL
+                        if (bannerSettings.logoUrl && !bannerSettings.logoUrl.startsWith('http')) {
+                          try {
+                            const res = await fetch('/api/images/presigned', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ keys: [bannerSettings.logoUrl] })
+                            });
+                            if (res.ok) {
+                              const { urls } = await res.json();
+                              if (urls[bannerSettings.logoUrl]) {
+                                e.target.src = urls[bannerSettings.logoUrl];
+                              }
+                            }
+                          } catch (err) {
+                            console.warn('Error loading custom logo preview:', err);
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                {/if}
+              </div>
+            {/if}
+            {#if auctionHouse?.id}
+              <div>
+                <label for="logo-upload" class="block text-xs font-medium text-gray-700 mb-1">
+                  Upload Logo for Auction House
+                </label>
+                <input
+                  id="logo-upload"
+                  type="file"
+                  accept="image/*"
+                  class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  onchange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    
+                    try {
+                      const formData = new FormData();
+                      formData.append('files', file);
+                      
+                      const uploadResponse = await fetch('/api/upload/image', {
+                        method: 'POST',
+                        body: formData
+                      });
+                      
+                      if (!uploadResponse.ok) {
+                        throw new Error('Failed to upload logo');
+                      }
+                      
+                      const { images } = await uploadResponse.json();
+                      if (images && images.length > 0) {
+                        const logoUrl = images[0].url;
+                        bannerSettings.logoUrl = logoUrl;
+                        
+                        // Update auction house logo URL
+                        const updateResponse = await fetch(`/api/auction-houses/${auctionHouse.id}`, {
+                          method: 'PATCH',
+                          headers: {
+                            'Content-Type': 'application/json'
+                          },
+                          body: JSON.stringify({ logoUrl })
+                        });
+                        
+                        if (updateResponse.ok) {
+                          const updated = await updateResponse.json();
+                          // Update local auctionHouse reference if needed
+                          if (updated.auctionHouse) {
+                            auctionHouse.logoUrl = updated.auctionHouse.logoUrl;
+                          }
+                        }
+                      }
+                      
+                      e.target.value = '';
+                    } catch (error) {
+                      console.error('Error uploading logo:', error);
+                      alert('Failed to upload logo. Please try again.');
+                    }
+                  }}
+                />
+                <p class="mt-1 text-xs text-gray-500">
+                  Upload a logo to save it to your auction house
+                </p>
+              </div>
+            {/if}
+            
+            <div>
+              <label for="logo-position" class="block text-xs font-medium text-gray-700 mb-1">
+                Position
+              </label>
+              <select
+                id="logo-position"
+                bind:value={bannerSettings.logoPosition}
+                class="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+              >
+                <option value="top-left">Top Left</option>
+                <option value="top-center">Top Center</option>
+                <option value="top-right">Top Right</option>
+                <option value="bottom-left">Bottom Left</option>
+                <option value="bottom-center">Bottom Center</option>
+                <option value="bottom-right">Bottom Right</option>
+              </select>
+            </div>
+            
+            <div>
+              <label for="logo-size" class="block text-xs text-gray-600 mb-1">
+                Size: {bannerSettings.logoSize}px
+              </label>
+              <input
+                id="logo-size"
+                type="range"
+                min="50"
+                max="300"
+                step="10"
+                bind:value={bannerSettings.logoSize}
+                class="w-full"
+              />
+            </div>
+            
+            <div>
+              <label for="logo-opacity" class="block text-xs text-gray-600 mb-1">
+                Opacity: {(bannerSettings.logoOpacity * 100).toFixed(0)}%
+              </label>
+              <input
+                id="logo-opacity"
+                type="range"
+                min="0"
+                max="1"
+                step="0.1"
+                bind:value={bannerSettings.logoOpacity}
+                class="w-full"
+              />
+            </div>
+            
+            <div>
+              <label for="logo-margin" class="block text-xs text-gray-600 mb-1">
+                Margin: {bannerSettings.logoMargin}px
+              </label>
+              <input
+                id="logo-margin"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                bind:value={bannerSettings.logoMargin}
+                class="w-full"
+              />
+            </div>
+          {/if}
+        </div>
+      </CollapsibleSection>
     
       <!-- Actions -->
       <BannerActions
