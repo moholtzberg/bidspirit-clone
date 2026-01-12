@@ -36,8 +36,35 @@
   }
 
   function extractLotNumberFromRow(row) {
-    // Try various selectors for lot number in AG Grid or similar tables
-      const lotCell =
+    // First try: itemIndex (the lot number like 1, 2, 3...)
+    const itemIndexElement = row.querySelector('span.itemIndex, .itemIndex, [class*="itemIndex"]');
+    if (itemIndexElement) {
+      const itemIndex = (itemIndexElement.textContent || '').trim();
+      if (itemIndex) {
+        console.log(`[BidSpirit] Extracted lot number from itemIndex: ${itemIndex}`);
+        return itemIndex;
+      }
+    }
+    
+    // Second try: lotitemid attribute on the <tr> element
+    if (row.getAttribute && row.getAttribute('lotitemid')) {
+      const lotId = row.getAttribute('lotitemid');
+      console.log(`[BidSpirit] Extracted lot ID from lotitemid attribute: ${lotId}`);
+      return lotId;
+    }
+    
+    // Third try: <th column="serialId"> element (fallback)
+    const serialIdCell = row.querySelector('th[column="serialId"]');
+    if (serialIdCell) {
+      const serialId = (serialIdCell.textContent || '').trim();
+      if (serialId) {
+        console.log(`[BidSpirit] Extracted lot serial ID from th[column="serialId"]: ${serialId}`);
+        return serialId;
+      }
+    }
+    
+    // Fallback: Try various selectors for lot number in AG Grid or similar tables
+    const lotCell =
       row.querySelector('[col-id="lotNumber"], [data-col-id="lotNumber"]') ||
       row.querySelector('[col-id="lot"], [data-col-id="lot"]') ||
       row.querySelector('[col-id="number"], [data-col-id="number"]') ||
@@ -46,8 +73,8 @@
       row.querySelector('.ag-cell[col-id*="lot" i]') ||
       row.querySelector('.ag-cell:first-child'); // fallback to first cell
 
-      if (lotCell) {
-        const text = (lotCell.dataset?.lotNumber || lotCell.textContent || '').trim();
+    if (lotCell) {
+      const text = (lotCell.dataset?.lotNumber || lotCell.textContent || '').trim();
       const numMatch = text.match(/(\d+)/);
       if (numMatch) return numMatch[1];
     }
@@ -67,14 +94,14 @@
 
   async function extractImagesFromRow(row, lotNumber) {
     const images = new Set();
-    const thumbnailUrls = new Set();
     
     // Extract lot number from row if not provided
     if (!lotNumber) {
       lotNumber = extractLotNumberFromRow(row);
+      console.log('[BidSpirit] Extracted lot number from row:', lotNumber);
     }
     
-    console.log('[BidSpirit] Extracting images for lot', lotNumber);
+    console.log(`[BidSpirit] ===== Starting image extraction for LOT ${lotNumber || 'UNKNOWN'} =====`);
     
     // Scroll row into view first to ensure it's visible
     try {
@@ -84,69 +111,84 @@
       // Ignore scroll errors
     }
     
-    // Find the div with onmouseover that triggers the lightbox
-    const lightboxTrigger = row.querySelector('[onmouseover*="displayLotLightbox"], [onmouseover*="LotLightbox"]');
+    // First, close any existing lightbox
+    try {
+      if (typeof window.Components !== 'undefined' && 
+          typeof window.Components.LotLightbox !== 'undefined' && 
+          typeof window.Components.LotLightbox.hide === 'function') {
+        window.Components.LotLightbox.hide();
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    } catch (e) {
+      // Ignore
+    }
     
-    if (lightboxTrigger) {
-      console.log('[BidSpirit] Found lightbox trigger div for lot', lotNumber);
-      
-      // Trigger mouseover on the specific div that has the displayLotLightbox handler
-      try {
+    // Find the <td column="pic"> and the div inside it with onmouseover
+    const picCell = row.querySelector('td[column="pic"]');
+    if (!picCell) {
+      console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: No td[column="pic"] found`);
+      return [];
+    }
+    
+    const lightboxTrigger = picCell.querySelector('div[onmouseover*="displayLotLightbox"]');
+    
+    if (!lightboxTrigger) {
+      console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: No lightbox trigger div found in pic cell`);
+      return [];
+    }
+    
+    console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Found lightbox trigger div in pic cell`);
+    
+    // Extract lot ID from the onmouseover attribute
+    const onmouseoverAttr = lightboxTrigger.getAttribute('onmouseover');
+    let lotId = null;
+    if (onmouseoverAttr) {
+      const lotIdMatch = onmouseoverAttr.match(/displayLotLightbox\((\d+)/);
+      if (lotIdMatch) {
+        lotId = parseInt(lotIdMatch[1], 10);
+        console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Extracted lot ID from trigger: ${lotId}`);
+      }
+    }
+    
+    // Trigger the lightbox by hovering over the div
+    try {
+      // Try calling the function directly if available
+      if (lotId && typeof window.Admin !== 'undefined' && 
+          typeof window.Admin.Catalog !== 'undefined' && 
+          typeof window.Admin.Catalog.displayLotLightbox === 'function') {
+        console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Calling displayLotLightbox directly with lot ID: ${lotId}`);
+        window.Admin.Catalog.displayLotLightbox(lotId, lightboxTrigger, true);
+      } else {
+        // Fallback: trigger mouseover event on the div
+        console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Triggering mouseover event on trigger div`);
         const mouseoverEvent = new MouseEvent('mouseover', { 
           bubbles: true, 
           cancelable: true, 
           view: window 
         });
         lightboxTrigger.dispatchEvent(mouseoverEvent);
-        
-        // Also try calling the function directly if available
-        const onmouseoverAttr = lightboxTrigger.getAttribute('onmouseover');
-        if (onmouseoverAttr && typeof window.Admin !== 'undefined' && 
-            typeof window.Admin.Catalog !== 'undefined' && 
-            typeof window.Admin.Catalog.displayLotLightbox === 'function') {
-          // Extract lot ID from the onmouseover attribute
-          const lotIdMatch = onmouseoverAttr.match(/displayLotLightbox\((\d+)/);
-          if (lotIdMatch) {
-            const lotId = parseInt(lotIdMatch[1], 10);
-            console.log('[BidSpirit] Calling displayLotLightbox directly with lot ID:', lotId);
-            try {
-              window.Admin.Catalog.displayLotLightbox(lotId, lightboxTrigger, true);
-            } catch (e) {
-              console.warn('[BidSpirit] Error calling displayLotLightbox directly:', e);
-            }
-          }
-        }
-      } catch (e) {
-        console.warn('[BidSpirit] Error triggering mouseover on lightbox trigger:', e);
       }
-    } else {
-      // Fallback: trigger hover on the row and cells
-      console.log('[BidSpirit] No lightbox trigger div found, trying row hover');
-      try {
-        const rowMouseenter = new MouseEvent('mouseenter', { bubbles: true, cancelable: true, view: window });
-        const rowMouseover = new MouseEvent('mouseover', { bubbles: true, cancelable: true, view: window });
-        row.dispatchEvent(rowMouseenter);
-        row.dispatchEvent(rowMouseover);
-        
-        // Also trigger on image cells/containers in the row
-        const imageCells = row.querySelectorAll('.ag-cell, [class*="image"], [class*="thumbnail"]');
-        imageCells.forEach(cell => {
-          cell.dispatchEvent(rowMouseenter);
-          cell.dispatchEvent(rowMouseover);
-        });
-      } catch (e) {
-        console.warn('[BidSpirit] Error triggering hover events:', e);
-      }
+    } catch (e) {
+      console.warn(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Error triggering lightbox:`, e);
+      // Fallback: trigger mouseover event
+      const mouseoverEvent = new MouseEvent('mouseover', { 
+        bubbles: true, 
+        cancelable: true, 
+        view: window 
+      });
+      lightboxTrigger.dispatchEvent(mouseoverEvent);
     }
     
     // Wait for lightbox to appear - try multiple times with increasing delays
     let lightbox = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      await new Promise(resolve => setTimeout(resolve, 300 + (attempt * 200)));
+    const expectedLotNumber = lotNumber ? String(lotNumber) : null;
+    
+    for (let attempt = 0; attempt < 5; attempt++) {
+      await new Promise(resolve => setTimeout(resolve, 400 + (attempt * 200)));
       
       // Look for the lotLightbox that appears on hover
       const allLightboxes = document.querySelectorAll('.lotLightbox');
-      console.log(`[BidSpirit] Attempt ${attempt + 1}: Found ${allLightboxes.length} lightbox elements`);
+      console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Attempt ${attempt + 1}: Found ${allLightboxes.length} lightbox elements, looking for lot ${lotNumber}`);
       
       for (const lb of allLightboxes) {
         const style = lb.getAttribute('style') || '';
@@ -157,24 +199,33 @@
         if (isVisible) {
           // Check if lightbox matches this lot number
           const lightboxHeading = lb.querySelector('.panel-heading');
-          if (lightboxHeading && lotNumber) {
+          if (lightboxHeading) {
             const headingText = lightboxHeading.textContent || '';
             const lotMatch = headingText.match(/LOT\s+(\d+)/i);
-            if (lotMatch && lotMatch[1] === String(lotNumber)) {
+            const lightboxLotNumber = lotMatch ? lotMatch[1] : null;
+            
+            console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Found visible lightbox showing LOT ${lightboxLotNumber || 'UNKNOWN'}`);
+            
+            if (expectedLotNumber && lightboxLotNumber === expectedLotNumber) {
               lightbox = lb;
-              console.log(`[BidSpirit] Found matching lightbox for lot ${lotNumber} on attempt ${attempt + 1}`);
+              console.log(`[BidSpirit] ✓ LOT ${lotNumber}: Found matching lightbox on attempt ${attempt + 1}`);
+              break;
+            } else if (!expectedLotNumber) {
+              // If we don't have a lot number, use the first visible lightbox
+              lightbox = lb;
+              console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Using visible lightbox (no lot number to match) on attempt ${attempt + 1}`);
               break;
             } else {
-              console.log(`[BidSpirit] Lightbox shows LOT ${lotMatch?.[1]}, looking for LOT ${lotNumber}`);
+              console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Lightbox shows LOT ${lightboxLotNumber}, looking for LOT ${expectedLotNumber}, skipping`);
             }
-          } else if (!lotNumber) {
-            // If we don't have a lot number, use the first visible lightbox
-            lightbox = lb;
-            console.log(`[BidSpirit] Using visible lightbox (no lot number to match) on attempt ${attempt + 1}`);
-            break;
-    } else {
-            // No heading but we have a lot number - skip this one
-            console.log('[BidSpirit] Lightbox has no heading, skipping');
+          } else {
+            // No heading - skip if we have a lot number to match
+            console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Lightbox has no heading`);
+            if (!expectedLotNumber) {
+              lightbox = lb;
+              console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Using visible lightbox (no heading, no lot number) on attempt ${attempt + 1}`);
+              break;
+            }
           }
         }
       }
@@ -195,52 +246,93 @@
       }
       
       if (lightbox) {
-        console.log('[BidSpirit] Using lightbox for lot', lotNumber);
-      
-      // Extract main image from lightbox
-      const mainImage = lightbox.querySelector('.mainImage');
-      if (mainImage && mainImage.src) {
-        const mainUrl = transformImageUrl(mainImage.src);
-        if (mainUrl && /^https?:\/\//i.test(mainUrl)) {
-          images.add(mainUrl);
-          console.log('[BidSpirit] Added main image from lightbox:', mainUrl);
-        }
-      }
-      
-      // Extract all thumbnail images from lightbox
-      const thumbnailImages = lightbox.querySelectorAll('.images.row img.left, .images img, .images.row img');
-      console.log(`[BidSpirit] Found ${thumbnailImages.length} thumbnail images in lightbox`);
-      thumbnailImages.forEach((img, idx) => {
-        if (img.src && !img.src.includes('placeholder') && !img.src.includes('spacer')) {
-          // Transform thumbnail URL to full-size (replace h_100 with w_1000, remove size limits)
-          let thumbUrl = img.src;
-          // Remove size constraints from thumbnail URLs
-          console.log('[BidSpirit] Thumbnail URL:', thumbUrl);
-          thumbUrl = thumbUrl.replace(/h_100/g, 'w_1000');
-          // thumbUrl = thumbUrl.replace(/_c_limit/g, '');
-          // thumbUrl = thumbUrl.replace(/_c_fit/g, '');
-          thumbUrl = transformImageUrl(thumbUrl);
-          console.log('[BidSpirit] Transformed thumbnail URL:', thumbUrl);
-          if (thumbUrl && /^https?:\/\//i.test(thumbUrl)) {
-            images.add(thumbUrl);
-            console.log(`[BidSpirit] Added thumbnail ${idx + 1} from lightbox:`, thumbUrl);
+        const lightboxHeading = lightbox.querySelector('.panel-heading');
+        const headingText = lightboxHeading ? lightboxHeading.textContent : 'unknown';
+        console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Using lightbox (${headingText})`);
+        
+        // Extract ALL images from lightbox - try multiple selectors to catch everything
+        const allLightboxImages = lightbox.querySelectorAll('img');
+        console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Found ${allLightboxImages.length} total img elements in lightbox`);
+        
+        // Also check for main image specifically
+        const mainImage = lightbox.querySelector('.mainImage');
+        if (mainImage && mainImage.src) {
+          const mainUrl = transformImageUrl(mainImage.src);
+          if (mainUrl && /^https?:\/\//i.test(mainUrl)) {
+            images.add(mainUrl);
+            console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Added main image from lightbox:`, mainUrl.substring(0, 80) + '...');
           }
         }
-      });
-      
-        console.log(`[BidSpirit] Extracted ${images.size} total images from lightbox for lot ${lotNumber}`);
         
-        // Close lightbox by triggering mouseleave
+        // Extract all images from lightbox (main + thumbnails)
+        allLightboxImages.forEach((img, idx) => {
+          // Try multiple sources for the image URL
+          const imageSources = [
+            img.src,
+            img.currentSrc,
+            img.dataset.src,
+            img.dataset.full,
+            img.dataset.original,
+            img.getAttribute('data-src'),
+            img.getAttribute('data-full'),
+            img.getAttribute('data-original')
+          ].filter(Boolean);
+          
+          imageSources.forEach((imgUrl, sourceIdx) => {
+            if (!imgUrl || imgUrl.includes('placeholder') || imgUrl.includes('spacer') || imgUrl.includes('1x1') || imgUrl.startsWith('data:')) {
+              return;
+            }
+            
+            // Transform URL (replace h_100 with w_1000)
+            let transformedUrl = transformImageUrl(imgUrl);
+            
+            if (transformedUrl && /^https?:\/\//i.test(transformedUrl)) {
+              images.add(transformedUrl);
+              console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: ✓ Added image ${idx + 1} (source ${sourceIdx + 1}) from lightbox:`, transformedUrl.substring(0, 80) + '...');
+            }
+          });
+        });
+        
+        // Also check for background images in the lightbox
+        const elementsWithBg = lightbox.querySelectorAll('[style*="background-image"]');
+        elementsWithBg.forEach((el, idx) => {
+          const style = el.getAttribute('style') || '';
+          const bgMatch = style.match(/url\(['"]?([^'")]+)['"]?\)/i);
+          if (bgMatch) {
+            let bgUrl = bgMatch[1];
+            if (bgUrl.startsWith('//')) bgUrl = 'https:' + bgUrl;
+            if (bgUrl.startsWith('/')) bgUrl = location.origin + bgUrl;
+            if (/^https?:\/\//i.test(bgUrl) && !bgUrl.includes('placeholder')) {
+              const transformedUrl = transformImageUrl(bgUrl);
+              images.add(transformedUrl);
+              console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: ✓ Added background image ${idx + 1} from lightbox:`, transformedUrl.substring(0, 80) + '...');
+            }
+          }
+        });
+        
+        console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Extracted ${images.size} total unique images from lightbox`);
+        
+        // Close lightbox by calling hide function
         try {
-          const mouseleaveEvent = new MouseEvent('mouseleave', { bubbles: true, cancelable: true, view: window });
-          row.dispatchEvent(mouseleaveEvent);
-          await new Promise(resolve => setTimeout(resolve, 100));
+          if (typeof window.Components !== 'undefined' && 
+              typeof window.Components.LotLightbox !== 'undefined' && 
+              typeof window.Components.LotLightbox.hide === 'function') {
+            window.Components.LotLightbox.hide();
+          } else {
+            // Fallback: trigger mouseleave
+            const mouseleaveEvent = new MouseEvent('mouseleave', { bubbles: true, cancelable: true, view: window });
+            row.dispatchEvent(mouseleaveEvent);
+            if (lightboxTrigger) {
+              lightboxTrigger.dispatchEvent(mouseleaveEvent);
+            }
+          }
+          await new Promise(resolve => setTimeout(resolve, 200));
         } catch (e) {
-          // Ignore
+          console.warn('[BidSpirit] Error closing lightbox:', e);
         }
       }
     } else {
-      console.log('[BidSpirit] No lightbox found for lot', lotNumber, '- trying alternative methods');
+      console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: No lightbox found - trying alternative methods`);
     }
     
     // Method 0: Try to get data directly from AG Grid API if available
@@ -547,12 +639,13 @@
       }
     });
     
-    console.log('[BidSpirit] Final images for lot', lotNumber, ':', uniqueImages.length, 'unique URLs');
+    console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Final images: ${uniqueImages.length} unique URLs`);
     if (uniqueImages.length > 0) {
-      console.log('[BidSpirit] Sample URLs:', uniqueImages.slice(0, 2));
+      console.log(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: Sample URLs:`, uniqueImages.slice(0, 2).map(url => url.substring(0, 80) + '...'));
     } else {
-      console.warn('[BidSpirit] No images found for lot', lotNumber, '- raw images set had', images.size, 'entries');
+      console.warn(`[BidSpirit] LOT ${lotNumber || 'UNKNOWN'}: No images found - raw images set had ${images.size} entries`);
     }
+    console.log(`[BidSpirit] ===== Finished image extraction for LOT ${lotNumber || 'UNKNOWN'} =====`);
     
     return uniqueImages;
   }
@@ -561,15 +654,35 @@
     const lots = [];
     const debug = [];
     
-    // AG Grid rows (BidSpirit admin uses AG Grid)
-    const agRows = document.querySelectorAll('.ag-row:not(.ag-header-row)');
-    console.log('[BidSpirit] Found', agRows.length, 'AG Grid rows');
+    // First, try to find tbody.itemsTableBody with <tr> children
+    const itemsTableBody = document.querySelector('tbody.itemsTableBody');
+    let rows = [];
     
-    for (const [idx, row] of agRows.entries()) {
+    if (itemsTableBody) {
+      rows = Array.from(itemsTableBody.querySelectorAll('tr'));
+      console.log('[BidSpirit] Found tbody.itemsTableBody with', rows.length, 'rows');
+    } else {
+      // Fallback: AG Grid rows (BidSpirit admin uses AG Grid)
+      rows = Array.from(document.querySelectorAll('.ag-row:not(.ag-header-row)'));
+      console.log('[BidSpirit] No itemsTableBody found, using AG Grid rows:', rows.length);
+    }
+    
+    // If still no rows, try generic table rows
+    if (rows.length === 0) {
+      rows = Array.from(document.querySelectorAll('table tbody tr, table tr:not(:first-child)'));
+      console.log('[BidSpirit] Trying generic table rows:', rows.length);
+    }
+    
+    for (const [idx, row] of rows.entries()) {
       const lotNumber = extractLotNumberFromRow(row);
-      console.log(`[BidSpirit] Processing row ${idx + 1}/${agRows.length}, lot: ${lotNumber || 'unknown'}`);
+      console.log(`\n[BidSpirit] ===== Processing row ${idx + 1}/${rows.length} =====`);
+      console.log(`[BidSpirit] Lot Serial Number: ${lotNumber || 'UNKNOWN'}`);
+      console.log(`[BidSpirit] Row index: ${idx}`);
       
       const images = await extractImagesFromRow(row, lotNumber);
+      
+      console.log(`[BidSpirit] Lot ${lotNumber || 'UNKNOWN'}: Found ${images.length} images`);
+      console.log(`[BidSpirit] ===== Finished row ${idx + 1} =====\n`);
       
       debug.push({
         rowIndex: idx,
@@ -586,26 +699,20 @@
         lots.push({ lotNumber: String(inferredLot), images });
       }
       
-      // Small delay between rows to ensure lightboxes don't interfere
-      if (idx < agRows.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
-    }
-
-    // Fallback: try generic table rows
-    if (lots.length === 0) {
-      const tableRows = document.querySelectorAll('table tr:not(:first-child), .table-row, [role="row"]:not([role="columnheader"])');
-      console.log('[BidSpirit] Trying fallback rows:', tableRows.length);
-      
-      for (const [idx, row] of tableRows.entries()) {
-        const lotNumber = extractLotNumberFromRow(row);
-        const images = await extractImagesFromRow(row, lotNumber);
-        
-        if (lotNumber) {
-          lots.push({ lotNumber, images });
-        } else if (images.length > 0) {
-          lots.push({ lotNumber: String(idx + 1), images });
+      // Close any lightbox and wait before processing next row
+      try {
+        if (typeof window.Components !== 'undefined' && 
+            typeof window.Components.LotLightbox !== 'undefined' && 
+            typeof window.Components.LotLightbox.hide === 'function') {
+          window.Components.LotLightbox.hide();
         }
+      } catch (e) {
+        // Ignore
+      }
+      
+      // Small delay between rows to ensure lightboxes don't interfere
+      if (idx < rows.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 300));
       }
     }
 
@@ -752,6 +859,11 @@
             });
             
             try {
+              // Check if extension is still valid before sending
+              if (!isExtensionValid()) {
+                throw new Error('Extension context invalidated. Please reload the page.');
+              }
+              
               safeSendMessage(
                 { type: "download-images", lotNumber: lot.lotNumber, urls: lot.images },
                 (res) => {
@@ -761,14 +873,22 @@
                     console.log(`[BidSpirit] ✓ Lot ${lot.lotNumber}: ${res.count} images queued for download`);
                   } else if (res?.error) {
                     console.error('[BidSpirit] Extension error:', res.error);
+                    if (res.error.includes('connection') || res.error.includes('invalidated')) {
+                      status.textContent = `Extension reloaded. Please refresh the page.`;
+                    } else {
                     status.textContent = `Error: ${res.error}. Please reload the page.`;
+                    }
                   }
                 }
               );
             } catch (error) {
               console.error('[BidSpirit] Failed to send message:', error);
+              if (error.message.includes('connection') || error.message.includes('invalidated')) {
+                status.textContent = "Extension reloaded. Please refresh the page.";
+              } else {
               status.textContent = `Error: ${error.message}. Please reload the page.`;
-              return;
+              }
+              // Don't return, continue with other lots
             }
             // Small delay to avoid overwhelming the download API
             await new Promise(resolve => setTimeout(resolve, 100));
