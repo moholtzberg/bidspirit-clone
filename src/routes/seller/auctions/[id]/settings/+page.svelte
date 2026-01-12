@@ -5,8 +5,17 @@
   import BannerGenerator from '$lib/components/BannerGenerator.svelte';
 
   let auction = $state(null);
+  let auctionData = $state({
+    title: '',
+    description: '',
+    startDate: '',
+    endDate: '',
+    status: 'UPCOMING',
+    imageUrl: ''
+  });
   let loading = $state(true);
   let saving = $state(false);
+  let savingAuctionData = $state(false);
   let errorMessage = $state('');
   let successMessage = $state('');
   let expandedSections = $state({});
@@ -93,6 +102,16 @@
         throw new Error('Auction not found');
       }
       auction = await auctionResponse.json();
+      
+      // Populate auction data for editing
+      auctionData = {
+        title: auction.title || '',
+        description: auction.description || '',
+        startDate: auction.startDate ? new Date(auction.startDate).toISOString().slice(0, 16) : '',
+        endDate: auction.endDate ? new Date(auction.endDate).toISOString().slice(0, 16) : '',
+        status: auction.status || 'UPCOMING',
+        imageUrl: auction.imageUrl || ''
+      };
 
       // Load existing settings
       const settingsResponse = await fetch(`/api/auctions/${auction.id}/settings`);
@@ -137,6 +156,51 @@
       errorMessage = error.message || 'Failed to save settings. Please try again.';
     } finally {
       saving = false;
+    }
+  }
+
+  async function saveAuctionData() {
+    try {
+      savingAuctionData = true;
+      errorMessage = '';
+      successMessage = '';
+
+      // Convert date strings to ISO format
+      const startDate = auctionData.startDate ? new Date(auctionData.startDate).toISOString() : null;
+      const endDate = auctionData.endDate ? new Date(auctionData.endDate).toISOString() : null;
+
+      const response = await fetch(`/api/auctions/${auction.id}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: auctionData.title,
+          description: auctionData.description,
+          startDate: startDate,
+          endDate: endDate,
+          status: auctionData.status,
+          imageUrl: auctionData.imageUrl || null
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to save auction data');
+      }
+
+      const updated = await response.json();
+      auction = updated.auction || updated;
+      
+      successMessage = 'Auction data saved successfully!';
+      setTimeout(() => {
+        successMessage = '';
+      }, 3000);
+    } catch (error) {
+      console.error('Error saving auction data:', error);
+      errorMessage = error.message || 'Failed to save auction data. Please try again.';
+    } finally {
+      savingAuctionData = false;
     }
   }
 </script>
@@ -203,6 +267,127 @@
         <!-- Settings Form -->
         <form onsubmit={(e) => { e.preventDefault(); saveSettings(); }} class="p-6">
           <div class="space-y-4">
+            <!-- Auction Information -->
+            <div class="border border-gray-200 rounded-lg">
+              <button
+                type="button"
+                onclick={() => toggleSection('auctionInfo')}
+                class="w-full px-4 py-3 flex items-center justify-between bg-gray-50 hover:bg-gray-100 transition-colors"
+              >
+                <span class="font-medium text-gray-900">Auction Information</span>
+                <svg class="w-5 h-5 text-gray-500 transform transition-transform {expandedSections.auctionInfo ? 'rotate-180' : ''}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                </svg>
+              </button>
+              {#if expandedSections.auctionInfo}
+                <div class="p-4 space-y-4">
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Title *</label>
+                    <input 
+                      type="text" 
+                      bind:value={auctionData.title} 
+                      required
+                      class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                    />
+                  </div>
+                  
+                  <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <textarea 
+                      bind:value={auctionData.description} 
+                      rows="4"
+                      class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    ></textarea>
+                  </div>
+                  
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Start Date *</label>
+                      <input 
+                        type="datetime-local" 
+                        bind:value={auctionData.startDate} 
+                        required
+                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                      />
+                    </div>
+                    
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">End Date *</label>
+                      <input 
+                        type="datetime-local" 
+                        bind:value={auctionData.endDate} 
+                        required
+                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                      />
+                    </div>
+                  </div>
+                  
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Status *</label>
+                      <select 
+                        bind:value={auctionData.status} 
+                        required
+                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      >
+                        <option value="UPCOMING">Upcoming</option>
+                        <option value="LIVE">Live</option>
+                        <option value="ENDED">Ended</option>
+                        <option value="CANCELLED">Cancelled</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label class="block text-sm font-medium text-gray-700 mb-1">Image URL</label>
+                      <input 
+                        type="url" 
+                        bind:value={auctionData.imageUrl} 
+                        placeholder="https://example.com/image.jpg"
+                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" 
+                      />
+                      {#if auctionData.imageUrl}
+                        <div class="mt-2">
+                          <img 
+                            src={auctionData.imageUrl} 
+                            alt="Auction image preview" 
+                            class="h-32 w-32 object-cover border border-gray-200 rounded"
+                            onerror={(e) => {
+                              // If image fails to load (e.g., S3 key), try to get presigned URL
+                              if (auctionData.imageUrl && !auctionData.imageUrl.startsWith('http')) {
+                                fetch('/api/images/presigned', {
+                                  method: 'POST',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ keys: [auctionData.imageUrl] })
+                                }).then(async (res) => {
+                                  if (res.ok) {
+                                    const { urls } = await res.json();
+                                    if (urls[auctionData.imageUrl]) {
+                                      e.target.src = urls[auctionData.imageUrl];
+                                    }
+                                  }
+                                }).catch(() => {});
+                              }
+                            }}
+                          />
+                        </div>
+                      {/if}
+                    </div>
+                  </div>
+                  
+                  <div class="flex justify-end">
+                    <button
+                      type="button"
+                      onclick={saveAuctionData}
+                      disabled={savingAuctionData}
+                      class="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {savingAuctionData ? 'Saving...' : 'Save Auction Data'}
+                    </button>
+                  </div>
+                </div>
+              {/if}
+            </div>
+
             <!-- Default Auction Settings -->
             <div class="border border-gray-200 rounded-lg">
               <button
