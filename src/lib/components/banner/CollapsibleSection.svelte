@@ -8,11 +8,11 @@
   } = $props();
 </script>
 
-<div class="{bgColor} rounded-lg border {borderColor}">
+<div class="{bgColor} rounded border {borderColor}">
   <button
     type="button"
     onclick={() => isCollapsed = !isCollapsed}
-    class="w-full flex items-center justify-between p-2 text-sm font-semibold text-gray-900 {hoverColor} transition-colors"
+    class="w-full flex items-center justify-between p-1 text-sm font-semibold text-gray-900 {hoverColor} transition-colors"
   >
     <span>{title}</span>
     <svg

@@ -146,14 +146,46 @@
     { name: 'Playfair Display', value: 'Playfair Display, serif' },
     { name: 'Lora', value: 'Lora, serif' },
     { name: 'Merriweather', value: 'Merriweather, serif' },
-    { name: 'Georgia', value: 'Georgia, serif' }
+    { name: 'Georgia', value: 'Georgia, serif' },
+    { name: 'Times New Roman', value: 'Times New Roman, serif' },
+    { name: 'Crimson Text', value: 'Crimson Text, serif' },
+    { name: 'Libre Baskerville', value: 'Libre Baskerville, serif' },
+    { name: 'EB Garamond', value: 'EB Garamond, serif' },
+    { name: 'Bitter', value: 'Bitter, serif' },
+    { name: 'Cinzel', value: 'Cinzel, serif' },
+    { name: 'Raleway', value: 'Raleway, sans-serif' },
+    { name: 'Open Sans', value: 'Open Sans, sans-serif' },
+    { name: 'Roboto', value: 'Roboto, sans-serif' },
+    { name: 'Lato', value: 'Lato, sans-serif' },
+    { name: 'Montserrat', value: 'Montserrat, sans-serif' },
+    { name: 'Poppins', value: 'Poppins, sans-serif' },
+    { name: 'Inter', value: 'Inter, sans-serif' },
+    { name: 'Source Sans Pro', value: 'Source Sans Pro, sans-serif' },
+    { name: 'Nunito', value: 'Nunito, sans-serif' },
+    { name: 'Oswald', value: 'Oswald, sans-serif' },
+    { name: 'Roboto Slab', value: 'Roboto Slab, serif' },
+    { name: 'PT Serif', value: 'PT Serif, serif' },
+    { name: 'Abril Fatface', value: 'Abril Fatface, cursive' },
+    { name: 'Pacifico', value: 'Pacifico, cursive' }
   ];
 
   const hebrewFonts = [
     { name: 'Frank Ruhl Libre', value: 'Frank Ruhl Libre, Cardo, serif' },
     { name: 'David Libre', value: 'David Libre, serif' },
     { name: 'Noto Sans Hebrew', value: 'Noto Sans Hebrew, sans-serif' },
-    { name: 'Rubik', value: 'Rubik, sans-serif' }
+    { name: 'Rubik', value: 'Rubik' },
+    { name: 'Heebo', value: 'Heebo' },
+    { name: 'Alef', value: 'Alef' },
+    { name: 'Assistant', value: 'Assistant' },
+    { name: 'Varela Round', value: 'Varela Round, sans-serif' },
+    { name: 'Secular One', value: 'Secular One, sans-serif' },
+    { name: 'Suez One', value: 'Suez One, serif' },
+    { name: 'Miriam Libre', value: 'Miriam Libre, sans-serif' },
+    { name: 'Arimo', value: 'Arimo, sans-serif' },
+    { name: 'Cousine', value: 'Cousine, monospace' },
+    { name: 'Tinos', value: 'Tinos, serif' },
+    { name: 'Cardo', value: 'Cardo, serif' },
+    { name: 'Arial Hebrew', value: 'Arial Hebrew, sans-serif' }
   ];
 
   // Apply preset positions for 3 images in collage layout
@@ -2707,7 +2739,7 @@
   
   <!-- Template Selector -->
   {#if showTemplateSelector}
-    <div class="mb-6 p-6 bg-gray-50 rounded-lg border border-gray-200">
+    <div class="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
       <h3 class="text-lg font-semibold text-gray-900 mb-4">Choose a Template</h3>
       
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
@@ -2817,7 +2849,7 @@
   {#if !showTemplateSelector}
   <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
     <!-- Left: Settings -->
-    <div class="space-y-3 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
+    <div class="space-y-1 max-h-[calc(100vh-200px)] overflow-y-auto pr-2">
       <!-- Lot Selection (only for lot type) -->
       {#if type === 'lot' && lots && lots.length > 0}
         <div>
