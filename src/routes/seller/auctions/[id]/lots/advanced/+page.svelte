@@ -1011,40 +1011,18 @@
             const formData = new FormData();
             console.log(`[Upload] Preparing to upload ${lotImages.length} images for lot ${lotNumber}:`, lotImages.map(i => i.file.name));
             
-            // Validate all files before adding
-            const validFiles = lotImages.filter(item => {
-              if (!(item.file instanceof File)) {
-                console.warn(`[Upload] Skipping invalid file object:`, item.file);
-                return false;
-              }
-              if (item.file.size === 0) {
-                console.warn(`[Upload] Skipping empty file: ${item.file.name}`);
-                return false;
-              }
-              return true;
-            });
-            
-            if (validFiles.length === 0) {
-              throw new Error(`No valid files to upload for lot ${lotNumber}`);
-            }
-            
-            if (validFiles.length !== lotImages.length) {
-              console.warn(`[Upload] Filtered out ${lotImages.length - validFiles.length} invalid files for lot ${lotNumber}`);
-            }
-            
-            // Add all valid files to FormData
-            validFiles.forEach((item, idx) => {
+            // Add all files to FormData
+            lotImages.forEach((item, idx) => {
               formData.append('files', item.file);
-              console.log(`[Upload] Added file ${idx + 1}/${validFiles.length} to FormData: ${item.file.name} (${item.file.size} bytes, type: ${item.file.type})`);
+              console.log(`[Upload] Added file ${idx + 1}/${lotImages.length} to FormData: ${item.file.name} (${item.file.size} bytes)`);
             });
             
             // Verify all files are in FormData
             const filesInFormData = formData.getAll('files');
-            console.log(`[Upload] FormData contains ${filesInFormData.length} files (expected ${validFiles.length})`);
+            console.log(`[Upload] FormData contains ${filesInFormData.length} files (expected ${lotImages.length})`);
             
-            if (filesInFormData.length !== validFiles.length) {
-              console.error(`[Upload] Mismatch: FormData has ${filesInFormData.length} files but expected ${validFiles.length}`);
-              throw new Error(`FormData mismatch: expected ${validFiles.length} files but got ${filesInFormData.length}`);
+            if (filesInFormData.length !== lotImages.length) {
+              console.error(`[Upload] Mismatch: FormData has ${filesInFormData.length} files but expected ${lotImages.length}`);
             }
             
             formData.append('lotId', lot.id);
@@ -1075,20 +1053,14 @@
             }
 
             // Associate images with lot
-            // Get current image count to set displayOrder correctly
-            const currentImageCount = (lot.images && Array.isArray(lot.images) ? lot.images.length : 0) || 
-                                     (lot._images && Array.isArray(lot._images) ? lot._images.length : 0) || 0;
-            
-            console.log(`[Upload] Lot ${lotNumber} currently has ${currentImageCount} images`);
-            
             const imagesToAssociate = uploadedImages.map((img, index) => ({
               url: img.url,
               key: img.key,
-              displayOrder: currentImageCount + index, // Continue from existing images
-              isPrimary: index === 0 && currentImageCount === 0 // Only set primary if no existing images
+              displayOrder: index,
+              isPrimary: index === 0 && (!lot.images || lot.images.length === 0)
             }));
             
-            console.log(`[Upload] Associating ${imagesToAssociate.length} images with lot ${lotNumber}:`, imagesToAssociate.map(img => ({ url: img.url.substring(0, 50) + '...', displayOrder: img.displayOrder, isPrimary: img.isPrimary })));
+            console.log(`[Upload] Associating ${imagesToAssociate.length} images with lot ${lotNumber}:`, imagesToAssociate);
             
             const imageResponse = await fetch(`/api/lots/${lot.id}/images`, {
               method: 'POST',
@@ -1108,7 +1080,6 @@
 
             const associatedResult = await imageResponse.json();
             console.log(`[Upload] Successfully associated ${associatedResult.length || imagesToAssociate.length} images with lot ${lotNumber}`);
-            console.log(`[Upload] Associated images details:`, associatedResult.map(img => ({ id: img.id, url: img.url?.substring(0, 50) + '...', displayOrder: img.displayOrder })));
 
             if (!imageResponse.ok) {
               throw new Error(`Failed to associate images with lot ${lotNumber}`);
