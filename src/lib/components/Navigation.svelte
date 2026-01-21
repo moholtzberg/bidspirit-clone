@@ -39,7 +39,7 @@
 </script>
 
 <!-- Navigation Bar -->
-<nav class="bg-white shadow sticky top-0 z-50">
+<nav class="bg-white shadow sticky top-0 z-50 print:hidden">
     <div class="container mx-auto px-4 py-4 flex items-center justify-between">
       
         <a href="/" class="flex items-center space-x-2">
